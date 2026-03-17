@@ -38,6 +38,9 @@ jobs:
     inputs:
       useGlobalJson: true
 
+  - task: NuGetAuthenticate@1
+    displayName: Authenticate NuGet feeds
+
   - script: dotnet workload install maui macos
     displayName: Install MAUI workloads
 
@@ -77,6 +80,9 @@ jobs:
     displayName: Install .NET SDK
     inputs:
       useGlobalJson: true
+
+  - task: NuGetAuthenticate@1
+    displayName: Authenticate NuGet feeds
 
   - script: dotnet workload install maui macos
     displayName: Install MAUI workloads
