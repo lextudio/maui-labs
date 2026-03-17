@@ -1,5 +1,7 @@
 <Project>
 
+  <Import Project="Sdk.targets" Sdk="Microsoft.DotNet.Arcade.Sdk" />
+
   <Import Project="$(MSBuildThisFileDirectory)eng/Common.targets" />
 
 </Project>

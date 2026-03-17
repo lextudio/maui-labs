@@ -1,12 +1,42 @@
 <Project>
 
+  <Import Project="Sdk.props" Sdk="Microsoft.DotNet.Arcade.Sdk" />
+
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- Import shared packaging properties for NuGet packages -->
-  <Import Project="$(MSBuildThisFileDirectory)eng/Common.props" />
+  <PropertyGroup>
+    <Copyright>$(CopyrightNetFoundation)</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/dotnet/maui-labs</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/dotnet/maui-labs</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>dotnet maui labs experimental</PackageTags>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <DebugType>embedded</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+    <LangVersion>latest</LangVersion>
+    <!-- Non-shipping by default; override to true in shipping projects -->
+    <IsShipping>false</IsShipping>
+  </PropertyGroup>
+
+  <!-- Shared NuGet package metadata for all packable projects -->
+  <PropertyGroup Condition="'$(IsPackable)' != 'false'">
+    <Authors>Microsoft</Authors>
+    <Company>Microsoft</Company>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <!-- Include repo-root README in NuGet package -->
+  <ItemGroup Condition="'$(IsPackable)' != 'false'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
 
   <!-- Common SupportedOSPlatformVersion for all MAUI projects -->
   <PropertyGroup Condition="'$(UseMaui)' == 'true'">

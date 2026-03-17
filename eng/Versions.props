@@ -1,0 +1,50 @@
+<Project>
+
+  <PropertyGroup>
+    <!-- Product version -->
+    <VersionPrefix>0.23.1</VersionPrefix>
+    <PreReleaseVersionLabel>preview</PreReleaseVersionLabel>
+    <PreReleaseVersionIteration>1</PreReleaseVersionIteration>
+
+    <!-- Arcade features -->
+    <UsingToolXliff>false</UsingToolXliff>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Flowable dependencies (managed by darc/maestro)">
+    <!-- dotnet/maui -->
+    <MicrosoftMauiControlsVersion>10.0.31</MicrosoftMauiControlsVersion>
+    <MicrosoftAspNetCoreComponentsWebViewMauiVersion>10.0.31</MicrosoftAspNetCoreComponentsWebViewMauiVersion>
+    <!-- dotnet/runtime -->
+    <MicrosoftExtensionsHttpVersion>10.0.5</MicrosoftExtensionsHttpVersion>
+    <MicrosoftExtensionsHostingVersion>10.0.5</MicrosoftExtensionsHostingVersion>
+    <MicrosoftExtensionsLoggingAbstractionsVersion>10.0.5</MicrosoftExtensionsLoggingAbstractionsVersion>
+    <MicrosoftExtensionsLoggingDebugVersion>10.0.5</MicrosoftExtensionsLoggingDebugVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Pinned dependencies (third-party, not managed by darc)">
+    <FizzlerVersion>1.3.1</FizzlerVersion>
+    <SkiaSharpVersion>3.119.2</SkiaSharpVersion>
+    <SpectreConsoleVersion>0.54.0</SpectreConsoleVersion>
+    <SystemCommandLineVersion>2.0.0-beta4.22272.1</SystemCommandLineVersion>
+    <SystemTextJsonVersion>10.0.5</SystemTextJsonVersion>
+    <WebsocketClientVersion>5.3.0</WebsocketClientVersion>
+    <XenoAtomTerminalUIVersion>1.7.1</XenoAtomTerminalUIVersion>
+    <ModelContextProtocolVersion>1.1.0</ModelContextProtocolVersion>
+    <InteropUIAutomationClientVersion>10.19041.0</InteropUIAutomationClientVersion>
+    <!-- Platform extensions -->
+    <PlatformMauiMacOSVersion>0.3.0</PlatformMauiMacOSVersion>
+    <PlatformMauiMacOSBlazorWebViewVersion>0.3.0</PlatformMauiMacOSBlazorWebViewVersion>
+    <PlatformMauiMacOSEssentialsVersion>0.3.0</PlatformMauiMacOSEssentialsVersion>
+    <PlatformMauiLinuxGtk4Version>0.6.0</PlatformMauiLinuxGtk4Version>
+    <PlatformMauiLinuxGtk4BlazorWebViewVersion>0.6.0</PlatformMauiLinuxGtk4BlazorWebViewVersion>
+    <PlatformMauiLinuxGtk4EssentialsVersion>0.6.0</PlatformMauiLinuxGtk4EssentialsVersion>
+    <!-- Testing -->
+    <MicrosoftNETTestSdkVersion>18.3.0</MicrosoftNETTestSdkVersion>
+    <XunitVersion>2.9.3</XunitVersion>
+    <XunitRunnerVisualStudioVersion>3.1.5</XunitRunnerVisualStudioVersion>
+    <CoverletCollectorVersion>8.0.0</CoverletCollectorVersion>
+    <!-- Source Link (provided by Arcade SDK, but pinned here for reference) -->
+    <MicrosoftSourceLinkGitHubVersion>10.0.201</MicrosoftSourceLinkGitHubVersion>
+  </PropertyGroup>
+
+</Project>

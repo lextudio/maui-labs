@@ -1,6 +1,7 @@
 <Project>
-  <PropertyGroup>
-    <VersionPrefix>0.23.1</VersionPrefix>
-    <VersionSuffix>preview.1</VersionSuffix>
-  </PropertyGroup>
+  <!--
+    Versioning is now managed by the Arcade SDK via eng/Versions.props.
+    This file is kept for compatibility with existing project imports.
+    Do not set VersionPrefix or VersionSuffix here.
+  -->
 </Project>

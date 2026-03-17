@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Dependencies>
+  <ProductDependencies>
+    <!-- MAUI framework dependencies (flowable via dotnet/maui) -->
+    <Dependency Name="Microsoft.Maui.Controls" Version="10.0.31">
+      <Uri>https://github.com/dotnet/maui</Uri>
+      <Sha>4d447db12c83f04afe96be1fbb81e10f3849484f</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.AspNetCore.Components.WebView.Maui" Version="10.0.31">
+      <Uri>https://github.com/dotnet/maui</Uri>
+      <Sha>4d447db12c83f04afe96be1fbb81e10f3849484f</Sha>
+    </Dependency>
+    <!-- Runtime dependencies (flowable via dotnet/runtime) -->
+    <Dependency Name="Microsoft.Extensions.Http" Version="10.0.3">
+      <Uri>https://github.com/dotnet/runtime</Uri>
+      <Sha>d3981726bc8b0e179db50301daf9f22d42393096</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.Extensions.Hosting" Version="10.0.3">
+      <Uri>https://github.com/dotnet/runtime</Uri>
+      <Sha>d3981726bc8b0e179db50301daf9f22d42393096</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3">
+      <Uri>https://github.com/dotnet/runtime</Uri>
+      <Sha>d3981726bc8b0e179db50301daf9f22d42393096</Sha>
+    </Dependency>
+    <Dependency Name="Microsoft.Extensions.Logging.Debug" Version="10.0.3">
+      <Uri>https://github.com/dotnet/runtime</Uri>
+      <Sha>d3981726bc8b0e179db50301daf9f22d42393096</Sha>
+    </Dependency>
+  </ProductDependencies>
+  <ToolsetDependencies>
+    <Dependency Name="Microsoft.DotNet.Arcade.Sdk" Version="11.0.0-beta.26166.3">
+      <Uri>https://github.com/dotnet/arcade</Uri>
+      <Sha>bcbb938d7e69bdc06ee2ebb9fd8b13725aa43a2d</Sha>
+    </Dependency>
+  </ToolsetDependencies>
+</Dependencies>

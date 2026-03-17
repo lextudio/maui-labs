@@ -6,6 +6,7 @@
     <DefineConstants Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(DefineConstants);WINDOWS_BUILD</DefineConstants>
 
     <PackageId>Microsoft.Maui.DevFlow.Driver</PackageId>
+    <IsShipping>true</IsShipping>
     <Description>Driver library for connecting to Microsoft.Maui.DevFlow Agent and orchestrating MAUI app automation.</Description>
     <PackageTags>maui;automation;testing;driver</PackageTags>
   </PropertyGroup>

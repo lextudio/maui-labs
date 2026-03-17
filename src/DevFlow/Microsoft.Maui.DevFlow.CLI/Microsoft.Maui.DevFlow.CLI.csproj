@@ -10,6 +10,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>maui-devflow</ToolCommandName>
     <PackageId>Microsoft.Maui.DevFlow.CLI</PackageId>
+    <IsShipping>true</IsShipping>
     <Description>CDP-oriented CLI for automating MAUI Blazor WebViews</Description>
   </PropertyGroup>
 

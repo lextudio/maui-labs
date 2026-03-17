@@ -3,5 +3,11 @@
     "version": "10.0.100",
     "rollForward": "latestMinor",
     "allowPrerelease": false
+  },
+  "tools": {
+    "dotnet": "10.0.100"
+  },
+  "msbuild-sdks": {
+    "Microsoft.DotNet.Arcade.Sdk": "11.0.0-beta.26166.3"
   }
 }
