@@ -1,8 +1,6 @@
 # Azure DevOps official build pipeline for DevFlow
-# Builds, tests, packs, and signs DevFlow NuGet packages.
-#
-# This pipeline uses 1ES Pipeline Templates for security compliance.
-# It runs on commits to main/release branches and produces signed packages.
+# Uses dotnet/arcade build infrastructure with 1ES Pipeline Templates.
+# Runs on commits to main/release branches — produces signed & publishable packages.
 
 trigger:
   batch: true
@@ -20,57 +18,12 @@ trigger:
     - global.json
     - NuGet.config
 
-pr:
-  branches:
-    include:
-    - main
-    - release/*
-  paths:
-    include:
-    - src/DevFlow/**
-    - eng/**
-    - Directory.Build.props
-    - Directory.Build.targets
-    - Directory.Packages.props
-    - global.json
-    - NuGet.config
+pr: none
 
 variables:
 - template: /eng/pipelines/common-variables.yml@self
 - name: _BuildConfig
   value: Release
-- name: _ProductName
-  value: DevFlow
-- name: _SolutionFilter
-  value: src/DevFlow/DevFlow.slnf
-
-# Signing: real for official builds, test for PR builds
-- ${{ if ne(variables['Build.Reason'], 'PullRequest') }}:
-  - name: _SignType
-    value: real
-  - name: _Sign
-    value: true
-- ${{ else }}:
-  - name: _SignType
-    value: test
-  - name: _Sign
-    value: false
-
-parameters:
-- name: WindowsPool
-  type: object
-  default:
-    name: NetCore1ESPool-Internal
-    demands:
-      - ImageOverride -equals 1es-windows-2022
-    os: windows
-
-- name: MacOSPool
-  type: object
-  default:
-    name: Azure Pipelines
-    vmImage: macOS-15
-    os: macOS
 
 resources:
   repositories:
@@ -80,68 +33,74 @@ resources:
     ref: refs/tags/release
 
 extends:
-  ${{ if ne(variables['Build.Reason'], 'PullRequest') }}:
-    template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
-  ${{ else }}:
-    template: v1/1ES.Unofficial.PipelineTemplate.yml@1ESPipelineTemplates
+  template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
   parameters:
-    pool: ${{ parameters.WindowsPool }}
+    pool:
+      name: NetCore1ESPool-Internal
+      image: windows.vs2022.amd64
+      os: windows
     sdl:
       binskim:
         scanOutputDirectoryOnly: true
-      codeql:
-        runSourceLanguagesInSourceAnalysis: true
-      componentgovernance:
-        ignoreDirectories: $(Build.SourcesDirectory)/.packages
-      policheck:
-        enabled: true
-        exclusionsFile: $(Build.SourcesDirectory)/.config/PoliCheckExclusions.xml
       spotBugs:
         enabled: false
         justification: 'Not applicable — no Java code in this repository'
-      suppression:
-        suppressionFile: $(Build.SourcesDirectory)/.config/guardian/.gdnsuppress
-      tsa:
-        enabled: true
+
     stages:
 
-    # Stage 1: Build, Test, Pack (and Sign for official builds)
-    - stage: Build
-      displayName: Build & Test ${{ variables._ProductName }}
-      dependsOn: []
+    # ── Build ──────────────────────────────────────────────────────────
+    - stage: build
+      displayName: Build
       jobs:
-      - template: /eng/pipelines/templates/build-test-pack.yml@self
+      - template: /eng/common/templates-official/jobs/jobs.yml@self
         parameters:
-          pool: ${{ parameters.WindowsPool }}
-          macPool: ${{ parameters.MacOSPool }}
-          buildConfig: ${{ variables._BuildConfig }}
-          solutionFilter: ${{ variables._SolutionFilter }}
-          productName: ${{ variables._ProductName }}
-          signType: $(_SignType)
-          sign: $(_Sign)
+          enablePublishUsingPipelines: true
+          enablePublishBuildArtifacts: true
+          enablePublishTestResults: true
+          enableTelemetry: true
+          jobs:
 
-    # Stage 2: Publish packages (official builds only, non-PR)
-    - ${{ if ne(variables['Build.Reason'], 'PullRequest') }}:
-      - stage: Publish
-        displayName: Publish ${{ variables._ProductName }}
-        dependsOn: Build
-        condition: succeeded()
-        jobs:
-        - job: publish_packages
-          displayName: Publish NuGet Packages
-          pool: ${{ parameters.WindowsPool }}
-          steps:
-          - download: current
-            artifact: packages-$(_ProductName)
-            displayName: Download packages
+          - job: Windows
+            pool:
+              name: NetCore1ESPool-Internal
+              demands: ImageOverride -equals windows.vs2022.amd64
+            timeoutInMinutes: 60
+            strategy:
+              matrix:
+                Release:
+                  _BuildConfig: Release
+                  _OfficialBuildArgs: >-
+                    /p:DotNetSignType=$(_SignType)
+                    /p:TeamName=$(_TeamName)
+                    /p:DotNetPublishUsingPipelines=true
+                    /p:OfficialBuildId=$(BUILD.BUILDNUMBER)
+            steps:
+            - script: eng\common\cibuild.cmd
+                -configuration $(_BuildConfig)
+                -prepareMachine
+                $(_OfficialBuildArgs)
+              displayName: Build and Test
 
-          - task: NuGetAuthenticate@1
-            displayName: Authenticate NuGet
+          - job: macOS
+            pool:
+              name: Azure Pipelines
+              vmImage: macOS-15
+              os: macOS
+            timeoutInMinutes: 60
+            strategy:
+              matrix:
+                Release:
+                  _BuildConfig: Release
+            steps:
+            - script: eng/common/cibuild.sh
+                --configuration $(_BuildConfig)
+                --prepareMachine
+              displayName: Build and Test
 
-          - pwsh: |
-              Write-Host "Packages ready for publishing:"
-              Get-ChildItem "$(Pipeline.Workspace)/packages-$(_ProductName)/*.nupkg" | Format-Table Name, Length
-              Write-Host ""
-              Write-Host "Publishing is handled via release pipeline or manual approval."
-              Write-Host "Packages are available as pipeline artifacts."
-            displayName: List packages
+    # ── Post-build (validation + publishing) ───────────────────────────
+    - template: /eng/common/templates-official/post-build/post-build.yml@self
+      parameters:
+        enableSourceLinkValidation: false
+        enableSigningValidation: true
+        enableNugetValidation: true
+        publishInstallersAndChecksums: false
