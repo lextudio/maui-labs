@@ -75,9 +75,16 @@ extends:
                     /p:DotNetPublishUsingPipelines=true
                     /p:OfficialBuildId=$(BUILD.BUILDNUMBER)
             steps:
+            - task: NuGetAuthenticate@1
+              displayName: Authenticate NuGet feeds
+
+            - script: dotnet workload install maui macos
+              displayName: Install MAUI workloads
+
             - script: eng\common\cibuild.cmd
                 -configuration $(_BuildConfig)
                 -prepareMachine
+                -projects $(Build.SourcesDirectory)\src\DevFlow\DevFlow.slnf
                 $(_OfficialBuildArgs)
               displayName: Build and Test
 
@@ -92,9 +99,13 @@ extends:
                 Release:
                   _BuildConfig: Release
             steps:
+            - script: dotnet workload install maui macos
+              displayName: Install MAUI workloads
+
             - script: eng/common/cibuild.sh
                 --configuration $(_BuildConfig)
                 --prepareMachine
+                --projects $(Build.SourcesDirectory)/src/DevFlow/DevFlow.slnf
               displayName: Build and Test
 
     # ── Post-build (validation + publishing) ───────────────────────────
