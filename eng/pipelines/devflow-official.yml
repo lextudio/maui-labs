@@ -1,5 +1,11 @@
 # Azure DevOps official build pipeline for DevFlow
 # Uses Arcade build system with 1ES Pipeline Templates for security compliance.
+#
+# NuGet.org publishing is handled by a separate pipeline:
+#   eng/pipelines/release-publish-nuget.yml
+# MicroBuild signing enables CFS (CFSClean/CFSClean2) policies that block
+# outbound HTTPS to public package feeds including NuGet.org, even with
+# networkIsolationPolicy: Permissive. A separate pipeline avoids this.
 
 trigger:
   batch: true
@@ -9,12 +15,6 @@ trigger:
     - release/*
 
 pr: none
-
-parameters:
-- name: publishPackagesNuget
-  displayName: 'Publish packages to nuget.org'
-  type: boolean
-  default: false
 
 variables:
 - template: /eng/pipelines/common-variables.yml@self
@@ -88,38 +88,3 @@ extends:
         enableSourceLinkValidation: false
         enableSigningValidation: true
         enableNugetValidation: true
-
-    # Publish to NuGet.org using 1ES.PublishNuget task
-    # Pattern from dotnet/aspire release-publish-nuget.yml:
-    # - useDotNetTask: false (required - DotNetCoreCLI@2 doesn't support encrypted API keys)
-    # - nuGetFeedType: external + publishFeedCredentials for NuGet.org
-    - ${{ if eq(parameters.publishPackagesNuget, true) }}:
-      - stage: publish_nuget
-        displayName: 'Publish to NuGet.org'
-        dependsOn:
-        - Validate
-        - publish_using_darc
-        jobs:
-        - job: PublishNuGet
-          displayName: 'Push Packages to NuGet.org'
-          timeoutInMinutes: 30
-          pool:
-            name: NetCore1ESPool-Internal
-            image: windows.vs2022.amd64
-            os: windows
-          templateContext:
-            type: releaseJob
-            isProduction: true
-            inputs:
-            - input: pipelineArtifact
-              artifactName: PackageArtifacts
-              targetPath: '$(Pipeline.Workspace)/PackageArtifacts'
-          steps:
-          - task: 1ES.PublishNuget@1
-            displayName: 'Push Packages to NuGet.org'
-            inputs:
-              useDotNetTask: false
-              packagesToPush: '$(Pipeline.Workspace)/PackageArtifacts/*.nupkg'
-              packageParentPath: '$(Pipeline.Workspace)/PackageArtifacts'
-              nuGetFeedType: external
-              publishFeedCredentials: 'nuget.org (dotnetframework)'
