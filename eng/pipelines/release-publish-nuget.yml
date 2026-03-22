@@ -1,0 +1,232 @@
+# Release Pipeline: Publish NuGet Packages to NuGet.org
+#
+# This is a SEPARATE pipeline from the main build (devflow-official.yml).
+# It must be separate because MicroBuild signing in the build pipeline
+# enables CFS network isolation that blocks outbound HTTPS to NuGet.org
+# (DNS redirected to TEST-NET IP 192.0.2.x), regardless of the
+# networkIsolationPolicy setting.
+#
+# Pattern from dotnet/aspire release-publish-nuget.yml.
+#
+# Usage:
+#   1. Run a successful build with devflow-official.yml
+#   2. Manually trigger this pipeline, selecting the source build
+#   3. Artifacts are downloaded, SBOM is generated, and packages are pushed
+#
+# Prerequisites:
+#   - This YAML must be registered as a pipeline in Azure DevOps
+#   - Service connection 'nuget.org (dotnetframework)' must be authorized
+
+trigger: none  # Manual trigger only
+pr: none
+
+parameters:
+- name: DryRun
+  displayName: 'Dry Run (skip actual NuGet push)'
+  type: boolean
+  default: false
+
+- name: SkipNuGetPublish
+  displayName: 'Skip NuGet Publishing (set true if already completed)'
+  type: boolean
+  default: false
+
+resources:
+  repositories:
+  - repository: 1ESPipelineTemplates
+    type: git
+    name: 1ESPipelineTemplates/1ESPipelineTemplates
+    ref: refs/tags/release
+  pipelines:
+  - pipeline: devflow-build
+    source: dotnet-maui-labs-official
+    project: internal
+    trigger: none
+
+extends:
+  template: v1/1ES.Official.PipelineTemplate.yml@1ESPipelineTemplates
+  parameters:
+    pool:
+      name: NetCore1ESPool-Internal
+      image: windows.vs2026preview.scout.amd64
+      os: windows
+    settings:
+      networkIsolationPolicy: Permissive
+
+    stages:
+    # Stage 1: Download artifacts from the build pipeline and re-publish them.
+    # 1ES PT injects SBOM generation for templateContext outputs, making
+    # the artifacts compliant for the releaseJob in Stage 2.
+    - stage: PrepareArtifacts
+      displayName: 'Prepare Artifacts with SBOM'
+      jobs:
+      - job: PrepareJob
+        displayName: 'Download and Re-publish Artifacts'
+        timeoutInMinutes: 30
+        pool:
+          name: NetCore1ESPool-Internal
+          image: windows.vs2026preview.scout.amd64
+          os: windows
+        templateContext:
+          outputs:
+          - output: pipelineArtifact
+            displayName: 'Publish PackageArtifacts with SBOM'
+            targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+            artifactName: 'PackageArtifacts'
+        steps:
+        - checkout: none
+
+        - powershell: |
+            Write-Host "=== Prepare Artifacts Stage ==="
+            Write-Host "Source Build ID: $(resources.pipeline.devflow-build.runID)"
+            Write-Host "Source Build Name: $(resources.pipeline.devflow-build.runName)"
+            Write-Host "This stage downloads artifacts and re-publishes them so 1ES PT can generate SBOM."
+            Write-Host "==============================="
+          displayName: 'Log Stage Info'
+
+        - download: devflow-build
+          displayName: 'Download PackageArtifacts from Source Build'
+          artifact: PackageArtifacts
+          patterns: '**/*.nupkg'
+
+        - powershell: |
+            $sourcePath = "$(Pipeline.Workspace)/devflow-build/PackageArtifacts"
+            $targetPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+
+            Write-Host "Moving artifacts from $sourcePath to $targetPath"
+
+            if (!(Test-Path $targetPath)) {
+              New-Item -ItemType Directory -Path $targetPath -Force | Out-Null
+            }
+
+            $packages = Get-ChildItem -Path $sourcePath -Filter "*.nupkg" -Recurse
+            Write-Host "Found $($packages.Count) packages to copy"
+
+            foreach ($pkg in $packages) {
+              Copy-Item $pkg.FullName -Destination $targetPath -Force
+              Write-Host "  Copied: $($pkg.Name)"
+            }
+
+            Write-Host "Artifacts prepared for SBOM generation"
+          displayName: 'Prepare Artifacts for Publishing'
+
+    # Stage 2: Publish packages to NuGet.org
+    - stage: Release
+      displayName: 'Publish to NuGet.org'
+      dependsOn: PrepareArtifacts
+      jobs:
+      - job: PublishNuGet
+        displayName: 'Push Packages to NuGet.org'
+        timeoutInMinutes: 30
+        pool:
+          name: NetCore1ESPool-Internal
+          image: windows.vs2026preview.scout.amd64
+          os: windows
+        templateContext:
+          type: releaseJob
+          isProduction: true
+          inputs:
+          - input: pipelineArtifact
+            artifactName: PackageArtifacts
+            targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+        steps:
+        - task: UseDotNet@2
+          displayName: 'Install .NET SDK'
+          inputs:
+            packageType: 'sdk'
+            version: '10.0.x'
+
+        - powershell: |
+            $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+            Write-Host "=== Package Inventory ==="
+
+            $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+            Write-Host "Found $($packages.Count) packages:"
+
+            foreach ($pkg in $packages) {
+              $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
+              Write-Host "  - $($pkg.Name) ($sizeMB MB)"
+            }
+
+            if ($packages.Count -eq 0) {
+              Write-Error "No packages found in artifacts!"
+              exit 1
+            }
+
+            Write-Host "==========================="
+          displayName: 'List Packages'
+
+        # Verify package signatures before publishing
+        - powershell: |
+            $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+            Write-Host "=== Verifying Package Signatures ==="
+
+            $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+            $failedVerification = @()
+
+            foreach ($package in $packages) {
+              Write-Host "Verifying: $($package.Name)"
+
+              $originalErrorActionPreference = $ErrorActionPreference
+              $ErrorActionPreference = 'Continue'
+              $result = dotnet nuget verify $package.FullName 2>&1
+              $verifyExitCode = $LASTEXITCODE
+              $ErrorActionPreference = $originalErrorActionPreference
+
+              if ($verifyExitCode -ne 0) {
+                Write-Host "  Signature verification FAILED"
+                Write-Host $result
+                $failedVerification += $package.Name
+              } else {
+                Write-Host "  Signature valid"
+              }
+            }
+
+            if ($failedVerification.Count -gt 0) {
+              Write-Host ""
+              Write-Host "=== SIGNATURE VERIFICATION FAILED ==="
+              Write-Host "The following packages failed signature verification:"
+              foreach ($pkg in $failedVerification) {
+                Write-Host "  - $pkg"
+              }
+              Write-Error "Package signature verification failed. Aborting release."
+              exit 1
+            }
+
+            Write-Host ""
+            Write-Host "All $($packages.Count) packages passed signature verification"
+            Write-Host "==========================="
+          displayName: 'Verify Package Signatures'
+
+        # Dry Run: show what would be published
+        - ${{ if and(eq(parameters.DryRun, true), eq(parameters.SkipNuGetPublish, false)) }}:
+          - powershell: |
+              $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
+              Write-Host "=== DRY RUN MODE ==="
+              Write-Host "The following packages would be published to NuGet.org:"
+              Write-Host ""
+              $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
+              foreach ($pkg in $packages) {
+                $sizeMB = [math]::Round($pkg.Length / 1MB, 2)
+                Write-Host "  - $($pkg.Name) ($sizeMB MB)"
+              }
+              Write-Host ""
+              Write-Host "Total: $($packages.Count) packages"
+              Write-Host "=== DRY RUN - No packages were actually published ==="
+            displayName: 'Dry Run - List Packages (No Publish)'
+
+        # Actual publish to NuGet.org
+        - ${{ if and(eq(parameters.DryRun, false), eq(parameters.SkipNuGetPublish, false)) }}:
+          - task: 1ES.PublishNuget@1
+            displayName: 'Push Packages to NuGet.org'
+            inputs:
+              useDotNetTask: false
+              packagesToPush: '$(Pipeline.Workspace)/packages/PackageArtifacts/*.nupkg'
+              packageParentPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
+              nuGetFeedType: external
+              publishFeedCredentials: 'nuget.org (dotnetframework)'
+
+        - ${{ if eq(parameters.SkipNuGetPublish, true) }}:
+          - powershell: |
+              Write-Host "=== Skipping NuGet Publishing (SkipNuGetPublish=true) ==="
+            displayName: 'Skip NuGet Publish (flagged)'

@@ -1,5 +1,10 @@
 # Azure DevOps official build pipeline for DevFlow
 # Uses Arcade build system with 1ES Pipeline Templates for security compliance.
+#
+# NuGet.org publishing is handled by a separate pipeline:
+#   eng/pipelines/release-publish-nuget.yml
+# This avoids CFS network isolation conflicts between MicroBuild signing
+# and external NuGet.org access.
 
 trigger:
   batch: true
@@ -9,12 +14,6 @@ trigger:
     - release/*
 
 pr: none
-
-parameters:
-- name: publishPackagesNuget
-  displayName: 'Publish packages to nuget.org'
-  type: boolean
-  default: false
 
 variables:
 - template: /eng/pipelines/common-variables.yml@self
@@ -39,9 +38,6 @@ extends:
       name: NetCore1ESPool-Internal
       image: windows.vs2026preview.scout.amd64
       os: windows
-    # Required for publishing to external feeds like nuget.org
-    settings:
-      networkIsolationPolicy: Permissive, CFSClean, CFSClean2
 
     stages:
     - stage: build
@@ -88,58 +84,3 @@ extends:
         enableSourceLinkValidation: false
         enableSigningValidation: true
         enableNugetValidation: true
-
-    # Publish to NuGet.org using 1ES.PublishNuget task
-    # Pattern from dotnet/aspire release-publish-nuget.yml:
-    # - PrepareArtifacts job re-publishes PackageArtifacts through 1ES outputs
-    #   so that SBOM manifest is generated (required for releaseJob validation)
-    # - PublishNuGet job consumes the SBOM-annotated artifact and pushes to NuGet.org
-    - ${{ if eq(parameters.publishPackagesNuget, true) }}:
-      - stage: publish_nuget
-        displayName: 'Publish to NuGet.org'
-        dependsOn:
-        - Validate
-        - publish_using_darc
-        jobs:
-        - job: PrepareArtifacts
-          displayName: 'Prepare Artifacts with SBOM'
-          timeoutInMinutes: 15
-          pool:
-            name: NetCore1ESPool-Internal
-            image: windows.vs2026preview.scout.amd64
-            os: windows
-          templateContext:
-            outputs:
-            - output: pipelineArtifact
-              displayName: Publish PackageArtifacts
-              targetPath: '$(Pipeline.Workspace)/PackageArtifacts'
-              artifactName: PackageArtifactsForNuGet
-          steps:
-          - download: current
-            artifact: PackageArtifacts
-            displayName: Download PackageArtifacts
-
-        - job: PublishNuGet
-          displayName: 'Push Packages to NuGet.org'
-          dependsOn: PrepareArtifacts
-          timeoutInMinutes: 30
-          pool:
-            name: NetCore1ESPool-Internal
-            image: windows.vs2026preview.scout.amd64
-            os: windows
-          templateContext:
-            type: releaseJob
-            isProduction: true
-            inputs:
-            - input: pipelineArtifact
-              artifactName: PackageArtifactsForNuGet
-              targetPath: '$(Pipeline.Workspace)/PackageArtifacts'
-          steps:
-          - task: 1ES.PublishNuget@1
-            displayName: 'Push Packages to NuGet.org'
-            inputs:
-              useDotNetTask: false
-              packagesToPush: '$(Pipeline.Workspace)/PackageArtifacts/*.nupkg'
-              packageParentPath: '$(Pipeline.Workspace)/PackageArtifacts'
-              nuGetFeedType: external
-              publishFeedCredentials: 'nuget.org (dotnetframework)'
