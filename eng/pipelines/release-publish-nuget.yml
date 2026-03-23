@@ -130,7 +130,7 @@ extends:
             artifactName: PackageArtifacts
             targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
         steps:
-        - checkout: self
+        - checkout: none
 
         - task: UseDotNet@2
           displayName: 'Install .NET SDK'
