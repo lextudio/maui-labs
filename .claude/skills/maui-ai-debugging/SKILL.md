@@ -200,6 +200,7 @@ if the build fails.
 7. `maui-devflow MAUI screenshot --output screen.png` — visual verification (auto-scaled to 1x on HiDPI)
 8. `maui-devflow MAUI screenshot --id <elementId> --output el.png` — element-only screenshot
 9. `maui-devflow MAUI screenshot --selector "Button" --output btn.png` — screenshot by CSS selector
+10. `maui-devflow MAUI screenshot --fullscreen --output full.png` — full device display including status bar and safe areas
 
 **Property inspection** is more reliable than screenshots for verifying exact runtime values:
 ```bash
@@ -430,7 +431,7 @@ resolution options are provided.
 | `MAUI clear [elementId] [--automationId A] [--type T] [--text T] [--index N] [--and-screenshot [path]] [--and-tree]` | Clear text. elementId optional when using resolution options |
 | `MAUI focus [elementId] [--automationId A] [--type T] [--text T] [--index N]` | Set focus. elementId optional when using resolution options |
 | `MAUI assert [--id ID] [--automationId A] <property> <expected>` | Assert element property value. Exit 0 if match, 1 if mismatch. Ideal for verification without screenshots |
-| `MAUI screenshot [--output path.png] [--window W] [--id ID] [--selector SEL] [--overwrite] [--max-width N] [--scale native]` | PNG screenshot. Auto-scales to 1x logical resolution on HiDPI displays (2x, 3x). Use `--scale native` for full resolution. `--max-width N` overrides auto-scaling with explicit width. `--overwrite` replaces existing file |
+| `MAUI screenshot [--output path.png] [--window W] [--id ID] [--selector SEL] [--fullscreen] [--overwrite] [--max-width N] [--scale native]` | PNG screenshot. Default captures **Page content area only** (excludes status bar, home indicator, safe areas). `--fullscreen` captures the complete device display including system chrome and safe area regions. Auto-scales to 1x logical resolution on HiDPI displays (2x, 3x). Use `--scale native` for full resolution. `--max-width N` overrides auto-scaling with explicit width. `--overwrite` replaces existing file |
 | `MAUI property <elementId> <prop>` | Read property (Text, IsVisible, FontSize, etc.) |
 | `MAUI set-property <elementId> <prop> <value>` | Set property (live editing — colors, text, sizes, etc.) |
 | `MAUI element <elementId>` | Full element JSON (type, bounds, children, etc.) |
@@ -597,6 +598,7 @@ their input.
 - Use **`--format compact`** for minimal tree output (id, type, text, automationId, bounds).
 - **Prefer `MAUI query --automationId`** over full tree traversal — much smaller response.
 - Use **element-level screenshots** (`--id <elementId>`) when you only need to see one control.
+- Use **`--fullscreen`** when verifying layout near screen edges, safe areas, or device chrome — default screenshots exclude these.
 
 ### Adaptive Depth Learning
 MAUI app trees vary in depth — a simple app might have controls at depth 8, while a complex app
@@ -622,6 +624,38 @@ the screenshot dimensions accordingly. This happens server-side before transfer.
   ```bash
   maui-devflow MAUI screenshot --output screen.png --max-width 600
   ```
+
+### Safe Area & Edge Verification
+Default screenshots capture the **Page content area only** — they do NOT include the device
+status bar, home indicator, notch, Dynamic Island, or navigation bar chrome. This means layout
+issues near screen edges are invisible in default screenshots.
+
+**When to use `--fullscreen`:** Use fullscreen mode whenever the user mentions or you need to
+verify anything related to:
+- Safe areas, safe area insets, or `UseSafeArea`
+- Content being cut off, clipped, or hidden at screen edges
+- Status bar overlap, notch clearance, or Dynamic Island avoidance
+- Home indicator area, bottom bar, or navigation bar overlap
+- Layout near the top or bottom of the screen
+- Rounded corner clipping on modern devices
+- Toolbar or tab bar positioning relative to device chrome
+- Keyboard avoiding behavior and content shifting
+- Screen edge gestures conflicting with swipe-based UI
+
+```bash
+# Full device display — shows status bar, safe areas, home indicator
+maui-devflow MAUI screenshot --fullscreen --output full-device.png
+
+# Compare: default captures Page content only
+maui-devflow MAUI screenshot --output page-only.png
+```
+
+**Verify safe area padding via properties** (complement to fullscreen screenshots):
+```bash
+maui-devflow MAUI property <id> Padding      # check if padding accounts for safe area
+maui-devflow MAUI property <id> Margin        # check margins near edges
+maui-devflow MAUI platform display            # get screen density, size, orientation
+```
 
 ### Eliminating Round-Trips
 - **Use implicit resolution** instead of query-then-act:

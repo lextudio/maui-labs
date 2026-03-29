@@ -308,7 +308,8 @@ class Program
         var screenshotOverwriteOption = new Option<bool>("--overwrite", () => false, "Overwrite existing file (default: fail if exists)");
         var screenshotMaxWidthOption = new Option<int?>("--max-width", "Resize screenshot to this max width (overrides auto-scaling)");
         var screenshotScaleOption = new Option<string?>("--scale", "Scale mode: 'native' keeps full HiDPI resolution, default auto-scales to 1x logical pixels");
-        var mauiScreenshotCmd = new Command("screenshot", "Take screenshot") { screenshotOutputOption, windowOption, screenshotIdOption, screenshotSelectorOption, screenshotOverwriteOption, screenshotMaxWidthOption, screenshotScaleOption };
+        var screenshotFullscreenOption = new Option<bool>("--fullscreen", () => false, "Capture complete device display including status bar and safe areas");
+        var mauiScreenshotCmd = new Command("screenshot", "Take screenshot") { screenshotOutputOption, windowOption, screenshotIdOption, screenshotSelectorOption, screenshotOverwriteOption, screenshotMaxWidthOption, screenshotScaleOption, screenshotFullscreenOption };
         mauiScreenshotCmd.SetHandler(async (ctx) =>
         {
             var host = ctx.ParseResult.GetValueForOption(agentHostOption)!;
@@ -321,7 +322,8 @@ class Program
                 ctx.ParseResult.GetValueForOption(screenshotSelectorOption),
                 ctx.ParseResult.GetValueForOption(screenshotOverwriteOption),
                 ctx.ParseResult.GetValueForOption(screenshotMaxWidthOption),
-                ctx.ParseResult.GetValueForOption(screenshotScaleOption));
+                ctx.ParseResult.GetValueForOption(screenshotScaleOption),
+                ctx.ParseResult.GetValueForOption(screenshotFullscreenOption));
         });
         mauiCommand.Add(mauiScreenshotCmd);
 
@@ -2010,7 +2012,7 @@ class Program
         catch (Exception ex) { OutputWriter.WriteError(ex.Message, json, suggestions: new[] { "Run 'MAUI tree' to refresh element IDs" }); _errorOccurred = true; }
     }
 
-    private static async Task MauiScreenshotAsync(string host, int port, bool json, string? output, int? window, string? id, string? selector, bool overwrite = false, int? maxWidth = null, string? scale = null)
+    private static async Task MauiScreenshotAsync(string host, int port, bool json, string? output, int? window, string? id, string? selector, bool overwrite = false, int? maxWidth = null, string? scale = null, bool fullscreen = false)
     {
         try
         {
@@ -2044,7 +2046,7 @@ class Program
             // Fall back to agent-based screenshot (or used for element-scoped captures)
             if (data == null)
             {
-                data = await client.ScreenshotAsync(window, id, selector, maxWidth, scale);
+                data = await client.ScreenshotAsync(window, id, selector, maxWidth, scale, fullscreen);
             }
 
             if (data == null)
@@ -2064,11 +2066,11 @@ class Program
             var fullPath = Path.GetFullPath(filename);
             if (json)
             {
-                OutputWriter.WriteResult(new { path = fullPath, size = data.Length, maxWidth = maxWidth, scale = scale ?? "auto" }, json);
+                OutputWriter.WriteResult(new { path = fullPath, size = data.Length, maxWidth = maxWidth, scale = scale ?? "auto", fullscreen }, json);
             }
             else
             {
-                var target = id != null ? $" (element: {id})" : selector != null ? $" (selector: {selector})" : "";
+                var target = id != null ? $" (element: {id})" : selector != null ? $" (selector: {selector})" : fullscreen ? " (fullscreen)" : "";
                 var scaleInfo = scale?.Equals("native", StringComparison.OrdinalIgnoreCase) == true ? " (native resolution)" :
                                 maxWidth != null ? $" (max-width: {maxWidth}px)" : " (auto-scaled to 1x)";
                 Console.WriteLine($"Screenshot saved: {fullPath} ({data.Length} bytes){target}{scaleInfo}");

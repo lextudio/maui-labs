@@ -145,13 +145,15 @@ public class AgentClient : IDisposable
     /// <summary>
     /// Take a screenshot (returns PNG bytes).
     /// Optionally target a specific element by ID or CSS selector.
+    /// When fullscreen is true, captures the complete device display including status bar and safe areas.
     /// </summary>
-    public async Task<byte[]?> ScreenshotAsync(int? window = null, string? elementId = null, string? selector = null, int? maxWidth = null, string? scale = null)
+    public async Task<byte[]?> ScreenshotAsync(int? window = null, string? elementId = null, string? selector = null, int? maxWidth = null, string? scale = null, bool fullscreen = false)
     {
         try
         {
             var queryParams = new List<string>();
             if (window != null) queryParams.Add($"window={window}");
+            if (fullscreen) queryParams.Add("fullscreen=true");
             if (elementId != null) queryParams.Add($"id={Uri.EscapeDataString(elementId)}");
             if (selector != null) queryParams.Add($"selector={Uri.EscapeDataString(selector)}");
             if (maxWidth != null) queryParams.Add($"maxWidth={maxWidth}");
