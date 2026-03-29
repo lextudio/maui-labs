@@ -20,12 +20,15 @@ public sealed class ScreenshotTool
 		[Description("Resize screenshot to this max width in pixels (overrides auto-scaling)")] int? maxWidth = null,
 		[Description("Scale mode: 'native' keeps full HiDPI resolution, default auto-scales to 1x logical pixels")] string? scale = null)
 	{
+		if (fullscreen && (!string.IsNullOrWhiteSpace(elementId) || !string.IsNullOrWhiteSpace(selector)))
+			throw new McpException("'fullscreen' and 'elementId'/'selector' are mutually exclusive. Omit elementId/selector for a fullscreen screenshot, or set fullscreen=false to capture a specific element.");
+
 		var agent = await session.GetAgentClientAsync(agentPort);
 		var bytes = await agent.ScreenshotAsync(window, elementId, selector, maxWidth, scale, fullscreen);
 		if (bytes == null || bytes.Length == 0)
 			throw new McpException("Screenshot failed — no image data returned. Is the agent connected and the app visible?");
 
-		var modeLabel = fullscreen ? "fullscreen" : (elementId ?? selector) != null ? "element" : "page";
+		var modeLabel = fullscreen ? "fullscreen" : !string.IsNullOrWhiteSpace(elementId) || !string.IsNullOrWhiteSpace(selector) ? "element" : "page";
 		return [
 			new TextContentBlock { Text = $"Screenshot captured ({bytes.Length} bytes, PNG, mode: {modeLabel})" },
 			ImageContentBlock.FromBytes(bytes, "image/png")
