@@ -25,10 +25,53 @@ on:
       - 'NuGet.config'
 
 jobs:
-  build:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      devflow: ${{ steps.combine.outputs.devflow }}
+      client: ${{ steps.combine.outputs.client }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            shared:
+              - 'eng/**'
+              - 'Directory.Build.props'
+              - 'Directory.Build.targets'
+              - 'Directory.Packages.props'
+              - 'global.json'
+              - 'NuGet.config'
+            devflow:
+              - 'src/DevFlow/**'
+            client:
+              - 'src/Client/**'
+      - id: combine
+        run: |
+          shared="${{ steps.filter.outputs.shared }}"
+          devflow="${{ steps.filter.outputs.devflow }}"
+          client="${{ steps.filter.outputs.client }}"
+          echo "devflow=$([ "$shared" = 'true' ] || [ "$devflow" = 'true' ] && echo 'true' || echo 'false')" >> "$GITHUB_OUTPUT"
+          echo "client=$([ "$shared" = 'true' ] || [ "$client" = 'true' ] && echo 'true' || echo 'false')" >> "$GITHUB_OUTPUT"
+
+  devflow:
+    needs: changes
+    if: needs.changes.outputs.devflow == 'true'
     uses: ./.github/workflows/_build.yml
     with:
       project-path: src/DevFlow/DevFlow.slnf
       project-name: devflow
       run-tests: true
       pack: true
+
+  client:
+    needs: changes
+    if: needs.changes.outputs.client == 'true'
+    uses: ./.github/workflows/_build.yml
+    with:
+      project-path: src/Client/Client.slnf
+      project-name: client
+      run-tests: true
+      pack: true
+      install-workloads: false

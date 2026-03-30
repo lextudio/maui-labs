@@ -1,0 +1,9 @@
+{
+  "solution": {
+    "path": "../../MauiLabs.sln",
+    "projects": [
+      "src\\Client\\Microsoft.Maui.Client\\Microsoft.Maui.Client.csproj",
+      "src\\Client\\Microsoft.Maui.Client.UnitTests\\Microsoft.Maui.Client.UnitTests.csproj"
+    ]
+  }
+}

@@ -57,6 +57,7 @@ extends:
           enableTelemetry: true
           jobs:
           - job: Windows
+            displayName: DevFlow - Windows
             pool:
               name: NetCore1ESPool-Internal
               demands: ImageOverride -equals windows.vs2026preview.scout.amd64
@@ -81,7 +82,31 @@ extends:
                 -prepareMachine
                 -projects $(Build.SourcesDirectory)\src\DevFlow\DevFlow.slnf
                 $(_OfficialBuildArgs)
-              displayName: Build and Test
+              displayName: Build and Test DevFlow
+
+          - job: Client
+            displayName: Client - Windows
+            pool:
+              name: NetCore1ESPool-Internal
+              demands: ImageOverride -equals windows.vs2026preview.scout.amd64
+            strategy:
+              matrix:
+                Release:
+                  _BuildConfig: Release
+                  _OfficialBuildArgs: /p:DotNetSignType=$(_SignType)
+                    /p:TeamName=$(_TeamName)
+                    /p:OfficialBuildId=$(BUILD.BUILDNUMBER)
+            steps:
+            - task: UseDotNet@2
+              displayName: Install .NET SDK
+              inputs:
+                useGlobalJson: true
+            - script: eng\common\cibuild.cmd
+                -configuration $(_BuildConfig)
+                -prepareMachine
+                -projects $(Build.SourcesDirectory)\src\Client\Client.slnf
+                $(_OfficialBuildArgs)
+              displayName: Build and Test Client
        
     - template: /eng/common/templates-official/post-build/post-build.yml@self
       parameters:
