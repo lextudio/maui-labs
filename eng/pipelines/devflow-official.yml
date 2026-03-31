@@ -280,9 +280,13 @@ extends:
                 exit 0
               }
 
+              # Use PAT for push since the Azure Pipelines GitHub App is read-only
+              $remote = "https://x-access-token:$(GitHubPushToken)@github.com/dotnet/maui-labs.git"
               git config user.name "dotnet-bot"
               git config user.email "dotnet-bot@microsoft.com"
               git tag -a $tag -m "Release $tag (build $(Build.BuildNumber))"
-              git push origin $tag
+              git push $remote $tag
               Write-Host "Pushed tag $tag"
             displayName: 'Push git tag'
+            env:
+              GitHubPushToken: $(GitHubPushToken)
