@@ -20,6 +20,10 @@ parameters:
   displayName: 'Publish Cli packages to NuGet.org'
   type: boolean
   default: false
+- name: createGitHubRelease
+  displayName: 'Create GitHub Release (tag + release notes)'
+  type: boolean
+  default: false
 
 variables:
 - template: /eng/pipelines/common-variables.yml@self
@@ -229,17 +233,17 @@ extends:
               nuGetFeedType: external
               publishFeedCredentials: 'nuget.org (dotnetframework)'
 
-    # Create a Git tag after successful NuGet publish.
+    # Create a Git tag after successful build validation and DARC publish.
     # This triggers the create-release.yml GitHub Actions workflow
     # which auto-creates a GitHub Release with generated notes.
-    - ${{ if or(eq(parameters.publishDevFlowNuget, true), eq(parameters.publishCliNuget, true)) }}:
+    # Runs concurrently with any NuGet publish stages — by the time the
+    # GitHub Release is visible, packages will be on NuGet.org.
+    - ${{ if eq(parameters.createGitHubRelease, true) }}:
       - stage: create_git_tag
         displayName: 'Create Git Tag'
         dependsOn:
-        - ${{ if eq(parameters.publishDevFlowNuget, true) }}:
-          - publish_devflow_nuget
-        - ${{ if eq(parameters.publishCliNuget, true) }}:
-          - publish_cli_nuget
+        - Validate
+        - publish_using_darc
         jobs:
         - job: PushTag
           displayName: 'Compute and push version tag'

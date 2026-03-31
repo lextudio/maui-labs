@@ -32,6 +32,10 @@ jobs:
           echo "prerelease=false" >> "$GITHUB_OUTPUT"
         fi
 
+        # Discover all packable projects from the source tree
+        PACKAGES=$(grep -rh '<PackageId>' src/ --include='*.csproj' | \
+          sed 's/.*<PackageId>//' | sed 's/<.*//' | sort -u)
+
         # Build package table
         {
           echo "### NuGet Packages"
@@ -39,16 +43,11 @@ jobs:
           echo "| Package | NuGet |"
           echo "|---------|-------|"
 
-          for pkg in Agent Agent.Core Agent.Gtk Blazor Blazor.Gtk Driver Logging; do
-            echo "| Microsoft.Maui.DevFlow.${pkg} | [![NuGet](https://img.shields.io/nuget/v/Microsoft.Maui.DevFlow.${pkg}.svg)](https://www.nuget.org/packages/Microsoft.Maui.DevFlow.${pkg}) |"
-          done
+          while IFS= read -r pkg; do
+            [ -z "$pkg" ] && continue
+            echo "| ${pkg} | [![NuGet](https://img.shields.io/nuget/v/${pkg}.svg)](https://www.nuget.org/packages/${pkg}) |"
+          done <<< "$PACKAGES"
 
-          echo "| Microsoft.Maui.Cli | [![NuGet](https://img.shields.io/nuget/v/Microsoft.Maui.Cli.svg)](https://www.nuget.org/packages/Microsoft.Maui.Cli) |"
-          echo ""
-          echo "Install with:"
-          echo '```'
-          echo "dotnet add package Microsoft.Maui.DevFlow.Agent --version \"${VERSION}.*\""
-          echo '```'
           echo ""
           echo "---"
           echo ""
