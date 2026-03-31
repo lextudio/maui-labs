@@ -1,0 +1,74 @@
+# Automatically creates a GitHub Release when a version tag is pushed.
+# Tags are pushed by the AzDO official pipeline after successful NuGet publish.
+
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Build release notes
+      id: notes
+      run: |
+        TAG="${GITHUB_REF_NAME}"
+        VERSION="${TAG#v}"
+
+        # Determine prerelease status
+        if [[ "$TAG" == *"preview"* ]] || [[ "$TAG" == *"rc"* ]]; then
+          echo "prerelease=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "prerelease=false" >> "$GITHUB_OUTPUT"
+        fi
+
+        # Build package table
+        {
+          echo "### NuGet Packages"
+          echo ""
+          echo "| Package | NuGet |"
+          echo "|---------|-------|"
+
+          for pkg in Agent Agent.Core Agent.Gtk Blazor Blazor.Gtk Driver Logging; do
+            echo "| Microsoft.Maui.DevFlow.${pkg} | [![NuGet](https://img.shields.io/nuget/v/Microsoft.Maui.DevFlow.${pkg}.svg)](https://www.nuget.org/packages/Microsoft.Maui.DevFlow.${pkg}) |"
+          done
+
+          echo "| Microsoft.Maui.Cli | [![NuGet](https://img.shields.io/nuget/v/Microsoft.Maui.Cli.svg)](https://www.nuget.org/packages/Microsoft.Maui.Cli) |"
+          echo ""
+          echo "Install with:"
+          echo '```'
+          echo "dotnet add package Microsoft.Maui.DevFlow.Agent --version \"${VERSION}.*\""
+          echo '```'
+          echo ""
+          echo "---"
+          echo ""
+        } > "$RUNNER_TEMP/release-notes.md"
+
+    - name: Create GitHub Release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        TAG="${GITHUB_REF_NAME}"
+
+        ARGS=(
+          "$TAG"
+          --title "$TAG"
+          --notes-file "$RUNNER_TEMP/release-notes.md"
+          --generate-notes
+        )
+
+        if [ "${{ steps.notes.outputs.prerelease }}" = "true" ]; then
+          ARGS+=(--prerelease)
+        fi
+
+        gh release create "${ARGS[@]}"
