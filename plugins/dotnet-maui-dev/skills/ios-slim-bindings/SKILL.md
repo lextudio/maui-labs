@@ -254,9 +254,8 @@ public class ClassName: NSObject {
 - [CommunityToolkit.Maui Bindings](https://github.com/CommunityToolkit/Maui)
 
 ## Reference Files
-- [ios-bindings-guide.md](references/ios-bindings-guide. comprehensive binding referencemd) 
-- [android-bindings-guide.md](references/android-bindings-guide. Android bindings referencemd) 
-- [ios-slim-bindings-implementation.md](references/ios-slim-bindings-implementation. detailed code examples, troubleshooting, and complete scriptsmd) 
+- [ios-bindings-guide.md](references/ios-bindings-guide.md) — comprehensive binding reference
+- [ios-slim-bindings-implementation.md](references/ios-slim-bindings-implementation.md) — detailed code examples, troubleshooting, and complete scripts
 - For Android bindings, use the **android-slim-bindings** skill
 
 # Output Format
