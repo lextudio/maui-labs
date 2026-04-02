@@ -13,6 +13,13 @@
     <Project Path="samples/DevFlow.Sample/DevFlow.Sample.csproj" />
   </Folder>
   <Folder Name="/src/" />
+  <Folder Name="/src/Comet/">
+    <Project Path="src/Comet/src/Comet.SourceGenerator/Comet.SourceGenerator.csproj" />
+    <Project Path="src/Comet/src/Comet/Comet.csproj" />
+  </Folder>
+  <Folder Name="/src/Comet/tests/">
+    <Project Path="src/Comet/tests/Comet.Tests/Comet.Tests.csproj" />
+  </Folder>
   <Folder Name="/src/Cli/">
     <Project Path="src/Cli/Microsoft.Maui.Cli.UnitTests/Microsoft.Maui.Cli.UnitTests.csproj" />
     <Project Path="src/Cli/Microsoft.Maui.Cli/Microsoft.Maui.Cli.csproj" />
