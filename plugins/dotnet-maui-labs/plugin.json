@@ -1,0 +1,6 @@
+{
+  "name": "dotnet-maui-labs",
+  "version": "0.1.0",
+  "description": "Experimental .NET MAUI skills for DevFlow automation, AI-assisted debugging, and multiplatform app inspection. Requires the maui CLI tool and DevFlow agent packages.",
+  "skills": ["./skills/"]
+}

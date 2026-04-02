@@ -1,0 +1,13 @@
+{
+  "name": "dotnet-maui-labs-skills",
+  "owner": {
+    "name": ".NET MAUI Team"
+  },
+  "plugins": [
+    {
+      "name": "dotnet-maui-labs",
+      "source": "./plugins/dotnet-maui-labs",
+      "description": "Experimental .NET MAUI skills for DevFlow automation, AI-assisted debugging, and multiplatform app inspection."
+    }
+  ]
+}
