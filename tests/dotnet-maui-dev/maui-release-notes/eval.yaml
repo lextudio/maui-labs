@@ -1,0 +1,91 @@
+scenarios:
+  - name: "Construct Apple platform GitHub release link from workload version"
+    prompt: |
+      I'm generating release notes for the .NET 10 iOS workload and need to
+      link to the GitHub release. The iOS workload version is 26.2.10191.
+      What's the correct GitHub release tag and URL for this on the
+      dotnet/macios repository?
+    assertions:
+      - type: "output_contains"
+        value: "dotnet-10.0.1xx-xcode26.2-10191"
+      - type: "output_contains"
+        value: "github.com/dotnet/macios/releases"
+      - type: "output_not_contains"
+        value: "github.com/dotnet/maui"
+    rubric:
+      - "Constructs the tag as dotnet-{dotnetVersion}.0.1xx-xcode{xcodeVersion}-{buildNumber}"
+      - "Correctly parses 26.2.10191 into xcodeVersion=26.2 and buildNumber=10191"
+      - "Points to dotnet/macios repository (not dotnet/maui) for iOS/Mac Catalyst releases"
+      - "Shows the complete URL: https://github.com/dotnet/macios/releases/tag/dotnet-10.0.1xx-xcode26.2-10191"
+    timeout: 120
+
+  - name: "Generate workload versions table for release notes"
+    prompt: |
+      I need to create the workload versions table for .NET 10 release notes.
+      The workload set NuGet version is 10.102.0 (CLI: 10.0.102), and the
+      workloads are:
+      - MAUI: 10.0.10 (band 10.0.100)
+      - iOS: 26.2.10191 (band 10.0.100, Xcode ≥ 26.2)
+      - Mac Catalyst: 26.2.10191 (band 10.0.100, Xcode ≥ 26.2)
+      - Android: 35.0.50 (band 9.0.100, API 35, JDK 17)
+
+      Generate the markdown table in the correct release notes format.
+    assertions:
+      - type: "output_matches"
+        pattern: "Workload.*Version.*SDK Band.*Links|Workload.*Version.*Requirements"
+      - type: "output_matches"
+        pattern: "Xcode ≥ 26\\.2|Xcode.*26\\.2"
+      - type: "output_matches"
+        pattern: "API 35.*JDK|JDK.*17"
+      - type: "output_matches"
+        pattern: "\\[NuGet\\]|nuget\\.org/packages"
+    rubric:
+      - "Produces a markdown table with columns: Workload, Full ID (or Version), SDK Band, and Links"
+      - "Includes NuGet manifest links constructed as Microsoft.NET.Sdk.{Workload}.Manifest-{band}/{version}"
+      - "Includes GitHub release links — MAUI to dotnet/maui, Android to dotnet/android, Apple platforms to dotnet/macios"
+      - "Shows Requirements column with Xcode ≥ for Apple platforms and API + JDK for Android"
+      - "Uses ≥ symbol (not >=) for version requirements"
+    timeout: 120
+
+  - name: "Determine if release notes need updating"
+    prompt: |
+      I have existing release notes from last week. How do I check whether new
+      workload versions have been published that warrant a new release notes
+      entry? What specific versions should I compare, and where do I get the
+      current data?
+    assertions:
+      - type: "output_matches"
+        pattern: "dotnet-workload-info|workload.set|workload.search"
+      - type: "output_matches"
+        pattern: "(?i)compare|diff|changed"
+      - type: "output_matches"
+        pattern: "maui-release-notes-.*\\.md|YYYYMMDD"
+    rubric:
+      - "Recommends using the dotnet-workload-info skill or equivalent NuGet API queries to fetch current versions"
+      - "Identifies the key versions to compare: workload set version, MAUI version, iOS version, Android version"
+      - "Shows checking the most recent maui-release-notes-YYYYMMDD.md file for the previous values"
+      - "Explains the workflow: only generate new notes if at least one version changed"
+    timeout: 120
+
+  - name: "Generate dated release notes with installation commands"
+    prompt: |
+      Generate a complete dated release notes file for today's date covering
+      .NET 10 with workload set CLI version 10.0.102. Include the installation
+      section with the correct dotnet workload commands and the MAUI NuGet
+      packages section showing both implicit and latest versions.
+    assertions:
+      - type: "output_matches"
+        pattern: "dotnet workload.*--version 10\\.0\\.102"
+      - type: "output_matches"
+        pattern: "Implicit.*Latest|implicit.*latest"
+      - type: "output_matches"
+        pattern: "Microsoft\\.Maui\\.Controls"
+      - type: "output_matches"
+        pattern: "maui-release-notes-\\d{8}\\.md|maui-release-notes\\.md"
+    rubric:
+      - "Uses the file naming convention maui-release-notes-{YYYYMMDD}.md with today's date"
+      - "Includes installation commands using --version flag with the CLI version (10.0.102)"
+      - "Shows a MAUI NuGet Packages table distinguishing Implicit (workload-bundled) from Latest (out-of-band) versions"
+      - "Includes a back-link to the index page (maui-release-notes.md)"
+      - "Adds a Source line noting data comes from NuGet.org workload manifests"
+    timeout: 120

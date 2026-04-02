@@ -86,6 +86,70 @@ Rubric items are judged by an LLM comparing responses with and without the skill
 - **Measurable** — Can be objectively evaluated from the response
 - **Relevant** — Tests what the skill actually teaches
 
+## Writing Good Evaluations
+
+Evaluations use **pairwise comparison**: an LLM generates a response _with_ the skill injected and another _without_. A judge LLM scores which response is better. This means your scenarios must test knowledge the agent **wouldn't have without the skill**.
+
+### The Three Mistakes to Avoid
+
+1. **Testing common knowledge** — If a top LLM already knows the answer (e.g., "use `@objc` for Swift interop"), the skill won't improve the response and your scenario measures nothing. Test specific details from your skill document: exact API names, version conversion formulas, decision trees, specific error codes.
+
+2. **Brittle assertions** — `output_contains: "Run the following command"` will break on rephrasing. Use `output_matches` with regex alternatives: `"gradlew|gradle wrapper|./gradlew"`. Check concepts, not exact phrasing.
+
+3. **Vague rubric items** — "Provides helpful guidance" can't be objectively measured. Instead: "Maps `androidx.core:core` to `Xamarin.AndroidX.Core` NuGet package" — this is either present or not.
+
+### What Makes a Good Scenario
+
+| Good Scenario | Bad Scenario |
+|---|---|
+| Tests skill-specific knowledge (version math, API URLs, error codes) | Tests general programming knowledge |
+| Prompt includes specific versions, error messages, platform details | Prompt is vague ("how do I do bindings?") |
+| Assertions check for concrete artifacts (package names, commands, patterns) | Assertions check for generic phrases ("build succeeded") |
+| Rubric items describe specific findings | Rubric says "gives good advice" |
+| Negative assertions catch common wrong answers | No guardrails |
+
+### Scenario Design Tips
+
+- **Include version numbers** in prompts — forces specific, testable answers
+- **Include error messages** — tests diagnostic knowledge unique to the skill
+- **Test the decision tree** — when the skill teaches "if X then Y, else Z", write a scenario for each branch
+- **Use negative assertions** — `output_not_contains` catches wrong platform advice (e.g., no `adb reverse` for iOS)
+- **One aspect per scenario** — don't test everything in one massive prompt
+- **Realistic context** — write prompts that sound like real developer questions, not test questions
+
+### Example: Good vs Bad
+
+**Bad** (tests common knowledge, vague rubric):
+```yaml
+- name: "Create Android binding"
+  prompt: "How do I bind an Android library in .NET MAUI?"
+  assertions:
+    - type: "output_contains"
+      value: "binding"
+  rubric:
+    - "Provides helpful information about Android bindings"
+```
+
+**Good** (tests specific skill knowledge, precise assertions):
+```yaml
+- name: "Resolve XA4241 and XA4242 dependency errors"
+  prompt: |
+    My Android binding project fails with:
+    error XA4241: Java dependency 'javax.inject:javax.inject' is not satisfied.
+    error XA4242: Java dependency 'com.google.firebase:firebase-common:21.0.0'
+    is not satisfied. Suggested fix: Install NuGet 'Xamarin.Firebase.Common'.
+    How do I fix each of these? I don't need them from C# directly.
+  assertions:
+    - type: "output_matches"
+      pattern: "AndroidMavenLibrary|AndroidIgnoredJavaDependency"
+    - type: "output_matches"
+      pattern: "Bind.*false"
+  rubric:
+    - "For XA4242 with suggestion, recommends installing the suggested NuGet"
+    - "For compile-time-only deps, suggests AndroidIgnoredJavaDependency"
+    - "Explains the decision tree: NuGet suggestion → use it; runtime needed → AndroidMavenLibrary; compile-only → ignore"
+```
+
 ## Validation
 
 ### Local Testing
