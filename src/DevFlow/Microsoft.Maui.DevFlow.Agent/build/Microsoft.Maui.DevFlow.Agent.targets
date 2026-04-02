@@ -30,4 +30,22 @@
       <Compile Include="$(_MauiDevFlowPortFile)" />
     </ItemGroup>
   </Target>
+
+  <!--
+    Auto-initialization support: forward MSBuild properties to the source generator
+    via CompilerVisibleProperty so it can generate an interceptor for MauiAppBuilder.Build().
+    Activated when the consuming project sets <InitMauiDevFlowAgent>true</InitMauiDevFlowAgent>.
+  -->
+  <PropertyGroup Condition="'$(InitMauiDevFlowAgent)' == 'true'">
+    <InterceptorsPreviewNamespaces>$(InterceptorsPreviewNamespaces);Microsoft.Maui.DevFlow.Agent.Generated</InterceptorsPreviewNamespaces>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerVisibleProperty Include="InitMauiDevFlowAgent" />
+    <CompilerVisibleProperty Include="MauiDevFlowPort" />
+    <CompilerVisibleProperty Include="MauiDevFlowFileLogging" />
+    <CompilerVisibleProperty Include="MauiDevFlowNetworkMonitoring" />
+    <CompilerVisibleProperty Include="MauiDevFlowProfiler" />
+  </ItemGroup>
+
 </Project>

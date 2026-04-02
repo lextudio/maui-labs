@@ -41,6 +41,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DevFlow.Sample", "samples\D
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DevFlow.Sample.MacOS", "samples\DevFlow.Sample.MacOS\DevFlow.Sample.MacOS.csproj", "{AFD6683E-10FC-445C-9139-7F4FDFBFA232}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Microsoft.Maui.DevFlow.Agent.SourceGen", "src\DevFlow\Microsoft.Maui.DevFlow.Agent.SourceGen\Microsoft.Maui.DevFlow.Agent.SourceGen.csproj", "{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -207,6 +209,18 @@ Global
 		{AFD6683E-10FC-445C-9139-7F4FDFBFA232}.Release|x64.Build.0 = Release|Any CPU
 		{AFD6683E-10FC-445C-9139-7F4FDFBFA232}.Release|x86.ActiveCfg = Release|Any CPU
 		{AFD6683E-10FC-445C-9139-7F4FDFBFA232}.Release|x86.Build.0 = Release|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Debug|x64.Build.0 = Debug|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Debug|x86.Build.0 = Debug|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Release|x64.ActiveCfg = Release|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Release|x64.Build.0 = Release|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Release|x86.ActiveCfg = Release|Any CPU
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -227,5 +241,6 @@ Global
 		{13978349-2CD3-4F84-B9C8-EDB5F9B1CB18} = {12E5C810-18C6-BE57-4EA6-3F3BE821652E}
 		{B843C880-C1FE-4A2B-A41E-5A6D251929DD} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 		{AFD6683E-10FC-445C-9139-7F4FDFBFA232} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
+		{305033E5-0B0E-49DB-BE10-1C9FFD4D48D5} = {C0FFC53F-FDFB-A1DA-15F9-43B3CCBD9458}
 	EndGlobalSection
 EndGlobal

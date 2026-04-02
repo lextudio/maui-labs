@@ -21,6 +21,11 @@
     <PackageVersion Include="Microsoft.Extensions.Logging.Debug" Version="$(MicrosoftExtensionsLoggingDebugVersion)" />
   </ItemGroup>
 
+  <!-- Roslyn (source generators) -->
+  <ItemGroup Label="Roslyn">
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="$(MicrosoftCodeAnalysisCSharpVersion)" />
+  </ItemGroup>
+
   <!-- DevFlow dependencies (pinned, third party) -->
   <ItemGroup Label="DevFlow">
     <PackageVersion Include="Fizzler" Version="$(FizzlerVersion)" />
