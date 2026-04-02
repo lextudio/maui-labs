@@ -50,6 +50,23 @@ A comprehensive MAUI testing, automation, and debugging toolkit. The DevFlow CLI
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and development setup.
 
+## Agent Skills
+
+This repository is also a marketplace for distributable agent skills for .NET MAUI development. Skills are organized as plugins compatible with Copilot CLI, Claude Code, and VS Code.
+
+| Plugin | Description |
+|--------|-------------|
+| [`dotnet-maui-devflow`](plugins/dotnet-maui-devflow/) | DevFlow automation: agent connectivity, visual tree, screenshots, debugging |
+| [`dotnet-maui-dev`](plugins/dotnet-maui-dev/) | General MAUI development: profiling, accessibility, design patterns |
+
+```bash
+# Install via Copilot CLI
+/plugin marketplace add dotnet/maui-labs
+/plugin install dotnet-maui-devflow@dotnet-maui-labs-skills
+```
+
+See [plugins/](plugins/) for the full catalog and [plugins/CONTRIBUTING.md](plugins/CONTRIBUTING.md) for how to add skills.
+
 ## Support
 
 See [SUPPORT.md](.github/SUPPORT.md) for how to file issues, get help, and the support policy for this repository.
