@@ -7,7 +7,7 @@
     {
       "name": "dotnet-maui-labs",
       "source": "./plugins/dotnet-maui-labs",
-      "description": "Experimental .NET MAUI skills for DevFlow automation, AI-assisted debugging, and multiplatform app inspection."
+      "description": "Skills for .NET MAUI development: DevFlow automation, profiling, accessibility, UI design patterns, platform-specific debugging, and more."
     }
   ]
 }

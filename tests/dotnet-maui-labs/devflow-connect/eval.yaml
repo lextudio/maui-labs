@@ -9,7 +9,7 @@ scenarios:
       - type: "output_contains"
         value: "adb reverse"
       - type: "output_matches"
-        pattern: "tcp:5173|tcp:9988"
+        pattern: "tcp:19223|tcp:9223"
       - type: "output_contains"
         value: "broker"
     rubric:
@@ -21,12 +21,12 @@ scenarios:
 
   - name: "Resolve port conflict on agent port"
     prompt: |
-      When my MAUI app starts, I see an error about port 9988 being already in use.
+      When my MAUI app starts, I see an error about port 9223 being already in use.
       I think a previous debugging session left something running. How do I fix this
       so DevFlow can connect?
     assertions:
       - type: "output_matches"
-        pattern: "lsof.*9988|netstat.*9988"
+        pattern: "lsof.*9223|netstat.*9223"
       - type: "output_matches"
         pattern: "kill|stop"
     rubric:
@@ -38,7 +38,7 @@ scenarios:
   - name: "iOS simulator connection troubleshooting"
     prompt: |
       My MAUI app runs fine on the iOS simulator but maui devflow tree returns
-      "Cannot connect to agent at localhost:9988". I've confirmed the DevFlow agent
+      "Cannot connect to agent at localhost:9223". I've confirmed the DevFlow agent
       is integrated. What should I check?
     assertions:
       - type: "output_not_contains"
@@ -46,7 +46,7 @@ scenarios:
       - type: "output_matches"
         pattern: "(?i)broker|maui devflow broker"
       - type: "output_matches"
-        pattern: "lsof|port|9988"
+        pattern: "lsof|port|9223"
     rubric:
       - "Does NOT suggest adb reverse (iOS simulators share host network)"
       - "Checks if the broker is running and the agent registered"

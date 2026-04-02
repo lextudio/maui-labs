@@ -51,8 +51,8 @@ Skills are evaluated using LLM-based pairwise comparison (with vs. without the s
 ### Cli and DevFlow packages
 
 ```bash
-dotnet build src/Cli/Microsoft.Maui.Cli.sln
-dotnet build src/DevFlow/Microsoft.Maui.DevFlow.sln
+dotnet build src/Cli/Cli.slnf
+dotnet build src/DevFlow/DevFlow.slnf
 ```
 
 ### Running tests

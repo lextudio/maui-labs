@@ -33,8 +33,7 @@ permissions:
   contents: read
   pull-requests: write
   statuses: write
-
-jobs:
+  issues: write
   # Post initial commit status so required check is never stuck as "Expected"
   pr-status:
     if: github.event_name == 'pull_request'
@@ -94,7 +93,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    outputs:
+      issues: write
       should_run: ${{ steps.check.outputs.should_run }}
       pr_number: ${{ github.event.issue.number }}
       pr_head_sha: ${{ steps.pr-info.outputs.head_sha }}
@@ -135,6 +134,7 @@ jobs:
       contents: read
       pull-requests: write
       statuses: write
+      issues: write
     timeout-minutes: 120
     steps:
       - name: Checkout PR
@@ -190,20 +190,25 @@ jobs:
           RESULTS_DIR="artifacts/eval-results"
           mkdir -p "$RESULTS_DIR"
 
+          EVAL_FAILED=0
           echo "$ENTRIES" | jq -c '.[]' | while read -r entry; do
             name=$(echo "$entry" | jq -r '.name')
             plugin=$(echo "$entry" | jq -r '.plugin')
             skills_path=$(echo "$entry" | jq -r '.skills_path')
 
             echo "=== Evaluating: $name ==="
-            /tmp/skill-validator/bin/skill-validator evaluate \
+            if ! /tmp/skill-validator/bin/skill-validator evaluate \
               --verdict-warn-only \
               --results-dir "$RESULTS_DIR/$name" \
               --reporter console --reporter json --reporter markdown \
               --runs 3 \
               --tests-dir "./tests/$plugin" \
-              "./$skills_path" || true
+              "./$skills_path"; then
+              echo "::warning::Evaluation failed for $name"
+              EVAL_FAILED=1
+            fi
           done
+          exit $EVAL_FAILED
 
       - name: Post results to PR
         if: always()

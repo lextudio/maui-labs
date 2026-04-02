@@ -47,7 +47,7 @@ grep -r "Microsoft.Maui.DevFlow.Agent" *.csproj
 The agent must be initialized in `MauiProgram.cs`:
 
 ```csharp
-builder.Services.AddDevFlowAgent();
+builder.Services.AddMauiDevFlowAgent();
 ```
 
 ### 2. Check Broker Status
@@ -69,8 +69,8 @@ maui devflow broker start
 Android emulators run in a network namespace. Port forwarding is required:
 
 ```bash
-adb reverse tcp:5173 tcp:5173   # Broker port
-adb reverse tcp:9988 tcp:9988   # Agent default port
+adb reverse tcp:19223 tcp:19223  # Broker port
+adb reverse tcp:9223 tcp:9223    # Agent default port
 ```
 
 Verify with:
@@ -92,7 +92,7 @@ xcrun simctl list devices booted
 Direct localhost access. Check if the port is in use:
 
 ```bash
-lsof -i :9988
+lsof -i :9223
 ```
 
 #### Windows
@@ -127,8 +127,8 @@ A successful response returns the top-level visual tree. If this fails with a ti
 
 | Symptom | Fix |
 |---------|-----|
-| No agents listed | Check agent NuGet package + `AddDevFlowAgent()` call |
-| Android: connection refused | Run `adb reverse` for both ports |
-| Port already in use | Kill stale process: `lsof -i :9988` then `kill <PID>` |
+| No agents listed | Check agent NuGet package + `AddMauiDevFlowAgent()` call |
+| Android: connection refused | Run `adb reverse` for both ports (19223 + 9223) |
+| Port already in use | Kill stale process: `lsof -i :9223` then `kill <PID>` |
 | Broker not running | `maui devflow broker start` |
 | App crashes on startup | Check that DevFlow agent version matches MAUI version |
