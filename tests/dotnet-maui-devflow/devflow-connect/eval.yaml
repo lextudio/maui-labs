@@ -3,13 +3,15 @@ scenarios:
     prompt: |
       I'm running my MAUI app on an Android emulator. When I run `maui devflow list`
       it shows no agents. The app is running and I can see it on screen. I added the
-      Microsoft.Maui.DevFlow.Agent NuGet package and called AddDevFlowAgent() in
+      Microsoft.Maui.DevFlow.Agent NuGet package and called AddMauiDevFlowAgent() in
       MauiProgram.cs. What's wrong?
     assertions:
       - type: "output_contains"
         value: "adb reverse"
-      - type: "output_matches"
-        pattern: "tcp:19223|tcp:9223"
+      - type: "output_contains"
+        value: "tcp:19223"
+      - type: "output_contains"
+        value: "tcp:9223"
       - type: "output_contains"
         value: "broker"
     rubric:
@@ -30,7 +32,7 @@ scenarios:
       - type: "output_matches"
         pattern: "kill|stop"
     rubric:
-      - "Suggests checking what process is using port 9988 with lsof or netstat"
+      - "Suggests checking what process is using port 9223 with lsof or netstat"
       - "Provides a command to terminate the stale process"
       - "Mentions that restarting the app should resolve the issue after clearing the port"
     timeout: 120
@@ -57,7 +59,7 @@ scenarios:
   - name: "Full connectivity diagnostic workflow"
     prompt: |
       I just set up DevFlow for the first time in my MAUI app. I've added the NuGet
-      package and the AddDevFlowAgent() call. The app builds and runs on Mac Catalyst.
+      package and the AddMauiDevFlowAgent() call. The app builds and runs on Mac Catalyst.
       Walk me through verifying everything is connected properly.
     assertions:
       - type: "output_contains"

@@ -30,11 +30,11 @@ This skill guides the creation of **Native Library Interop (Slim Bindings)** for
 
 | Scenario | Recommended Approach |
 |----------|---------------------|
-| Need only a subset of library functionality | **Slim  |Bindings** 
-| Easier maintenance when SDK updates | **Slim  |Bindings** 
-| Prefer working in Java/Kotlin for wrapper | **Slim  |Bindings** 
-| Better isolation from breaking changes | **Slim  |Bindings** 
-| Complex libraries with many dependencies | **Slim  |Bindings** 
+| Need only a subset of library functionality | **Slim Bindings** |
+| Easier maintenance when SDK updates | **Slim Bindings** |
+| Prefer working in Java/Kotlin for wrapper | **Slim Bindings** |
+| Better isolation from breaking changes | **Slim Bindings** |
+| Complex libraries with many dependencies | **Slim Bindings** |
 | Need entire library API surface | Traditional Bindings |
 | Creating bindings for third-party developers | Traditional Bindings |
 | Already maintaining traditional bindings | Traditional Bindings |
@@ -84,16 +84,16 @@ MyBinding/
 
 Before creating any bindings, analyze the complete dependency tree of your target library. This is the most critical step and where most binding projects fail.
 
-**Prerequisites:** JDK 17+, Android SDK with `ANDROID_HOME` set, .NET SDK 9+. You don't need Gradle installed  the Gradle Wrapper downloads the correct version automatically.globally 
+**Prerequisites:** JDK 17+, Android SDK with `ANDROID_HOME` set, .NET SDK 9+. You don't need Gradle installed globally; the Gradle Wrapper downloads the correct version automatically.
 
 ## Step 2: Create the Android Library Project
 
 Choose one of these approaches:
 
-- **Option A: Android Studio** (recommended for  create a No Activity project, then add an Android Library moduleGUI) 
-- **Option B: `gradle init` with Wrapper** ( scaffold with Gradle, then convert to AndroidCLI) 
-- **Option C: Clone from  use CommunityToolkit NativeLibraryInterop templateTemplate** 
-- **Option D: Manual  create structure manually with Gradle WrapperCreation** 
+- **Option A: Android Studio** (recommended for GUI-based projects: create a "No Activity" project, then add an Android Library module)
+- **Option B: `gradle init` with Wrapper** (recommended for CLI-based projects: scaffold with Gradle using the Wrapper, then convert to an Android library)
+- **Option C: CommunityToolkit NativeLibraryInterop template** (clone and use the CommunityToolkit NativeLibraryInterop template as your starting point)
+- **Option D: Manual creation with Gradle Wrapper** (create the project structure manually using the Gradle Wrapper)
 
 After project creation, configure `settings.gradle.kts`, root `build.gradle.kts`, and `app/build.gradle.kts` with your library dependency.
 
@@ -293,8 +293,8 @@ Add a conditional `<ProjectReference>`, initialize in `MauiProgram.cs` using `Co
 - [Xamarin.AndroidX Repository](https://github.com/xamarin/AndroidX)
 
 ## Reference Files
-- [android-bindings-guide.md](references/android-bindings-guide. comprehensive binding referencemd) 
-- [android-slim-bindings-implementation.md](references/android-slim-bindings-implementation. detailed code examples, troubleshooting, and complete scriptsmd) 
+- [android-bindings-guide.md](references/android-bindings-guide.md) — comprehensive binding reference
+- [android-slim-bindings-implementation.md](references/android-slim-bindings-implementation.md) — detailed code examples, troubleshooting, and complete scripts
 - For iOS bindings, use the **ios-slim-bindings** skill
 
 # Output Format

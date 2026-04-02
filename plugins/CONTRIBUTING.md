@@ -94,13 +94,13 @@ Download the skill-validator from [dotnet/skills releases](https://github.com/do
 
 ```bash
 # Static validation (no LLM)
-skill-validator check --plugin plugins/dotnet-maui-labs
+skill-validator check --plugin plugins/<plugin-name>
 
 # LLM evaluation (requires GitHub auth)
 skill-validator evaluate \
   --runs 3 \
-  --tests-dir tests/dotnet-maui-labs \
-  plugins/dotnet-maui-labs/skills
+  --tests-dir tests/<plugin-name> \
+  plugins/<plugin-name>/skills
 ```
 
 ### CI

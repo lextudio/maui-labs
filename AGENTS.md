@@ -4,7 +4,7 @@ This repository contains experimental .NET MAUI packages and distributable agent
 
 ## Skills
 
-Skills are organized as plugins under `plugins/`. Each subdirectory in `plugins/` is an independent plugin (e.g., `plugins/dotnet-maui-labs`).
+Skills are organized as plugins under `plugins/`. Each subdirectory (e.g., `plugins/dotnet-maui-devflow`, `plugins/dotnet-maui-dev`) is an independent plugin.
 
 ### Plugin Structure
 

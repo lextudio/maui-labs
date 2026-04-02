@@ -34,6 +34,8 @@ permissions:
   pull-requests: write
   statuses: write
   issues: write
+
+jobs:
   # Post initial commit status so required check is never stuck as "Expected"
   pr-status:
     if: github.event_name == 'pull_request'
@@ -94,6 +96,7 @@ permissions:
       contents: read
       pull-requests: write
       issues: write
+    outputs:
       should_run: ${{ steps.check.outputs.should_run }}
       pr_number: ${{ github.event.issue.number }}
       pr_head_sha: ${{ steps.pr-info.outputs.head_sha }}

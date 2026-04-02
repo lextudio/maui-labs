@@ -17,7 +17,7 @@ Diagnose and resolve connectivity between the `maui` CLI and running .NET MAUI a
 
 - `maui devflow list` shows no agents
 - `maui devflow tree` fails with "Cannot connect to agent"
-- Port conflicts on 9988 or the broker port
+- Port conflicts on 9223 or the broker port
 - Android emulator connectivity issues (adb port forwarding)
 - App is running but DevFlow commands fail
 

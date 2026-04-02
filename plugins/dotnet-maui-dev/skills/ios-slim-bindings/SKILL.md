@@ -28,10 +28,10 @@ This skill guides the creation of **Native Library Interop (Slim Bindings)** for
 
 | Scenario | Recommended Approach |
 |----------|---------------------|
-| Need only a subset of library functionality | **Slim  |Bindings** 
-| Easier maintenance when SDK updates | **Slim  |Bindings** 
-| Prefer working in Swift/Objective-C for wrapper | **Slim  |Bindings** 
-| Better isolation from breaking changes | **Slim  |Bindings** 
+| Need only a subset of library functionality | **Slim Bindings** |
+| Easier maintenance when SDK updates | **Slim Bindings** |
+| Prefer working in Swift/Objective-C for wrapper | **Slim Bindings** |
+| Better isolation from breaking changes | **Slim Bindings** |
 | Need entire library API surface | Traditional Bindings |
 | Creating bindings for third-party developers | Traditional Bindings |
 | Already maintaining traditional bindings | Traditional Bindings |
@@ -159,7 +159,7 @@ Add a conditional `<ProjectReference>`, initialize in `MauiProgram.cs` with `#if
 2. Update Swift wrapper if APIs changed
 3. Clean and rebuild: `dotnet clean && dotnet build`
 4. Regenerate Objective Sharpie output and diff with existing `ApiDefinition.cs`
-5. Merge  add new bindings, update signatures, preserve custom attributeschanges 
+5. Merge changes: add new bindings, update signatures, preserve custom attributes.
 6. Test with sample app
 
 > For detailed update instructions, see [references/ios-slim-bindings-implementation.md](references/ios-slim-bindings-implementation.md).
@@ -247,7 +247,7 @@ public class ClassName: NSObject {
 - [Objective Sharpie](https://learn.microsoft.com/previous-versions/xamarin/cross-platform/macios/binding/objective-sharpie/)
 
 ## Tools
-- [XcodeGen](https://github.com/yonaskolb/ Generate Xcode projects from YAML specificationXcodeGen) 
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen) — Generate Xcode projects from YAML specification
 
 ## Templates and Examples
 - [Maui.NativeLibraryInterop Repository](https://github.com/CommunityToolkit/Maui.NativeLibraryInterop)
