@@ -1,0 +1,6 @@
+{
+  "name": "dotnet-maui-dev",
+  "version": "0.1.0",
+  "description": "Skills for .NET MAUI development: profiling, accessibility, UI design patterns, platform-specific guidance, and best practices.",
+  "skills": ["./skills/"]
+}

@@ -1,6 +1,0 @@
-{
-  "name": "dotnet-maui-labs",
-  "version": "0.1.0",
-  "description": "Skills for .NET MAUI development: DevFlow automation, profiling, accessibility, UI design patterns, platform-specific debugging, and more. Some skills require the maui CLI tool and DevFlow agent packages.",
-  "skills": ["./skills/"]
-}

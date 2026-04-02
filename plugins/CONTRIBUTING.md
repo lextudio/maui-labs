@@ -5,7 +5,7 @@ This guide covers how to add agent skills to the maui-labs marketplace.
 ## Skill Structure
 
 ```
-plugins/dotnet-maui-labs/skills/<skill-name>/
+plugins/dotnet-maui-devflow/skills/<skill-name>/
 ├── SKILL.md           # Skill definition (required)
 ├── references/        # Detailed reference docs (optional)
 │   └── *.md
@@ -44,7 +44,7 @@ description: >-
 Every skill should have evaluation scenarios:
 
 ```
-tests/dotnet-maui-labs/<skill-name>/
+tests/<plugin-name>/<skill-name>/
 └── eval.yaml
 ```
 
