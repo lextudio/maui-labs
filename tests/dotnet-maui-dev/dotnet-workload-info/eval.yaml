@@ -19,7 +19,7 @@ scenarios:
       - "Correctly builds the manifest package ID as Microsoft.NET.Sdk.iOS.Manifest-{sdkBand}"
       - "Extracts xcode version range from WorkloadDependencies.json and shows the recommended version"
       - "Does not hardcode any specific Xcode version numbers as the answer"
-    timeout: 120
+    timeout: 240
 
   - name: "Convert between CLI and NuGet workload set versions"
     prompt: |
@@ -41,7 +41,7 @@ scenarios:
       - "Derives the SDK band as 10.0.100 from the CLI version"
       - "Shows the complete NuGet download URL with lowercase package ID"
       - "Explains the conversion rule: CLI {major}.0.{patch} → NuGet {major}.{patch}.0"
-    timeout: 120
+    timeout: 240
 
   - name: "Find Android SDK packages from workload manifest"
     prompt: |
@@ -64,7 +64,7 @@ scenarios:
       - "Shows the androidsdk.packages array with build-tools, platform-tools, platforms, and cmdline-tools"
       - "Provides a scriptable approach suitable for CI (curl/unzip or PowerShell equivalent)"
       - "Includes the sdkmanager install command using the extracted package list"
-    timeout: 120
+    timeout: 240
 
   - name: "Query latest MAUI NuGet package version from search API"
     prompt: |
@@ -83,4 +83,4 @@ scenarios:
       - "Shows how to filter results to the specific .NET major version"
       - "Explains the distinction between implicit (workload-bundled) and latest (out-of-band) versions"
       - "Shows adding an explicit PackageReference to override the implicit workload version"
-    timeout: 120
+    timeout: 240

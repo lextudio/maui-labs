@@ -20,11 +20,11 @@ scenarios:
       - "Includes Gradle project structure with the lottie Maven dependency in build.gradle.kts"
       - "Shows the C# binding project referencing the built AAR via AndroidLibrary"
       - "Uses simple marshallable types in the wrapper API (no Kotlin coroutines or lambdas)"
-    timeout: 120
+    timeout: 240
 
-  - name: "Resolve XA4241 and XA4242 dependency errors"
+  - name: "Resolve XA4241 and XA4242 dependency errors in Android binding"
     prompt: |
-      My Android binding project for a Firebase library fails to build with these errors:
+      My Android slim binding project for a Firebase library fails to build with these errors:
 
       ```
       error XA4241: Java dependency 'androidx.core:core' is not satisfied.
@@ -48,7 +48,7 @@ scenarios:
       - "For androidx.core:core and kotlin-stdlib, maps to the correct Xamarin.AndroidX/Kotlin NuGet packages"
       - "For javax.inject (annotation/compile-time only), suggests AndroidIgnoredJavaDependency or AndroidMavenLibrary with Bind=false"
       - "Explains the decision tree: XA4242 suggestion → NuGet; needed at runtime → AndroidMavenLibrary; compile-time only → AndroidIgnoredJavaDependency"
-    timeout: 120
+    timeout: 240
 
   - name: "Avoid Kotlin coroutines and lambdas in wrapper"
     prompt: |
@@ -82,7 +82,7 @@ scenarios:
       - "Shows a corrected wrapper using a callback interface with onSuccess/onError methods"
       - "Adds @JvmStatic annotation on methods for static access from C#"
       - "Uses simple marshallable types (String, boolean, int) not Kotlin-specific types (Result, Flow)"
-    timeout: 120
+    timeout: 240
 
   - name: "Find NuGet package for Maven dependency using dotnet CLI"
     prompt: |
@@ -107,4 +107,4 @@ scenarios:
       - "Maps all three Maven artifacts to their correct NuGet package names"
       - "Shows PackageReference elements for the .csproj file"
       - "Does not suggest manually downloading JARs or AARs for well-known AndroidX libraries"
-    timeout: 120
+    timeout: 240

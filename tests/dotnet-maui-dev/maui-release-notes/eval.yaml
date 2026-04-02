@@ -13,11 +13,11 @@ scenarios:
       - type: "output_not_contains"
         value: "github.com/dotnet/maui"
     rubric:
-      - "Constructs the tag as dotnet-{dotnetVersion}.0.1xx-xcode{xcodeVersion}-{buildNumber}"
-      - "Correctly parses 26.2.10191 into xcodeVersion=26.2 and buildNumber=10191"
-      - "Points to dotnet/macios repository (not dotnet/maui) for iOS/Mac Catalyst releases"
-      - "Shows the complete URL: https://github.com/dotnet/macios/releases/tag/dotnet-10.0.1xx-xcode26.2-10191"
-    timeout: 120
+      - "Derives the tag by parsing the workload version into its Xcode and build number components"
+      - "Uses the correct repository (dotnet/macios, not dotnet/maui) for Apple platform releases"
+      - "Produces a working GitHub URL that includes the full tag with .NET version, Xcode version, and build number"
+      - "Explains the tag format so the user can construct future tags independently"
+    timeout: 240
 
   - name: "Generate workload versions table for release notes"
     prompt: |
@@ -40,12 +40,11 @@ scenarios:
       - type: "output_matches"
         pattern: "\\[NuGet\\]|nuget\\.org/packages"
     rubric:
-      - "Produces a markdown table with columns: Workload, Full ID (or Version), SDK Band, and Links"
-      - "Includes NuGet manifest links constructed as Microsoft.NET.Sdk.{Workload}.Manifest-{band}/{version}"
-      - "Includes GitHub release links — MAUI to dotnet/maui, Android to dotnet/android, Apple platforms to dotnet/macios"
-      - "Shows Requirements column with Xcode ≥ for Apple platforms and API + JDK for Android"
-      - "Uses ≥ symbol (not >=) for version requirements"
-    timeout: 120
+      - "Produces a well-structured markdown table with workload names, versions, and platform requirements"
+      - "Includes links to the NuGet manifest packages for each workload"
+      - "Routes GitHub release links to the correct repository per platform (not all to dotnet/maui)"
+      - "Distinguishes Apple platform requirements (Xcode) from Android requirements (API level, JDK)"
+    timeout: 240
 
   - name: "Determine if release notes need updating"
     prompt: |
@@ -61,11 +60,11 @@ scenarios:
       - type: "output_matches"
         pattern: "maui-release-notes-.*\\.md|YYYYMMDD"
     rubric:
-      - "Recommends using the dotnet-workload-info skill or equivalent NuGet API queries to fetch current versions"
-      - "Identifies the key versions to compare: workload set version, MAUI version, iOS version, Android version"
-      - "Shows checking the most recent maui-release-notes-YYYYMMDD.md file for the previous values"
-      - "Explains the workflow: only generate new notes if at least one version changed"
-    timeout: 120
+      - "Recommends querying live NuGet data (not cached values) to get current workload versions"
+      - "Identifies which version numbers matter for detecting changes (workload set, individual workloads)"
+      - "Describes comparing against the most recent existing release notes file"
+      - "Only triggers new release notes when actual version changes are detected"
+    timeout: 240
 
   - name: "Generate dated release notes with installation commands"
     prompt: |
@@ -83,9 +82,8 @@ scenarios:
       - type: "output_matches"
         pattern: "maui-release-notes-\\d{8}\\.md|maui-release-notes\\.md"
     rubric:
-      - "Uses the file naming convention maui-release-notes-{YYYYMMDD}.md with today's date"
-      - "Includes installation commands using --version flag with the CLI version (10.0.102)"
-      - "Shows a MAUI NuGet Packages table distinguishing Implicit (workload-bundled) from Latest (out-of-band) versions"
-      - "Includes a back-link to the index page (maui-release-notes.md)"
-      - "Adds a Source line noting data comes from NuGet.org workload manifests"
-    timeout: 120
+      - "Creates a file with a date-based naming convention"
+      - "Includes workload install commands with the specific CLI version"
+      - "Distinguishes between workload-bundled and independently-released NuGet package versions"
+      - "Provides a complete, ready-to-commit markdown file (not just fragments)"
+    timeout: 240

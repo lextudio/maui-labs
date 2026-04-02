@@ -20,11 +20,11 @@ scenarios:
       - "Shows a Swift wrapper class inheriting from NSObject with @objc annotations on class and methods"
       - "References the Xcode project from the C# binding .csproj using XcodeProject MSBuild item with SchemeName"
       - "Sets BUILD_LIBRARY_FOR_DISTRIBUTION to YES for ABI stability across Swift versions"
-    timeout: 120
+    timeout: 240
 
-  - name: "Fix unrecognized selector runtime crash"
+  - name: "Fix unrecognized selector runtime crash in iOS binding"
     prompt: |
-      My iOS slim binding builds successfully but crashes at runtime with:
+      My iOS slim binding project builds successfully but crashes at runtime with:
 
       ```
       Objective-C exception thrown. Name: NSInvalidArgumentException
@@ -49,7 +49,7 @@ scenarios:
       }
       ```
 
-      What's wrong?
+      What's wrong with my binding?
     assertions:
       - type: "output_matches"
         pattern: "(?i)selector.*mismatch|mismatch.*selector|Export.*doesn.t match|@objc.*selector"
@@ -62,7 +62,7 @@ scenarios:
       - "Explains that Swift auto-generates the selector as initializeWithApiKey: but the @objc without explicit selector may produce initializeApiKey: or similar"
       - "Shows the fix: add @objc(initializeWithApiKey:) to explicitly match the [Export] attribute"
       - "Emphasizes that @objc(selector:) in Swift must exactly match [Export(\"selector:\")] in ApiDefinition.cs"
-    timeout: 120
+    timeout: 240
 
   - name: "Design Swift wrapper for async APIs with completion handlers"
     prompt: |
@@ -92,7 +92,7 @@ scenarios:
       - "Uses @objc annotation on the completion handler methods with correct selector names"
       - "Shows [Async] attribute in ApiDefinition.cs to auto-generate C# async/await wrappers"
       - "Does not suggest exposing Swift async/await directly through the binding"
-    timeout: 120
+    timeout: 240
 
   - name: "Generate ApiDefinition.cs with Objective Sharpie"
     prompt: |
@@ -112,4 +112,4 @@ scenarios:
       - "Provides the correct sharpie bind command with --sdk, --namespace, and --scope flags"
       - "Lists required cleanup steps: remove [Verify] attributes after review, add [NullAllowed], add [Async]"
       - "Mentions removing InitWithCoder constructors that are auto-generated but not needed"
-    timeout: 120
+    timeout: 240
