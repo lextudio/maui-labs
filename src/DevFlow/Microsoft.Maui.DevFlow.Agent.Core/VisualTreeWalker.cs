@@ -37,6 +37,9 @@ public class VisualTreeWalker
     /// Returns IVisualTreeElement, ToolbarItem, or other mapped objects.
     /// </summary>
     public object? GetElementById(string id, Application? app)
+        => GetElementById(id, (IApplication?)app);
+
+    public object? GetElementById(string id, IApplication? app)
     {
         if (app == null || string.IsNullOrEmpty(id)) return null;
 
@@ -97,17 +100,22 @@ public class VisualTreeWalker
     /// Returns elements whose window bounds contain the given point.
     /// </summary>
     public List<VisualElement> HitTestByBounds(double x, double y, Application app, int? windowIndex = null)
+        => HitTestByBounds(x, y, (IApplication)app, windowIndex);
+
+    public List<VisualElement> HitTestByBounds(double x, double y, IApplication app, int? windowIndex = null)
     {
         var hits = new List<VisualElement>();
         var window = windowIndex.HasValue && windowIndex.Value < app.Windows.Count
             ? app.Windows[windowIndex.Value]
             : app.Windows.FirstOrDefault();
-        if (window?.Page == null) return hits;
+        // Page is only available on Window (MAUI Controls), not on all IWindow implementations
+        var page = (window as Window)?.Page;
+        if (page == null) return hits;
 
-        HitTestByBoundsRecursive(window.Page, x, y, hits);
+        HitTestByBoundsRecursive(page, x, y, hits);
 
         // Also check modal pages
-        var modalStack = window.Navigation?.ModalStack;
+        var modalStack = (window as Window)?.Navigation?.ModalStack;
         if (modalStack != null)
         {
             foreach (var modal in modalStack)
@@ -312,6 +320,9 @@ public class VisualTreeWalker
     /// When windowIndex is null, walks all windows. Otherwise walks only the specified window.
     /// </summary>
     public List<ElementInfo> WalkTree(Application app, int maxDepth = 0, int? windowIndex = null, bool includeLayout = false)
+        => WalkTree((IApplication)app, maxDepth, windowIndex, includeLayout);
+
+    public List<ElementInfo> WalkTree(IApplication app, int maxDepth = 0, int? windowIndex = null, bool includeLayout = false)
     {
         _usedIds.Clear();
         _elementIdToExternalId.Clear();
@@ -431,6 +442,9 @@ public class VisualTreeWalker
     /// Queries elements matching the given criteria.
     /// </summary>
     public List<ElementInfo> Query(Application app, string? type = null, string? automationId = null, string? text = null)
+        => Query((IApplication)app, type, automationId, text);
+
+    public List<ElementInfo> Query(IApplication app, string? type = null, string? automationId = null, string? text = null)
     {
         var results = new List<ElementInfo>();
         if (app is not IVisualTreeElement appElement)
@@ -1515,6 +1529,9 @@ public class VisualTreeWalker
     /// Walks the full tree, then runs the CSS selector engine against it.
     /// </summary>
     public List<ElementInfo> QueryCss(Application app, string selector)
+        => QueryCss((IApplication)app, selector);
+
+    public List<ElementInfo> QueryCss(IApplication app, string selector)
     {
         var tree = WalkTree(app);
         return CssSelectorEngine.Query(tree, selector);

@@ -31,8 +31,15 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     private BrokerRegistration? _brokerRegistration;
     private string? _sessionId;
     protected Application? _app;
+    protected IApplication? _iApp;
     protected IDispatcher? _dispatcher;
     private bool _disposed;
+
+    /// <summary>
+    /// Returns the bound application instance, preferring Application (MAUI Controls)
+    /// but falling back to IApplication (Comet/custom hosts).
+    /// </summary>
+    protected IApplication? BoundApplication => (IApplication?)_app ?? _iApp;
 
     /// <summary>
     /// The network request store for capturing HTTP traffic.
@@ -277,10 +284,11 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     /// </summary>
     private Window? GetWindow(int? index)
     {
-        if (_app == null) return null;
-        if (index == null) return _app.Windows.FirstOrDefault() as Window;
-        if (index.Value < 0 || index.Value >= _app.Windows.Count) return null;
-        return _app.Windows[index.Value] as Window;
+        var app = BoundApplication;
+        if (app == null) return null;
+        if (index == null) return app.Windows.FirstOrDefault() as Window;
+        if (index.Value < 0 || index.Value >= app.Windows.Count) return null;
+        return app.Windows[index.Value] as Window;
     }
 
     /// <summary>
@@ -398,7 +406,10 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     /// <summary>
     /// Starts the HTTP server without an Application binding.
     /// Use when Application.Current is unavailable (e.g., Comet apps).
-    /// Endpoints requiring the app will return errors until BindApp() is called.
+    /// After starting, attempts to resolve IApplication from the DI container
+    /// so that tree/element endpoints work immediately for Comet apps.
+    /// Endpoints requiring the app will return errors until BindApp()/BindIApp()
+    /// is called or DI resolution succeeds.
     /// </summary>
     public void StartServerOnly(IDispatcher dispatcher)
     {
@@ -407,7 +418,15 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         try
         {
             _server.Start();
-            Console.WriteLine($"[Microsoft.Maui.DevFlow.Agent] HTTP server started on port {_options.Port} (app not yet bound)");
+
+            // Try to resolve the IApplication from the platform service provider.
+            // Comet apps register IApplication (CometApp) but never set Application.Current.
+            TryResolveIApplicationFromDI();
+
+            if (BoundApplication != null)
+                Console.WriteLine($"[Microsoft.Maui.DevFlow.Agent] HTTP server started on port {_options.Port} (resolved IApplication from DI)");
+            else
+                Console.WriteLine($"[Microsoft.Maui.DevFlow.Agent] HTTP server started on port {_options.Port} (app not yet bound)");
         }
         catch (Exception ex)
         {
@@ -437,6 +456,49 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             state = "started",
             timestamp = DateTimeOffset.UtcNow.ToString("O")
         });
+    }
+
+    /// <summary>
+    /// Late-binds an IApplication instance (e.g. CometApp) after the server is already running.
+    /// Use when the app doesn't extend Microsoft.Maui.Controls.Application.
+    /// </summary>
+    public void BindIApp(IApplication app)
+    {
+        if (_disposed || !_options.Enabled) return;
+        if (app is Application controlsApp)
+            _app = controlsApp;
+        else
+            _iApp = app;
+        Console.WriteLine("[Microsoft.Maui.DevFlow.Agent] IApplication bound to running agent");
+    }
+
+    /// <summary>
+    /// Attempts to resolve IApplication from the platform DI container.
+    /// Works for Comet apps that register IApplication via UseCometApp&lt;T&gt;().
+    /// </summary>
+    private void TryResolveIApplicationFromDI()
+    {
+        try
+        {
+            var services = IPlatformApplication.Current?.Services;
+            if (services == null) return;
+
+            var iApp = services.GetService(typeof(IApplication)) as IApplication;
+            if (iApp == null) return;
+
+            if (iApp is Application controlsApp)
+            {
+                _app = controlsApp;
+            }
+            else
+            {
+                _iApp = iApp;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[Microsoft.Maui.DevFlow.Agent] Failed to resolve IApplication from DI: {ex.Message}");
+        }
     }
 
     public async Task StopAsync()
@@ -544,7 +606,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     {
         var windowIndex = ParseWindowIndex(request);
         var appName = TryGetAppInfoString(() => AppInfo.Current.Name)
-            ?? _app?.GetType().Assembly.GetName().Name
+            ?? BoundApplication?.GetType().Assembly.GetName().Name
             ?? "unknown";
         var packageId = TryGetAppInfoString(() => AppInfo.Current.PackageName) ?? "unknown";
         var appVersion = TryGetAppInfoString(() => AppInfo.Current.VersionString) ?? "unknown";
@@ -581,7 +643,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
                     deviceType = DeviceTypeName,
                     idiom = IdiomName,
                     displayDensity = GetWindowDisplayDensity(window),
-                    windowCount = _app?.Windows.Count ?? 0,
+                    windowCount = BoundApplication?.Windows.Count ?? 0,
                     windowWidth = double.IsFinite(w) ? w : 0,
                     windowHeight = double.IsFinite(h) ? h : 0,
                 },
@@ -604,7 +666,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
                     profiler = IsProfilerFeatureAvailable,
                     jobs = IsJobsSupported,
                 },
-                running = _app != null,
+                running = BoundApplication != null,
                 cdpReady = _cdpWebViews.Any(v => v.IsReady),
                 cdpWebViewCount = _cdpWebViews.Count,
                 profiler = BuildProfilerCapabilitiesPayload(),
@@ -693,7 +755,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleTree(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         int maxDepth = 0;
         if (request.QueryParams.TryGetValue("depth", out var depthStr))
@@ -704,19 +766,19 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             includeLayout = layoutStr == "1" || string.Equals(layoutStr, "true", StringComparison.OrdinalIgnoreCase);
 
         var windowIndex = ParseWindowIndex(request);
-        var tree = await DispatchAsync(() => _treeWalker.WalkTree(_app, maxDepth, windowIndex, includeLayout));
+        var tree = await DispatchAsync(() => _treeWalker.WalkTree(BoundApplication, maxDepth, windowIndex, includeLayout));
         return HttpResponse.Json(tree);
     }
 
     private async Task<HttpResponse> HandleElement(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
         if (!request.RouteParams.TryGetValue("id", out var id))
             return HttpResponse.Error("Element ID required");
 
         var element = await DispatchAsync(() =>
         {
-            var el = _treeWalker.GetElementById(id, _app);
+            var el = _treeWalker.GetElementById(id, BoundApplication);
             if (el is IVisualTreeElement vte)
                 return (object?)_treeWalker.WalkElement(vte, null, 1, 2);
 
@@ -732,14 +794,14 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleQuery(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         // CSS selector takes precedence over simple filters
         if (request.QueryParams.TryGetValue("selector", out var selector) && !string.IsNullOrWhiteSpace(selector))
         {
             try
             {
-                var results = await DispatchAsync(() => _treeWalker.QueryCss(_app, selector));
+                var results = await DispatchAsync(() => _treeWalker.QueryCss(BoundApplication, selector));
                 return HttpResponse.Json(results);
             }
             catch (FormatException ex)
@@ -755,13 +817,13 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (type == null && automationId == null && text == null)
             return HttpResponse.Error("At least one query parameter required: type, automationId, text, or selector");
 
-        var simpleResults = await DispatchAsync(() => _treeWalker.Query(_app, type, automationId, text));
+        var simpleResults = await DispatchAsync(() => _treeWalker.Query(BoundApplication, type, automationId, text));
         return HttpResponse.Json(simpleResults);
     }
 
     private async Task<HttpResponse> HandleHitTest(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         if (!request.QueryParams.TryGetValue("x", out var xStr) || !double.TryParse(xStr, out var x))
             return HttpResponse.Error("x coordinate is required");
@@ -776,7 +838,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             if (window == null) return (object?)null;
 
             // Ensure tree is walked so element IDs are assigned and synthetic bounds are populated
-            _treeWalker.WalkTree(_app!, 0, windowIndex);
+            _treeWalker.WalkTree(BoundApplication!, 0, windowIndex);
 
             // Build active Shell context to filter out inactive ShellItem subtrees
             var activeShellItemIds = BuildActiveShellItemIds(window);
@@ -785,7 +847,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
             // Supplement with bounds-based hit testing — some platforms (e.g. macOS AppKit)
             // don't traverse into all containers via GetVisualTreeElements
-            var boundsHits = _treeWalker.HitTestByBounds(x, y, _app!, windowIndex);
+            var boundsHits = _treeWalker.HitTestByBounds(x, y, BoundApplication!, windowIndex);
             var seen = new HashSet<object>(ReferenceEqualityComparer.Instance);
             var allHits = new List<IVisualTreeElement>();
             foreach (var h in platformHits)
@@ -935,7 +997,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     protected virtual async Task<HttpResponse> HandleScreenshot(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         int? maxWidth = null;
         if (request.QueryParams.TryGetValue("maxWidth", out var mwStr) && int.TryParse(mwStr, out var mw) && mw > 0)
@@ -984,7 +1046,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             {
                 var element = await DispatchAsync(() =>
                 {
-                    var el = _treeWalker.GetElementById(elementId, _app);
+                    var el = _treeWalker.GetElementById(elementId, BoundApplication);
                     return el as VisualElement;
                 });
 
@@ -1010,7 +1072,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             {
                 var matchId = await DispatchAsync(() =>
                 {
-                    var results = _treeWalker.QueryCss(_app, selector);
+                    var results = _treeWalker.QueryCss(BoundApplication, selector);
                     return results.Count > 0 ? results[0].Id : null;
                 });
 
@@ -1019,7 +1081,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
                 var element = await DispatchAsync(() =>
                 {
-                    var el = _treeWalker.GetElementById(matchId, _app);
+                    var el = _treeWalker.GetElementById(matchId, BoundApplication);
                     return el as VisualElement;
                 });
 
@@ -1166,7 +1228,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleProperty(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
         if (!request.RouteParams.TryGetValue("id", out var id))
             return HttpResponse.Error("Element ID required");
         if (!request.RouteParams.TryGetValue("name", out var propName))
@@ -1174,7 +1236,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
         var value = await DispatchAsync(() =>
         {
-            var el = _treeWalker.GetElementById(id, _app);
+            var el = _treeWalker.GetElementById(id, BoundApplication);
             if (el == null) return (object?)null;
 
             // Support dot-path notation (e.g., "Shadow.Radius")
@@ -1293,7 +1355,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleSetProperty(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
         if (!request.RouteParams.TryGetValue("id", out var id))
             return HttpResponse.Error("Element ID required");
         if (!request.RouteParams.TryGetValue("name", out var propName))
@@ -1306,7 +1368,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         var startedAtUtc = DateTime.UtcNow;
         var result = await DispatchAsync(() =>
         {
-            var el = _treeWalker.GetElementById(id, _app);
+            var el = _treeWalker.GetElementById(id, BoundApplication);
             if (el == null) return "Element not found";
 
             var type = el.GetType();
@@ -1426,7 +1488,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleTap(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var body = request.BodyAs<ActionRequest>();
         if (body?.ElementId == null)
@@ -1435,7 +1497,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         var startedAtUtc = DateTime.UtcNow;
         var result = await DispatchAsync(() =>
         {
-            var el = _treeWalker.GetElementById(body.ElementId, _app);
+            var el = _treeWalker.GetElementById(body.ElementId, BoundApplication);
             if (el == null) return "Element not found";
 
             switch (el)
@@ -1547,7 +1609,15 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
                     // Last resort: try native tap via handler's platform view
                     if (TryNativeTapOnHandler(iView))
                         return "ok";
+                    // Bubble up parent chain for Comet gesture views (tap may be on parent container)
+                    if (TryBubbleCometGestureTap(iView))
+                        return "ok";
                     return $"Unhandled IView type: {el.GetType().FullName}";
+                case IView iViewNoHandler:
+                    // No handler but might have parent gesture
+                    if (TryBubbleCometGestureTap(iViewNoHandler))
+                        return "ok";
+                    return $"Unhandled IView (no handler): {el.GetType().FullName}";
                 default:
                     return $"Unhandled type: {el.GetType().FullName}";
             }
@@ -1695,9 +1765,37 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         return false;
     }
 
+    /// <summary>
+    /// Walks up the Comet parent chain looking for a parent with a tap gesture.
+    /// Comet uses OnTap on container views (HStack, VStack) — child views like Text
+    /// don't have their own gestures, but tapping them should invoke the parent's gesture.
+    /// </summary>
+    private static bool TryBubbleCometGestureTap(IView view)
+    {
+        try
+        {
+            // Walk up the parent chain via reflection (Comet views have a Parent property)
+            var current = view;
+            for (int i = 0; i < 10; i++) // max 10 levels to prevent infinite loops
+            {
+                var parentProp = current.GetType().GetProperty("Parent",
+                    BindingFlags.Public | BindingFlags.Instance);
+                var parent = parentProp?.GetValue(current) as IView;
+                if (parent == null) break;
+
+                if (TryInvokeCometGestureTap(parent))
+                    return true;
+
+                current = parent;
+            }
+        }
+        catch { }
+        return false;
+    }
+
     private async Task<HttpResponse> HandleFill(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var body = request.BodyAs<FillRequest>();
         if (body?.ElementId == null || body.Text == null)
@@ -1706,7 +1804,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         var startedAtUtc = DateTime.UtcNow;
         var result = await DispatchAsync(() =>
         {
-            var el = _treeWalker.GetElementById(body.ElementId, _app);
+            var el = _treeWalker.GetElementById(body.ElementId, BoundApplication);
             if (el == null) return "Element not found";
 
             switch (el)
@@ -1753,7 +1851,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleClear(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var body = request.BodyAs<ActionRequest>();
         if (body?.ElementId == null)
@@ -1762,7 +1860,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         var startedAtUtc = DateTime.UtcNow;
         var success = await DispatchAsync(() =>
         {
-            var el = _treeWalker.GetElementById(body.ElementId, _app);
+            var el = _treeWalker.GetElementById(body.ElementId, BoundApplication);
             if (el == null) return false;
 
             switch (el)
@@ -1805,7 +1903,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleFocus(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var body = request.BodyAs<ActionRequest>();
         if (body?.ElementId == null)
@@ -1814,7 +1912,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         var startedAtUtc = DateTime.UtcNow;
         var success = await DispatchAsync(() =>
         {
-            var el = _treeWalker.GetElementById(body.ElementId, _app);
+            var el = _treeWalker.GetElementById(body.ElementId, BoundApplication);
             if (el is not VisualElement ve) return false;
             ve.Focus();
             return true;
@@ -1832,7 +1930,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleNavigate(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var body = request.BodyAs<NavigateRequest>();
         if (string.IsNullOrEmpty(body?.Route))
@@ -1906,7 +2004,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleResize(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var body = request.BodyAs<ResizeRequest>();
         if (body == null || body.Width <= 0 || body.Height <= 0)
@@ -2008,7 +2106,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleBack(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var startedAtUtc = DateTime.UtcNow;
         var windowIndex = ParseWindowIndex(request);
@@ -2052,7 +2150,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleKey(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var body = request.BodyAs<KeyActionRequest>();
         if (body == null || (string.IsNullOrWhiteSpace(body.Key) && string.IsNullOrWhiteSpace(body.Text)))
@@ -2065,7 +2163,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             object? el = null;
             if (!string.IsNullOrWhiteSpace(body.ElementId))
             {
-                el = _treeWalker.GetElementById(body.ElementId, _app);
+                el = _treeWalker.GetElementById(body.ElementId, BoundApplication);
                 if (el == null)
                     return "Element not found";
             }
@@ -2149,7 +2247,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleGesture(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var body = request.BodyAs<GestureActionRequest>();
         if (body == null || string.IsNullOrWhiteSpace(body.Type))
@@ -2188,7 +2286,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleBatch(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var body = request.BodyAs<BatchRequest>();
         if (body?.Actions == null || body.Actions.Count == 0)
@@ -2323,7 +2421,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse> HandleScroll(HttpRequest request)
     {
-        if (_app == null) return HttpResponse.Error("Agent not bound to app");
+        if (BoundApplication == null) return HttpResponse.Error("Agent not bound to app");
 
         var body = request.BodyAs<ScrollRequest>();
         if (body == null)
@@ -2339,7 +2437,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
                 object? targetObj = null;
                 if (!string.IsNullOrEmpty(body.ElementId))
                 {
-                    targetObj = _treeWalker.GetElementById(body.ElementId, _app);
+                    targetObj = _treeWalker.GetElementById(body.ElementId, BoundApplication);
                     if (targetObj == null) return "Element not found";
                 }
 
@@ -2368,7 +2466,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             // Priority 2: Scroll element into view
             if (!string.IsNullOrEmpty(body.ElementId))
             {
-                var el = _treeWalker.GetElementById(body.ElementId, _app);
+                var el = _treeWalker.GetElementById(body.ElementId, BoundApplication);
                 if (el == null) return "Element not found";
 
                 if (el is VisualElement ve)
@@ -3118,7 +3216,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private void ScanUiTreeForHooks()
     {
-        if (_app is not IVisualTreeElement appElement)
+        if (BoundApplication is not IVisualTreeElement appElement)
             return;
 
         foreach (var child in appElement.GetVisualChildren())
@@ -4472,7 +4570,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
                 timestamp = now,
                 data = new
                 {
-                    state = _app != null ? "started" : "stopped",
+                    state = BoundApplication != null ? "started" : "stopped",
                     timestamp = now
                 }
             }));
@@ -5013,7 +5111,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private async Task<HttpResponse?> TryCaptureRegisteredWebViewAsync(CdpWebViewInfo webView)
     {
-        if (_app == null)
+        if (BoundApplication == null)
             return null;
 
         try
@@ -5022,16 +5120,16 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             {
                 if (!string.IsNullOrWhiteSpace(webView.ElementId))
                 {
-                    var byId = _treeWalker.GetElementById(webView.ElementId!, _app) as VisualElement;
+                    var byId = _treeWalker.GetElementById(webView.ElementId!, BoundApplication) as VisualElement;
                     if (byId != null)
                         return byId;
                 }
 
                 if (!string.IsNullOrWhiteSpace(webView.AutomationId))
                 {
-                    var match = _treeWalker.Query(_app, automationId: webView.AutomationId).FirstOrDefault();
+                    var match = _treeWalker.Query(BoundApplication, automationId: webView.AutomationId).FirstOrDefault();
                     if (match?.Id is { Length: > 0 } matchId)
-                        return _treeWalker.GetElementById(matchId, _app) as VisualElement;
+                        return _treeWalker.GetElementById(matchId, BoundApplication) as VisualElement;
                 }
 
                 return null;
