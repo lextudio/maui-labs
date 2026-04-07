@@ -57,6 +57,7 @@ namespace Comet.Handlers
 				var title = VirtualView?.GetTitle();
 				if (!string.IsNullOrEmpty(title))
 					vc.Title = title;
+				ApplyToolbarItems(vc, newContent, nav);
 			});
 			navigationController.PushViewController(vc, true);
 
@@ -70,8 +71,8 @@ namespace Comet.Handlers
 					(s, e) => action());
 			}
 
-			// Apply toolbar items from the NavigationView to the root view controller
-			ApplyToolbarItems(vc, null, nav);
+			// Apply toolbar items to the root view controller, preferring the root content's own items.
+			ApplyToolbarItems(vc, VirtualView.Content, nav);
 
 			return navigationController.View;
 		}
