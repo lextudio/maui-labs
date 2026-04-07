@@ -97,7 +97,10 @@ namespace Comet.Handlers
 				items = nav.ToolbarItems;
 
 			if (items == null || items.Count == 0)
+			{
+				vc.NavigationItem.RightBarButtonItems = new UIBarButtonItem[0];
 				return;
+			}
 
 			var rightItems = new List<UIBarButtonItem>();
 			foreach (var item in items)
@@ -154,8 +157,9 @@ namespace Comet.Handlers
 				barItem.Enabled = item.IsEnabled;
 				rightItems.Add(barItem);
 			}
-			if (rightItems.Count > 0)
-				vc.NavigationItem.RightBarButtonItems = rightItems.ToArray();
+			vc.NavigationItem.RightBarButtonItems = rightItems.Count > 0
+				? rightItems.ToArray()
+				: new UIBarButtonItem[0];
 		}
 
 		protected override void ConnectHandler(UIView platformView)

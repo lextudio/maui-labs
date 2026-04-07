@@ -92,10 +92,10 @@ namespace Comet.iOS
 			if (view != null && _containerView != null)
 			{
 				var bg = view.GetBackground();
-				if (bg is Microsoft.Maui.Graphics.SolidPaint solid && solid.Color != null)
-				{
-					_containerView.BackgroundColor = solid.Color.ToPlatform();
-				}
+				_containerView.BackgroundColor =
+					bg is Microsoft.Maui.Graphics.SolidPaint solid && solid.Color != null
+						? solid.Color.ToPlatform()
+						: UIColor.Clear;
 			}
 
 			ApplyStyle();

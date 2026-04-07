@@ -17,6 +17,7 @@ public class VisualTreeWalker
     // Per-walk state — fully rebuilt on each WalkTree call
     private readonly HashSet<string> _usedIds = new();
     private readonly Dictionary<Guid, string> _elementIdToExternalId = new();
+    private readonly Dictionary<IVisualTreeElement, string> _elementToExternalId = new(ReferenceEqualityComparer.Instance);
     private readonly ConcurrentDictionary<string, (BoundsInfo Bounds, object Marker)> _syntheticBounds = new();
 
     /// <summary>
@@ -42,6 +43,7 @@ public class VisualTreeWalker
         // Walk tree fresh, searching for matching ID
         _usedIds.Clear();
         _elementIdToExternalId.Clear();
+        _elementToExternalId.Clear();
         _syntheticBounds.Clear();
 
         if (app is not IVisualTreeElement appElement) return null;
@@ -58,7 +60,7 @@ public class VisualTreeWalker
     /// </summary>
     public string GetDiagnostics()
     {
-        return $"SyntheticBounds: {_syntheticBounds.Count}, ElementIds: {_elementIdToExternalId.Count}";
+        return $"SyntheticBounds: {_syntheticBounds.Count}, ElementIds: {_elementIdToExternalId.Count}, RefIds: {_elementToExternalId.Count}";
     }
 
     /// <summary>
@@ -67,8 +69,10 @@ public class VisualTreeWalker
     /// </summary>
     public string? GetIdForElement(IVisualTreeElement element)
     {
-        if (element is Element el && _elementIdToExternalId.TryGetValue(el.Id, out var id))
+        if (_elementToExternalId.TryGetValue(element, out var id))
             return id;
+        if (element is Element el && _elementIdToExternalId.TryGetValue(el.Id, out var mappedId))
+            return mappedId;
         return null;
     }
 
@@ -104,14 +108,15 @@ public class VisualTreeWalker
         var window = windowIndex.HasValue && windowIndex.Value < app.Windows.Count
             ? app.Windows[windowIndex.Value]
             : app.Windows.FirstOrDefault();
-        // Page is only available on Window (MAUI Controls), not on all IWindow implementations
-        var page = (window as Window)?.Page;
+        if (window == null) return hits;
+
+        var page = GetWindowRootElement(window);
         if (page == null) return hits;
 
         HitTestByBoundsRecursive(page, x, y, hits);
 
         // Also check modal pages
-        var modalStack = (window as Window)?.Navigation?.ModalStack;
+        var modalStack = (page as Page)?.Navigation?.ModalStack;
         if (modalStack != null)
         {
             foreach (var modal in modalStack)
@@ -142,6 +147,14 @@ public class VisualTreeWalker
                     HitTestByBoundsRecursive(childEl, x, y, hits);
             }
         }
+    }
+
+    private static VisualElement? GetWindowRootElement(IWindow window)
+    {
+        if (window is Window mauiWindow)
+            return mauiWindow.Page as VisualElement;
+
+        return window.Content as VisualElement ?? window as VisualElement;
     }
 
     /// <summary>
@@ -322,6 +335,7 @@ public class VisualTreeWalker
     {
         _usedIds.Clear();
         _elementIdToExternalId.Clear();
+        _elementToExternalId.Clear();
         _syntheticBounds.Clear();
         var results = new List<ElementInfo>();
         if (app is not IVisualTreeElement appElement)
@@ -558,6 +572,7 @@ public class VisualTreeWalker
         }
 
         _usedIds.Add(id);
+        _elementToExternalId[element] = id;
         if (element is Element elFinal)
             _elementIdToExternalId[elFinal.Id] = id;
         return id;

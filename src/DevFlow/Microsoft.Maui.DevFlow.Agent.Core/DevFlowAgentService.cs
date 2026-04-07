@@ -245,13 +245,37 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
     /// <summary>
     /// Gets the window at the given index, or the first window when index is null.
     /// </summary>
-    private Window? GetWindow(int? index)
+    private IWindow? GetWindow(int? index)
     {
         var app = BoundApplication;
-        if (app == null) return null;
-        if (index == null) return app.Windows.FirstOrDefault() as Window;
+        if (app == null || app.Windows.Count == 0) return null;
+        if (index == null) return app.Windows.FirstOrDefault();
         if (index.Value < 0 || index.Value >= app.Windows.Count) return null;
-        return app.Windows[index.Value] as Window;
+        return app.Windows[index.Value];
+    }
+
+    private static Page? GetWindowPage(IWindow window)
+    {
+        if (window is Window mauiWindow)
+            return mauiWindow.Page;
+
+        return window.Content as Page ?? window as Page;
+    }
+
+    private static VisualElement? GetWindowRootElement(IWindow window)
+    {
+        return GetWindowPage(window) as VisualElement
+            ?? window.Content as VisualElement
+            ?? window as VisualElement;
+    }
+
+    private static INavigation? GetWindowNavigation(IWindow window)
+        => GetWindowPage(window)?.Navigation;
+
+    private static Page? GetVisiblePage(IWindow window)
+    {
+        var page = GetWindowPage(window);
+        return (page as Shell)?.CurrentPage ?? page;
     }
 
     /// <summary>
@@ -625,7 +649,10 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             // Build active Shell context to filter out inactive ShellItem subtrees
             var activeShellItemIds = BuildActiveShellItemIds(window);
 
-            var platformHits = VisualTreeElementExtensions.GetVisualTreeElements(window, x, y);
+            var hitRoot = window as IVisualTreeElement ?? GetWindowRootElement(window);
+            if (hitRoot == null) return (object?)null;
+
+            var platformHits = VisualTreeElementExtensions.GetVisualTreeElements(hitRoot, x, y);
 
             // Supplement with bounds-based hit testing — some platforms (e.g. macOS AppKit)
             // don't traverse into all containers via GetVisualTreeElements
@@ -646,7 +673,7 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             var elements = new List<object>();
 
             // Detect modal pages — elements behind the topmost modal should be excluded
-            var modalPage = window.Navigation?.ModalStack?.LastOrDefault();
+            var modalPage = GetWindowNavigation(window)?.ModalStack?.LastOrDefault();
 
             // Check synthetic elements first — they represent visible nav chrome
             // (nav bar, tab bar, flyout button) that sits on top of MAUI content.
@@ -717,9 +744,9 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
     /// Builds a set of active ShellItem objects for filtering hit test results.
     /// Returns null if the window doesn't contain a Shell (no filtering needed).
     /// </summary>
-    private static HashSet<object>? BuildActiveShellItemIds(Window window)
+    private static HashSet<object>? BuildActiveShellItemIds(IWindow window)
     {
-        var shell = window.Page as Shell;
+        var shell = GetWindowPage(window) as Shell;
         if (shell == null) return null;
 
         var currentItem = shell.CurrentItem;
@@ -894,7 +921,7 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                 VisualElement? topModal = null;
                 try
                 {
-                    var modalStack = window.Page?.Navigation?.ModalStack;
+                    var modalStack = GetWindowNavigation(window)?.ModalStack;
                     if (modalStack?.Count > 0 && modalStack[^1] is VisualElement ms)
                         topModal = ms;
                 }
@@ -905,9 +932,10 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                 if (topModal == null && window is IVisualTreeElement windowVte)
                 {
                     var children = windowVte.GetVisualChildren();
+                    var windowPage = GetWindowPage(window);
                     for (int i = children.Count - 1; i >= 0; i--)
                     {
-                        if (children[i] is Page page && page != window.Page)
+                        if (children[i] is Page page && !ReferenceEquals(page, windowPage))
                         {
                             topModal = page;
                             break;
@@ -918,7 +946,8 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                 if (topModal != null)
                     return await CaptureScreenshotAsync(topModal);
 
-                if (window.Page is not VisualElement rootElement) return null;
+                var rootElement = GetWindowRootElement(window);
+                if (rootElement == null) return null;
 
                 return await CaptureScreenshotAsync(rootElement);
             });
@@ -1773,8 +1802,9 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                 {
                     // No element specified — find first ItemsView on the page
                     var window = GetWindow(ParseWindowIndex(request));
-                    if (window?.Page != null)
-                        itemsView = FindDescendant<ItemsView>(window.Page);
+                    var rootElement = window != null ? GetWindowRootElement(window) : null;
+                    if (rootElement != null)
+                        itemsView = FindDescendant<ItemsView>(rootElement);
                 }
 
                 if (itemsView != null)
@@ -1860,10 +1890,10 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
 
             // Priority 3: Delta scroll with no element — find first scrollable on current page
             var pageWindow = GetWindow(ParseWindowIndex(request));
-            if (pageWindow?.Page == null) return "No page available";
-
-            // Use the current visible page (Shell.CurrentPage or the window page)
-            var currentPage = (pageWindow.Page as Shell)?.CurrentPage ?? pageWindow.Page;
+            var currentPage = pageWindow != null
+                ? (GetVisiblePage(pageWindow) as VisualElement ?? GetWindowRootElement(pageWindow))
+                : null;
+            if (currentPage == null) return "No page available";
 
             // 3a: Try ItemsView via native scroll first (CollectionView/ListView are more common scroll targets)
             var targetItemsView = FindDescendant<ItemsView>(currentPage);
