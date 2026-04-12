@@ -248,6 +248,22 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
     }
 
     /// <summary>
+    /// Returns the short type name of the current visible page, or null.
+    /// Used by the status endpoint for quick diagnostics.
+    /// </summary>
+    private static string? GetCurrentPageName(Window? window)
+    {
+        try
+        {
+            var page = window?.Page;
+            if (page is Shell shell)
+                page = shell.CurrentPage;
+            return page?.GetType().Name;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
     /// Creates the visual tree walker. Override in platform-specific subclasses
     /// to return a walker with native info population.
     /// </summary>
@@ -478,6 +494,8 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                 displayDensity = GetWindowDisplayDensity(window),
                 appName = _app?.GetType().Assembly.GetName().Name ?? "unknown",
                 running = _app != null,
+                shellPresent = Shell.Current != null,
+                currentPage = GetCurrentPageName(window),
                 cdpReady = _cdpWebViews.Any(w => w.IsReady),
                 cdpWebViewCount = _cdpWebViews.Count,
                 windowCount = _app?.Windows.Count ?? 0,
@@ -1604,22 +1622,7 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             PayloadJson = JsonSerializer.Serialize(new { route = body.Route })
         });
 
-        var result = await DispatchAsync(async () =>
-        {
-            try
-            {
-                if (Shell.Current != null)
-                {
-                    await Shell.Current.GoToAsync(body.Route);
-                    return "ok";
-                }
-                return "No Shell.Current available";
-            }
-            catch (Exception ex)
-            {
-                return ex.Message;
-            }
-        });
+        var result = await NavigateToRouteAsync(body.Route);
 
         Publish(new ProfilerMarker
         {
@@ -1638,6 +1641,31 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             tags: new { route = body.Route });
 
         return result == "ok" ? HttpResponse.Ok($"Navigated to {body.Route}") : HttpResponse.Error(result ?? "Navigation failed");
+    }
+
+    /// <summary>
+    /// Performs Shell navigation to the given route. Returns "ok" on success, or an error message.
+    /// Override in platform-specific subclasses to provide custom navigation when
+    /// <c>Shell.GoToAsync</c> is not fully supported (e.g. WinForms, GTK).
+    /// </summary>
+    protected virtual async Task<string> NavigateToRouteAsync(string route)
+    {
+        return await DispatchAsync(async () =>
+        {
+            try
+            {
+                if (Shell.Current != null)
+                {
+                    await Shell.Current.GoToAsync(route);
+                    return "ok";
+                }
+                return "No Shell.Current available";
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+        }) ?? "Navigation failed";
     }
 
     private async Task<HttpResponse> HandleResize(HttpRequest request)

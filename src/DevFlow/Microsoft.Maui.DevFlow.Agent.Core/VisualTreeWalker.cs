@@ -341,6 +341,18 @@ public class VisualTreeWalker
                 info.Children.Add(childInfo);
         }
 
+        // Window-specific: ensure the Page is included even if GetVisualChildren()
+        // doesn't expose it. Some backends (e.g. WinForms) use ElementHandler<IWindow,Form>
+        // where the logical child chain may not be established at the MAUI level,
+        // causing Window.GetVisualChildren() to return empty.
+        if (element is Window mauiWindow && mauiWindow.Page is IVisualTreeElement windowPageVte
+            && !children.Contains(windowPageVte))
+        {
+            var pageInfo = WalkElement(windowPageVte, id, currentDepth + 1, maxDepth);
+            if (pageInfo != null)
+                info.Children.Add(pageInfo);
+        }
+
         // ShellContent-specific: ensure content page is included even if
         // GetVisualChildren() doesn't expose it (common on GTK/Linux after navigation).
         if (element is ShellContent sc && sc.Content is IVisualTreeElement scPage
@@ -425,6 +437,13 @@ public class VisualTreeWalker
         var children = element.GetVisualChildren();
         foreach (var child in children)
             QueryRecursive(child, type, automationId, text, id, results);
+
+        // Window-specific: include Page if not already traversed
+        if (element is Window mauiWindow && mauiWindow.Page is IVisualTreeElement windowPageVte
+            && !children.Contains(windowPageVte))
+        {
+            QueryRecursive(windowPageVte, type, automationId, text, id, results);
+        }
 
         // ShellContent-specific: include content page if not already traversed
         if (element is ShellContent sc && sc.Content is IVisualTreeElement scPage
@@ -673,6 +692,14 @@ public class VisualTreeWalker
         foreach (var child in children)
         {
             var result = FindByIdRecursive(child, targetId, id);
+            if (result != null) return result;
+        }
+
+        // Window special case
+        if (element is Window mauiWindow && mauiWindow.Page is IVisualTreeElement windowPageVte
+            && !children.Contains(windowPageVte))
+        {
+            var result = FindByIdRecursive(windowPageVte, targetId, id);
             if (result != null) return result;
         }
 
