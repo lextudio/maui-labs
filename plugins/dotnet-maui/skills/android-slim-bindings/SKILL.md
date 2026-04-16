@@ -1,6 +1,15 @@
 ---
 name: android-slim-bindings
-description: Create and update slim/native platform interop bindings for Android in .NET MAUI and .NET for Android projects. Guides through creating Java/Kotlin wrappers, configuring Gradle projects, resolving Maven dependencies, generating C# bindings, and integrating native Android libraries using the Native Library Interop (NLI) approach. Use when asked about Android bindings, AAR/JAR integration, Kotlin interop, Maven dependencies, or bridging native Android SDKs to .NET.
+description: >-
+  Create and update slim/native platform interop bindings for Android in .NET MAUI
+  and .NET for Android projects. Guides through creating Java/Kotlin wrappers,
+  configuring Gradle projects, resolving Maven dependencies, generating C# bindings,
+  and integrating native Android libraries using the Native Library Interop (NLI)
+  approach. USE FOR: Android bindings, AAR/JAR integration, Kotlin interop, Maven
+  dependencies, bridging native Android SDKs to .NET MAUI, NLI setup, slim binding
+  project creation. DO NOT USE FOR: build failures unrelated to bindings, NuGet restore
+  errors, DevFlow connectivity, general .NET MAUI app development, iOS bindings (use
+  ios-slim-bindings), or installing .NET workloads (use dotnet-workload-info).
 ---
 
 # When to use this skill

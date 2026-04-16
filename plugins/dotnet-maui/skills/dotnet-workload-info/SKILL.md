@@ -1,9 +1,10 @@
 ---
 name: dotnet-workload-info
 description: >-
-  Discover .NET SDK versions, workload sets, manifest versions, and workload dependencies (Xcode, JDK, Android SDK) from live NuGet APIs. Use when asked about: .NET SDK
+  Discover .NET SDK versions, workload sets, manifest versions, and workload dependencies (Xcode, JDK, Android SDK) from live NuGet APIs. USE FOR: .NET SDK
   requirements/versions, workload set versions, workload manifest versions, Xcode version requirements, JDK version requirements, Android SDK packages, or MAUI NuGet package
-  versions. Triggers on questions like "What Xcode is required for .NET 10?" or "What's the latest workload set?"
+  versions. Triggers on questions like "What Xcode is required for .NET 10?" or "What's the latest workload set?". DO NOT USE FOR: installing or repairing workloads
+  (use `dotnet workload install/restore/repair`), project-level package restore, or runtime dependency errors unrelated to SDK/workload versions.
 ---
 
 # .NET Workload Info Discovery
@@ -47,6 +48,8 @@ Extract `latest-sdk` and derive SDK band:
 ### Step 2: Find Workload Set Package / Version
 
 Use the dotnet workload search version command to discover the latest workload set version:
+
+> **Requires .NET SDK 9.0.200+** (workload sets feature). Verify with `dotnet --version`. If older, fall back to `dotnet workload list` to see installed versions, or query the NuGet API directly (Step 3).
 
 ```
 dotnet workload search version --format json --take 1
