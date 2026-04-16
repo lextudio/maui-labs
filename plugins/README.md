@@ -6,7 +6,7 @@ Distributable agent skills for .NET MAUI development. Installable via the Copilo
 
 | Plugin | Skills | Description |
 |--------|--------|-------------|
-| [dotnet-maui](dotnet-maui/) | [devflow-connect](dotnet-maui/skills/devflow-connect/) | MAUI development — DevFlow automation, profiling, accessibility, platform bindings, diagnostics. Some skills require the `maui` CLI tool. |
+| [dotnet-maui](dotnet-maui/) | [devflow-connect](dotnet-maui/skills/devflow-connect/), [android-slim-bindings](dotnet-maui/skills/android-slim-bindings/), [ios-slim-bindings](dotnet-maui/skills/ios-slim-bindings/), [dotnet-workload-info](dotnet-maui/skills/dotnet-workload-info/) | MAUI development — DevFlow automation, profiling, native bindings, workload discovery, diagnostics. Some skills require the `maui` CLI tool. |
 
 ## Installation
 
