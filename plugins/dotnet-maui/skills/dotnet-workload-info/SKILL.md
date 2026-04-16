@@ -47,20 +47,23 @@ Extract `latest-sdk` and derive SDK band:
 
 ### Step 2: Find Workload Set Package / Version
 
-Use the dotnet workload search version command to discover the latest workload set version:
+### Step 2: Find Workload Set Package / Version
 
-> **Requires .NET SDK 9.0.200+** (workload sets feature). Verify with `dotnet --version`. If older, fall back to `dotnet workload list` to see installed versions, or query the NuGet API directly (Step 3).
+**Option A — CLI (requires .NET SDK 9.0.200+ workload sets):**
 
-```
-dotnet workload search version --format json --take 1
-# Returns: [{"workloadVersion":"10.0.103"}]
+```bash
+# Check installed workload set version
+dotnet workload --version
+
+# List available workload set versions (SDK 9.0.200+)
+dotnet workload search version
 ```
 
-```
-dotnet workload search version --format json --take 1 | ConvertFrom-Json
-```
+> If `dotnet workload search version` is unavailable (SDK < 9.0.200), use `dotnet workload list` to see installed manifest versions, then proceed to the NuGet API in Step 3.
 
-The returned workloadVersion is the CLI version to use with --version flag.
+**Option B — NuGet API (works for any SDK, recommended for scripting):**
+
+Query the NuGet flat-container API directly (Step 3) — no CLI flags needed, always returns current data.
 
 **Version conversion**:
 To convert this to the NuGet package version (needed for Steps 3-4):

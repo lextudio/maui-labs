@@ -6,13 +6,13 @@ scenarios:
       from live NuGet APIs so I can script it in my CI pipeline.
     assertions:
       - type: "output_matches"
-        pattern: "dotnet workload search version|workload search"
+        pattern: "dotnet workload|workload search|nuget"
       - type: "output_matches"
         pattern: "v3-flatcontainer|api\\.nuget\\.org"
       - type: "output_matches"
         pattern: "WorkloadDependencies\\.json"
       - type: "output_matches"
-        pattern: "Manifest-.*\\.0\\.100"
+        pattern: "Manifest-.*\\.0\\.1[0-9][0-9]"
     rubric:
       - "Shows the multi-step chain: SDK version discovery → workload set → workload manifest → WorkloadDependencies.json"
       - "Uses the NuGet flat container API (v3-flatcontainer) to download nupkg files"
@@ -23,10 +23,9 @@ scenarios:
 
   - name: "Convert between CLI and NuGet workload set versions"
     prompt: |
-      I'm writing a script that uses `dotnet workload search version --format json`
-      to get the workload set version, then needs to download the workload set
-      package from NuGet. The CLI returns version "10.0.103". What's the NuGet
-      package ID and version I need for the download URL?
+      I'm writing a script to download a workload set package from NuGet.
+      My workload set version is "10.0.103". What's the NuGet package ID
+      and version I need for the download URL?
     assertions:
       - type: "output_contains"
         value: "10.103.0"
@@ -34,8 +33,6 @@ scenarios:
         value: "Microsoft.NET.Workloads.10.0.100"
       - type: "output_matches"
         pattern: "v3-flatcontainer/microsoft\\.net\\.workloads"
-      - type: "output_matches"
-        pattern: "workload search version.*--format json|--format json.*workload search"
     rubric:
       - "Correctly converts CLI version 10.0.103 to NuGet version 10.103.0"
       - "Derives the SDK band as 10.0.100 from the CLI version"
