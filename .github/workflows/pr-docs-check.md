@@ -2,8 +2,9 @@
 description: |
   Analyzes merged pull requests for documentation needs. When a PR is merged,
   this workflow reviews the changes and determines if documentation updates are
-  needed on dotnet/docs-maui. If updates are needed, it opens a draft PR directly
-  on docs-maui. If not, it comments on the source PR explaining why.
+  needed on dotnet/docs-maui. If updates are needed, it opens an issue on
+  docs-maui describing the suggested changes. If not, it comments on the source
+  PR explaining why.
 
 on:
   pull_request:
@@ -55,12 +56,10 @@ tools:
 
 safe-outputs:
   github-token: ${{ secrets.MAUI_BOT_TOKEN }}
-  create-pull-request:
-    title-prefix: "[maui-labs] "
+  create-issue:
+    title-prefix: "[maui-labs docs] "
     labels: [docs-from-code]
-    draft: true
     target-repo: "dotnet/docs-maui"
-    expires: 30
   add-comment:
     hide-older-comments: true
 
@@ -165,35 +164,25 @@ Also check:
 - `docs/developer-tools/index.md` — Landing page for the developer-tools section
 - `docs/TOC.yml` — Table of contents (update if adding new pages)
 
-Before making changes, check if there are any open draft PRs on `dotnet/docs-maui`
-with the `docs-from-code` label from recent maui-labs merges. If so, note any
-potential conflicts in your PR description.
+### 4b: Open an Issue on docs-maui
 
-The documentation is written in Microsoft Learn Markdown format:
-- Use `> [!NOTE]`, `> [!WARNING]`, `> [!TIP]` for callout boxes
-- Use `ms.date: MM/DD/YYYY` format in frontmatter
-- Code blocks use triple backticks with language identifier
-- Tables use pipe syntax
+Create an issue on `dotnet/docs-maui` describing the documentation updates needed.
+The issue should include:
 
-### 4b: Open a Draft PR on docs-maui
+- **Which pages** need updating (reference the file paths above)
+- **What changed** — summarize the user-facing changes from the PR
+- **Suggested content** — provide the specific text, code blocks, or table rows
+  to add or modify so a docs author can apply the changes directly
+- If a new page is needed, suggest the filename and where it fits in `docs/TOC.yml`
 
-Make the changes to the appropriate documentation files and open a draft pull
-request on `dotnet/docs-maui`. Match changes to the right page:
-- CLI command changes → update the relevant `docs/developer-tools/cli/` page
-- DevFlow feature changes → update the relevant `docs/developer-tools/devflow/` page
-- New capabilities that don't fit existing pages → create a new page and add it to `docs/TOC.yml`
-
-The PR should:
-- Update the `ms.date` field in the frontmatter of changed files to today's date
-- Include a clear PR title describing the documentation update
-- In the PR body, link to the source PR in `dotnet/maui-labs` that triggered the change
-- Keep changes minimal — only update what's needed for this specific PR
+The issue body should be self-contained — a docs author should be able to make
+the update without reading the full source PR diff.
 
 ### 4c: Comment on the Source PR
 
 Comment on the original PR in `dotnet/maui-labs` with:
-- A summary of the documentation changes made
-- A link to the draft PR on `dotnet/docs-maui`
+- A summary of the documentation changes suggested
+- A link to the issue opened on `dotnet/docs-maui`
 
 ## Step 5: If Documentation is NOT Needed
 
