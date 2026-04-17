@@ -159,7 +159,6 @@ public static partial class AiCommands
 					}
 
 					// Pre-select all by default
-					prompt.AddChoices(Array.Empty<string>());
 					foreach (var skill in allSkills)
 					{
 						var label = string.IsNullOrEmpty(skill.Description)
@@ -186,7 +185,21 @@ public static partial class AiCommands
 					}
 				}
 
-				// Step 4: Confirmation
+				// Step 4: Dry run check (before confirmation prompt)
+				if (dryRun)
+				{
+					formatter.WriteInfo("[Dry run] Would install the following skills:");
+					formatter.WriteTable(
+						from s in selectedSkills
+						from e in environments
+						select new { s.Name, Env = e.Kind.ToString(), Path = Path.Combine(e.SkillsDirectory, s.Name) },
+						("Skill", x => x.Name),
+						("Environment", x => x.Env),
+						("Path", x => x.Path));
+					return 0;
+				}
+
+				// Step 5: Confirmation
 				if (!force && !isCi && !useJson)
 				{
 					var skillWord = selectedSkills.Count == 1 ? "skill" : "skills";
@@ -204,20 +217,7 @@ public static partial class AiCommands
 					}
 				}
 
-				if (dryRun)
-				{
-					formatter.WriteInfo("[Dry run] Would install the following skills:");
-					formatter.WriteTable(
-						from s in selectedSkills
-						from e in environments
-						select new { s.Name, Env = e.Kind.ToString(), Path = Path.Combine(e.SkillsDirectory, s.Name) },
-						("Skill", x => x.Name),
-						("Environment", x => x.Env),
-						("Path", x => x.Path));
-					return 0;
-				}
-
-				// Step 5: Install skills
+				// Step 6: Install skills
 				var results = new List<(string Skill, string Env, int Files, string Path)>();
 
 				foreach (var env in environments)

@@ -325,8 +325,8 @@ internal static class MarketplaceClient
 		{
 			using var response = await http.GetAsync(url, ct).ConfigureAwait(false);
 
-			// Return null only for 404 (resource not found); propagate other errors
-			// so callers can surface meaningful messages.
+			// Return null for 404 (resource not found) and network errors;
+			// user cancellation (Ctrl+C) propagates via OperationCanceledException.
 			if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
 				return null;
 
