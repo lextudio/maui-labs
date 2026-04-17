@@ -198,7 +198,7 @@ internal static class MarketplaceClient
 
 			// Validate the resolved path stays under the destination directory.
 			var fullDest = Path.GetFullPath(destPath);
-			if (!fullDest.StartsWith(fullBase, StringComparison.Ordinal))
+			if (!fullDest.StartsWith(fullBase, StringComparison.OrdinalIgnoreCase))
 				continue;
 
 			var destFileDir = Path.GetDirectoryName(destPath);

@@ -73,7 +73,7 @@ internal static class AgentEnvironmentDetector
 
 			// Stop at the Git root.
 			if (rootFullPath is not null &&
-				string.Equals(current.FullName, rootFullPath, StringComparison.Ordinal))
+				string.Equals(current.FullName, rootFullPath, StringComparison.OrdinalIgnoreCase))
 				break;
 
 			current = current.Parent;
