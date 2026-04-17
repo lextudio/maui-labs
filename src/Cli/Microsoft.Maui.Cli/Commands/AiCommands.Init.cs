@@ -314,13 +314,17 @@ public static partial class AiCommands
 			return [];
 
 		var allSkills = new List<SkillInfo>();
+
+		// Fetch the repository tree once and share it across all plugins.
+		var treeEntries = await MarketplaceClient.FetchTreeEntriesAsync(http, repo, branch, ct);
+
 		foreach (var pluginEntry in marketplace.Plugins)
 		{
 			var plugin = await MarketplaceClient.GetPluginAsync(http, repo, branch, pluginEntry.Source, ct);
 			if (plugin is null)
 				continue;
 
-			var skills = await MarketplaceClient.GetSkillsAsync(http, repo, branch, plugin, pluginEntry.Source, ct);
+			var skills = await MarketplaceClient.GetSkillsAsync(http, repo, branch, plugin, pluginEntry.Source, treeEntries, ct);
 			allSkills.AddRange(skills);
 		}
 

@@ -53,36 +53,32 @@ internal static class MarketplaceClient
 	}
 
 	/// <summary>
-	/// Discovers all skills within a plugin by enumerating the repository tree
-	/// and parsing SKILL.md frontmatter.
+	/// Fetches the full recursive tree for the given branch and returns the entries
+	/// as (path, type) pairs. Results can be cached and passed to
+	/// <see cref="GetSkillsAsync"/> to avoid redundant API calls.
 	/// </summary>
 	/// <param name="http">Configured <see cref="HttpClient"/>.</param>
 	/// <param name="repo">Repository in "owner/repo" format.</param>
 	/// <param name="branch">Branch name to read from.</param>
-	/// <param name="plugin">The plugin manifest whose skills to discover.</param>
-	/// <param name="pluginSourcePath">Repository-relative path to the plugin directory.</param>
-	/// <returns>List of discovered skills (empty on failure).</returns>
-	public static async Task<List<SkillInfo>> GetSkillsAsync(
-		HttpClient http, string repo, string branch, PluginManifest plugin, string pluginSourcePath, CancellationToken ct = default)
+	/// <param name="ct">Cancellation token.</param>
+	/// <returns>List of tree entries, or <c>null</c> on failure.</returns>
+	public static async Task<List<(string Path, string Type)>?> FetchTreeEntriesAsync(
+		HttpClient http, string repo, string branch, CancellationToken ct = default)
 	{
-		var skills = new List<SkillInfo>();
-
-		// Resolve the branch to a tree SHA, then fetch the full recursive tree.
 		var treeSha = await ResolveTreeShaAsync(http, repo, branch, ct).ConfigureAwait(false);
 		if (treeSha is null)
-			return skills;
+			return null;
 
 		var treeUrl = $"{GitHubApiBase}/repos/{repo}/git/trees/{treeSha}?recursive=1";
 		var treeJson = await FetchStringAsync(http, treeUrl, ct).ConfigureAwait(false);
 		if (treeJson is null)
-			return skills;
+			return null;
 
 		var treeNode = JsonNode.Parse(treeJson);
 		var treeArray = treeNode?["tree"]?.AsArray();
 		if (treeArray is null)
-			return skills;
+			return null;
 
-		// Collect all tree entries as (path, type) pairs.
 		var entries = new List<(string Path, string Type)>();
 		foreach (var entry in treeArray)
 		{
@@ -91,6 +87,33 @@ internal static class MarketplaceClient
 			if (entryPath is not null && entryType is not null)
 				entries.Add((entryPath, entryType));
 		}
+
+		return entries;
+	}
+
+	/// <summary>
+	/// Discovers all skills within a plugin by enumerating the repository tree
+	/// and parsing SKILL.md frontmatter.
+	/// </summary>
+	/// <param name="http">Configured <see cref="HttpClient"/>.</param>
+	/// <param name="repo">Repository in "owner/repo" format.</param>
+	/// <param name="branch">Branch name to read from.</param>
+	/// <param name="plugin">The plugin manifest whose skills to discover.</param>
+	/// <param name="pluginSourcePath">Repository-relative path to the plugin directory.</param>
+	/// <param name="cachedTreeEntries">
+	/// Optional pre-fetched tree entries from <see cref="FetchTreeEntriesAsync"/>.
+	/// When <c>null</c>, the tree is fetched automatically (one API call per invocation).
+	/// </param>
+	/// <returns>List of discovered skills (empty on failure).</returns>
+	public static async Task<List<SkillInfo>> GetSkillsAsync(
+		HttpClient http, string repo, string branch, PluginManifest plugin, string pluginSourcePath,
+		List<(string Path, string Type)>? cachedTreeEntries = null, CancellationToken ct = default)
+	{
+		var skills = new List<SkillInfo>();
+
+		var entries = cachedTreeEntries ?? await FetchTreeEntriesAsync(http, repo, branch, ct).ConfigureAwait(false);
+		if (entries is null)
+			return skills;
 
 		var normalizedPluginPath = NormalizePath(pluginSourcePath);
 
@@ -301,8 +324,13 @@ internal static class MarketplaceClient
 		try
 		{
 			using var response = await http.GetAsync(url, ct).ConfigureAwait(false);
-			if (!response.IsSuccessStatusCode)
+
+			// Return null only for 404 (resource not found); propagate other errors
+			// so callers can surface meaningful messages.
+			if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
 				return null;
+
+			response.EnsureSuccessStatusCode();
 
 			return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 		}
@@ -321,8 +349,11 @@ internal static class MarketplaceClient
 		try
 		{
 			using var response = await http.GetAsync(url, ct).ConfigureAwait(false);
-			if (!response.IsSuccessStatusCode)
+
+			if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
 				return null;
+
+			response.EnsureSuccessStatusCode();
 
 			return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
 		}

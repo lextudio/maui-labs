@@ -56,8 +56,10 @@ public static partial class AiCommands
 
 				using var http = CreateGitHubHttpClient();
 
-				// Scan installed skills and check for updates
+				// Scan installed skills and check for updates; de-duplicate by resolved path
+				// so environments sharing the same skills directory are not updated twice.
 				var updatable = new List<(DetectedEnvironment Env, string SkillDir, string SkillName, InstalledSkillVersion Version)>();
+				var processedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
 				foreach (var env in environments)
 				{
@@ -66,6 +68,10 @@ public static partial class AiCommands
 
 					foreach (var skillDir in Directory.GetDirectories(env.SkillsDirectory))
 					{
+						var resolvedPath = Path.GetFullPath(skillDir);
+						if (!processedPaths.Add(resolvedPath))
+							continue;
+
 						var skillName = Path.GetFileName(skillDir);
 
 						if (skillFilter is { Length: > 0 } &&
@@ -82,10 +88,13 @@ public static partial class AiCommands
 							var remoteSha = await MarketplaceClient.GetRemoteCommitShaAsync(
 								http, repo, branch, version.PluginPath, ct);
 
+							// Only update when the remote SHA is known AND differs from local,
+							// unless --force. When remoteSha is null (e.g. GitHub unreachable)
+							// we skip the update to avoid unnecessary reinstalls.
 							var needsUpdate = force ||
-								remoteSha is null ||
-								version.Commit is null ||
-								!string.Equals(remoteSha, version.Commit, StringComparison.OrdinalIgnoreCase);
+								(remoteSha is not null &&
+								 (version.Commit is null ||
+								  !string.Equals(remoteSha, version.Commit, StringComparison.OrdinalIgnoreCase)));
 
 							if (needsUpdate)
 								updatable.Add((env, skillDir, skillName, version));

@@ -41,7 +41,12 @@ internal static class SkillInstaller
 		if (skill.Name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || skill.Name.Contains(".."))
 			return (-1, string.Empty);
 
-		var installPath = Path.Combine(env.SkillsDirectory, skill.Name);
+		// If the skills directory is not rooted, resolve it relative to the project root.
+		var skillsDir = Path.IsPathRooted(env.SkillsDirectory)
+			? env.SkillsDirectory
+			: Path.GetFullPath(Path.Combine(projectRoot, env.SkillsDirectory));
+
+		var installPath = Path.Combine(skillsDir, skill.Name);
 
 		// Skip if already installed and not forcing.
 		if (!force)
