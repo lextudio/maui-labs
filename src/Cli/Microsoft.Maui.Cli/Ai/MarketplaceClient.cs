@@ -277,13 +277,41 @@ internal static class MarketplaceClient
 			return (name, description);
 
 		var frontmatter = trimmed[3..endIndex];
-		foreach (var line in frontmatter.Split('\n'))
+		var lines = frontmatter.Split('\n');
+		for (var i = 0; i < lines.Length; i++)
 		{
-			var trimmedLine = line.Trim();
+			var trimmedLine = lines[i].Trim();
 			if (trimmedLine.StartsWith("name:", StringComparison.OrdinalIgnoreCase))
 				name = StripYamlValue(trimmedLine["name:".Length..]);
 			else if (trimmedLine.StartsWith("description:", StringComparison.OrdinalIgnoreCase))
-				description = StripYamlValue(trimmedLine["description:".Length..]);
+			{
+				var rawValue = StripYamlValue(trimmedLine["description:".Length..]);
+				if (rawValue is ">-" or ">" or "|" or "|-" or "|+" or ">+")
+				{
+					// YAML block scalar — read indented continuation lines
+					var sb = new System.Text.StringBuilder();
+					while (i + 1 < lines.Length)
+					{
+						var nextLine = lines[i + 1];
+						if (nextLine.Length > 0 && (nextLine[0] == ' ' || nextLine[0] == '\t'))
+						{
+							if (sb.Length > 0)
+								sb.Append(' ');
+							sb.Append(nextLine.Trim());
+							i++;
+						}
+						else
+						{
+							break;
+						}
+					}
+					description = sb.ToString();
+				}
+				else
+				{
+					description = rawValue;
+				}
+			}
 		}
 
 		return (name, description);
@@ -312,6 +340,8 @@ internal static class MarketplaceClient
 	private static string NormalizePath(string path)
 	{
 		var normalized = path.Replace('\\', '/');
+		while (normalized.Contains("/./"))
+			normalized = normalized.Replace("/./", "/");
 		while (normalized.StartsWith("./", StringComparison.Ordinal))
 			normalized = normalized[2..];
 		while (normalized.Contains("//"))
