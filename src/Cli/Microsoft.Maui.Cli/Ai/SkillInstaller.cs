@@ -27,6 +27,7 @@ internal static class SkillInstaller
 	/// of files written and installPath is the absolute path to the skill directory.
 	/// Returns (0, installPath) if the skill is already installed and <paramref name="force"/> is <c>false</c>.
 	/// Returns (-1, string.Empty) if the skill name contains invalid characters.
+	/// Returns (-2, installPath) if the download produced zero files (network or remote failure).
 	/// </returns>
 	public static async Task<(int FilesInstalled, string InstallPath)> InstallSkillAsync(
 		HttpClient http,
@@ -65,7 +66,7 @@ internal static class SkillInstaller
 		{
 			// Clean up empty directory
 			try { if (Directory.Exists(installPath) && !Directory.EnumerateFileSystemEntries(installPath).Any()) Directory.Delete(installPath); } catch { }
-			return (0, installPath);
+			return (-2, installPath);
 		}
 
 		// Resolve the latest commit SHA for version tracking.

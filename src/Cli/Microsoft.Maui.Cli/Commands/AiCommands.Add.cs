@@ -130,9 +130,13 @@ public static partial class AiCommands
 
 					results.Add((env.Kind.ToString(), filesInstalled, installPath));
 
-					if (filesInstalled < 0)
+					if (filesInstalled == -1)
 					{
 						formatter.WriteWarning($"Skill '{skill.Name}' has an invalid name and cannot be installed.");
+					}
+					else if (filesInstalled == -2)
+					{
+						formatter.WriteWarning($"Failed to download skill files for '{skill.Name}'. Check your network connection.");
 					}
 					else if (filesInstalled > 0)
 						formatter.WriteSuccess($"Installed {skill.Name} → {env.Kind} ({filesInstalled} files)");

@@ -108,7 +108,7 @@ public static partial class AiCommands
 					return 0;
 				}
 
-			var updateWord = updatable.Count == 1 ? "skill" : "skills";
+				var updateWord = updatable.Count == 1 ? "skill" : "skills";
 				formatter.WriteInfo($"Found {updatable.Count} {updateWord} with updates available.");
 
 				if (dryRun)
@@ -169,8 +169,10 @@ public static partial class AiCommands
 
 					results.Add((skillName, env.Kind.ToString(), filesInstalled));
 
-					if (filesInstalled < 0)
+					if (filesInstalled == -1)
 						formatter.WriteWarning($"Skill '{skillName}' has an invalid name and cannot be updated.");
+					else if (filesInstalled == -2)
+						formatter.WriteWarning($"Failed to download skill files for '{skillName}'. Check your network connection.");
 					else if (filesInstalled > 0)
 						formatter.WriteSuccess($"Updated {skillName} → {env.Kind} ({filesInstalled} files)");
 					else

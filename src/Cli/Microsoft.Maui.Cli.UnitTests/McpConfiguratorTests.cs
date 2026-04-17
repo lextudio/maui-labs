@@ -221,6 +221,28 @@ public class McpConfiguratorTests : IDisposable
 	}
 
 	[Fact]
+	public async Task ConfigureAsync_CorruptedJson_ReturnsFalse()
+	{
+		var configDir = Path.Combine(_tempDir, ".claude");
+		Directory.CreateDirectory(configDir);
+		var configPath = Path.Combine(configDir, "mcp.json");
+
+		// Write invalid JSON content
+		await File.WriteAllTextAsync(configPath, "not json at all {{{");
+
+		var env = new DetectedEnvironment
+		{
+			Kind = AgentEnvironmentKind.Claude,
+			McpConfigPath = configPath,
+			SkillsDirectory = Path.Combine(_tempDir, ".claude", "skills")
+		};
+
+		var result = await McpConfigurator.ConfigureAsync(env);
+
+		Assert.False(result);
+	}
+
+	[Fact]
 	public async Task ConfigureAsync_ReturnsTrue_WhenEntryAlreadyExists()
 	{
 		var configDir = Path.Combine(_tempDir, ".claude");
