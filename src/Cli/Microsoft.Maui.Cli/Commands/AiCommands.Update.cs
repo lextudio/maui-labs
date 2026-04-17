@@ -72,7 +72,7 @@ public static partial class AiCommands
 							!skillFilter.Any(f => string.Equals(f, skillName, StringComparison.OrdinalIgnoreCase)))
 							continue;
 
-						var version = await SkillVersionStore.ReadAsync(skillDir);
+						var version = await SkillVersionStore.ReadAsync(skillDir, ct);
 						if (version is null)
 							continue;
 
@@ -80,7 +80,7 @@ public static partial class AiCommands
 						if (version.PluginPath is not null)
 						{
 							var remoteSha = await MarketplaceClient.GetRemoteCommitShaAsync(
-								http, repo, branch, version.PluginPath);
+								http, repo, branch, version.PluginPath, ct);
 
 							var needsUpdate = force ||
 								remoteSha is null ||
@@ -134,11 +134,11 @@ public static partial class AiCommands
 				if (!useJson && formatter is SpectreOutputFormatter spectre)
 				{
 					allSkills = await spectre.StatusAsync("Fetching marketplace...", async () =>
-						await FetchAllSkillsAsync(http, repo, branch));
+						await FetchAllSkillsAsync(http, repo, branch, ct));
 				}
 				else
 				{
-					allSkills = await FetchAllSkillsAsync(http, repo, branch);
+					allSkills = await FetchAllSkillsAsync(http, repo, branch, ct);
 				}
 
 				var results = new List<(string Skill, string Env, int Files)>();
@@ -155,7 +155,7 @@ public static partial class AiCommands
 					}
 
 					var (filesInstalled, _) = await SkillInstaller.InstallSkillAsync(
-						http, skillInfo, env, workingDir, repo, branch, force: true);
+						http, skillInfo, env, workingDir, repo, branch, force: true, ct);
 
 					results.Add((skillName, env.Kind.ToString(), filesInstalled));
 					formatter.WriteSuccess($"Updated {skillName} → {env.Kind} ({filesInstalled} files)");

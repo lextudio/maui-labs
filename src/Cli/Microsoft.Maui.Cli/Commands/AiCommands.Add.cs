@@ -64,11 +64,11 @@ public static partial class AiCommands
 				if (!useJson && formatter is SpectreOutputFormatter spectre)
 				{
 					allSkills = await spectre.StatusAsync("Fetching marketplace...", async () =>
-						await FetchAllSkillsAsync(http, repo, branch));
+						await FetchAllSkillsAsync(http, repo, branch, ct));
 				}
 				else
 				{
-					allSkills = await FetchAllSkillsAsync(http, repo, branch);
+					allSkills = await FetchAllSkillsAsync(http, repo, branch, ct);
 				}
 
 				var skill = allSkills.FirstOrDefault(s =>
@@ -126,7 +126,7 @@ public static partial class AiCommands
 				foreach (var env in environments)
 				{
 					var (filesInstalled, installPath) = await SkillInstaller.InstallSkillAsync(
-						http, skill, env, workingDir, repo, branch, force);
+						http, skill, env, workingDir, repo, branch, force, ct);
 
 					results.Add((env.Kind.ToString(), filesInstalled, installPath));
 
@@ -141,7 +141,7 @@ public static partial class AiCommands
 				{
 					foreach (var env in environments)
 					{
-						var ok = await McpConfigurator.ConfigureAsync(env, workingDir);
+						var ok = await McpConfigurator.ConfigureAsync(env, ct);
 						if (ok)
 							formatter.WriteSuccess($"MCP configured for {env.Kind}");
 						else

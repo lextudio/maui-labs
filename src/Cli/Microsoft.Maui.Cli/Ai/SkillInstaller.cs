@@ -21,10 +21,12 @@ internal static class SkillInstaller
 	/// <param name="repo">Repository in "owner/repo" format.</param>
 	/// <param name="branch">Branch name to install from.</param>
 	/// <param name="force">When <c>true</c>, overwrite an existing installation.</param>
+	/// <param name="ct">Cancellation token.</param>
 	/// <returns>
 	/// A tuple of (filesInstalled, installPath) where filesInstalled is the number
 	/// of files written and installPath is the absolute path to the skill directory.
 	/// Returns (0, installPath) if the skill is already installed and <paramref name="force"/> is <c>false</c>.
+	/// Returns (0, string.Empty) if the skill name contains invalid characters.
 	/// </returns>
 	public static async Task<(int FilesInstalled, string InstallPath)> InstallSkillAsync(
 		HttpClient http,
@@ -33,14 +35,18 @@ internal static class SkillInstaller
 		string projectRoot,
 		string repo,
 		string branch,
-		bool force)
+		bool force,
+		CancellationToken ct = default)
 	{
+		if (skill.Name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || skill.Name.Contains(".."))
+			return (0, string.Empty);
+
 		var installPath = Path.Combine(env.SkillsDirectory, skill.Name);
 
 		// Skip if already installed and not forcing.
 		if (!force)
 		{
-			var existing = await SkillVersionStore.ReadAsync(installPath).ConfigureAwait(false);
+			var existing = await SkillVersionStore.ReadAsync(installPath, ct).ConfigureAwait(false);
 			if (existing is not null)
 				return (0, installPath);
 		}
@@ -48,11 +54,18 @@ internal static class SkillInstaller
 		Directory.CreateDirectory(installPath);
 
 		var filesInstalled = await MarketplaceClient.DownloadSkillFilesAsync(
-			http, skill, installPath, repo, branch).ConfigureAwait(false);
+			http, skill, installPath, repo, branch, ct).ConfigureAwait(false);
+
+		if (filesInstalled == 0)
+		{
+			// Clean up empty directory
+			try { if (Directory.Exists(installPath) && !Directory.EnumerateFileSystemEntries(installPath).Any()) Directory.Delete(installPath); } catch { }
+			return (0, installPath);
+		}
 
 		// Resolve the latest commit SHA for version tracking.
 		var commitSha = await MarketplaceClient.GetRemoteCommitShaAsync(
-			http, repo, branch, skill.RemotePath).ConfigureAwait(false);
+			http, repo, branch, skill.RemotePath, ct).ConfigureAwait(false);
 
 		var version = new InstalledSkillVersion
 		{
@@ -64,7 +77,7 @@ internal static class SkillInstaller
 			PluginPath = skill.RemotePath
 		};
 
-		await SkillVersionStore.WriteAsync(installPath, version).ConfigureAwait(false);
+		await SkillVersionStore.WriteAsync(installPath, version, ct).ConfigureAwait(false);
 
 		return (filesInstalled, installPath);
 	}

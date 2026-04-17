@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using System.CommandLine.Parsing;
+using System.Globalization;
 using System.Text.Json.Nodes;
 using Microsoft.Maui.Cli.Ai;
 using Microsoft.Maui.Cli.Ai.Models;
@@ -55,7 +56,7 @@ public static partial class AiCommands
 					foreach (var skillDir in Directory.GetDirectories(env.SkillsDirectory))
 					{
 						var skillName = Path.GetFileName(skillDir);
-						var version = await SkillVersionStore.ReadAsync(skillDir);
+						var version = await SkillVersionStore.ReadAsync(skillDir, ct);
 
 						if (version is null)
 						{
@@ -64,7 +65,7 @@ public static partial class AiCommands
 						}
 
 						var installed = version.UpdatedAt is not null
-							? DateTime.Parse(version.UpdatedAt).ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+							? (DateTime.TryParse(version.UpdatedAt, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt) ? dt.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : version.UpdatedAt)
 							: "Unknown";
 
 						var status = "Installed";
@@ -72,7 +73,7 @@ public static partial class AiCommands
 						if (checkUpdates && http is not null && version.PluginPath is not null)
 						{
 							var remoteSha = await MarketplaceClient.GetRemoteCommitShaAsync(
-								http, repo, branch, version.PluginPath);
+								http, repo, branch, version.PluginPath, ct);
 
 							if (remoteSha is not null && version.Commit is not null)
 							{

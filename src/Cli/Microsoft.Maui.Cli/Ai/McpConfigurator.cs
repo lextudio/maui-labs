@@ -21,9 +21,9 @@ internal static class McpConfigurator
 	/// The operation is idempotent — it does nothing if the entry already exists.
 	/// </summary>
 	/// <param name="env">Target agent environment.</param>
-	/// <param name="projectRoot">Absolute path to the project root directory.</param>
+	/// <param name="ct">Cancellation token.</param>
 	/// <returns><c>true</c> if the configuration is in place; <c>false</c> on failure.</returns>
-	public static async Task<bool> ConfigureAsync(DetectedEnvironment env, string projectRoot)
+	public static async Task<bool> ConfigureAsync(DetectedEnvironment env, CancellationToken ct = default)
 	{
 		try
 		{
@@ -32,8 +32,8 @@ internal static class McpConfigurator
 			JsonObject root;
 			if (File.Exists(configPath))
 			{
-				var existingJson = await File.ReadAllTextAsync(configPath).ConfigureAwait(false);
-				root = JsonNode.Parse(existingJson)?.AsObject() ?? new JsonObject();
+				var existingJson = await File.ReadAllTextAsync(configPath, ct).ConfigureAwait(false);
+				root = JsonNode.Parse(existingJson) as JsonObject ?? new JsonObject();
 			}
 			else
 			{
@@ -65,7 +65,7 @@ internal static class McpConfigurator
 				Directory.CreateDirectory(configDir);
 
 			var options = new JsonSerializerOptions { WriteIndented = true };
-			await File.WriteAllTextAsync(configPath, root.ToJsonString(options)).ConfigureAwait(false);
+			await File.WriteAllTextAsync(configPath, root.ToJsonString(options), ct).ConfigureAwait(false);
 
 			return true;
 		}

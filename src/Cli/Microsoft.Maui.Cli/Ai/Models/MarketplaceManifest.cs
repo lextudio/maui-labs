@@ -14,9 +14,25 @@ internal sealed class MarketplaceManifest
 	public string Name { get; set; } = string.Empty;
 
 	/// <summary>
+	/// Owner information for the marketplace.
+	/// </summary>
+	public MarketplaceOwner? Owner { get; set; }
+
+	/// <summary>
 	/// List of plugin entries available in the marketplace.
 	/// </summary>
 	public PluginEntry[] Plugins { get; set; } = [];
+}
+
+/// <summary>
+/// Represents the marketplace owner.
+/// </summary>
+internal sealed class MarketplaceOwner
+{
+	/// <summary>
+	/// Name of the owning organization or team.
+	/// </summary>
+	public string Name { get; set; } = string.Empty;
 }
 
 /// <summary>

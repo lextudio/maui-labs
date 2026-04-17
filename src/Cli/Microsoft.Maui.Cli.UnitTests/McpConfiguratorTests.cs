@@ -38,7 +38,7 @@ public class McpConfiguratorTests : IDisposable
 			SkillsDirectory = Path.Combine(_tempDir, ".claude", "skills")
 		};
 
-		var result = await McpConfigurator.ConfigureAsync(env, _tempDir);
+		var result = await McpConfigurator.ConfigureAsync(env);
 
 		Assert.True(result);
 		Assert.True(File.Exists(configPath));
@@ -63,7 +63,7 @@ public class McpConfiguratorTests : IDisposable
 			SkillsDirectory = Path.Combine(_tempDir, ".claude", "skills")
 		};
 
-		await McpConfigurator.ConfigureAsync(env, _tempDir);
+		await McpConfigurator.ConfigureAsync(env);
 
 		var json = JsonNode.Parse(await File.ReadAllTextAsync(configPath));
 		var args = json?["mcpServers"]?["maui-devflow"]?["args"]?.AsArray();
@@ -101,7 +101,7 @@ public class McpConfiguratorTests : IDisposable
 			SkillsDirectory = Path.Combine(_tempDir, ".github", "skills")
 		};
 
-		var result = await McpConfigurator.ConfigureAsync(env, _tempDir);
+		var result = await McpConfigurator.ConfigureAsync(env);
 
 		Assert.True(result);
 		var json = JsonNode.Parse(await File.ReadAllTextAsync(configPath));
@@ -128,10 +128,10 @@ public class McpConfiguratorTests : IDisposable
 		};
 
 		// Configure twice
-		await McpConfigurator.ConfigureAsync(env, _tempDir);
+		await McpConfigurator.ConfigureAsync(env);
 		var contentAfterFirst = await File.ReadAllTextAsync(configPath);
 
-		await McpConfigurator.ConfigureAsync(env, _tempDir);
+		await McpConfigurator.ConfigureAsync(env);
 		var contentAfterSecond = await File.ReadAllTextAsync(configPath);
 
 		// File should not change on second run (entry already exists)
@@ -152,7 +152,7 @@ public class McpConfiguratorTests : IDisposable
 			SkillsDirectory = Path.Combine(_tempDir, ".opencode", "skills")
 		};
 
-		var result = await McpConfigurator.ConfigureAsync(env, _tempDir);
+		var result = await McpConfigurator.ConfigureAsync(env);
 
 		Assert.True(result);
 		var json = JsonNode.Parse(await File.ReadAllTextAsync(configPath));
@@ -191,7 +191,7 @@ public class McpConfiguratorTests : IDisposable
 			SkillsDirectory = Path.Combine(_tempDir, ".opencode", "skills")
 		};
 
-		await McpConfigurator.ConfigureAsync(env, _tempDir);
+		await McpConfigurator.ConfigureAsync(env);
 
 		var json = JsonNode.Parse(await File.ReadAllTextAsync(configPath));
 		var servers = json?["mcp"]?["servers"]?.AsObject();
@@ -214,7 +214,7 @@ public class McpConfiguratorTests : IDisposable
 			SkillsDirectory = Path.Combine(_tempDir, "new-env", ".claude", "skills")
 		};
 
-		var result = await McpConfigurator.ConfigureAsync(env, _tempDir);
+		var result = await McpConfigurator.ConfigureAsync(env);
 
 		Assert.True(result);
 		Assert.True(File.Exists(configPath));
@@ -235,11 +235,11 @@ public class McpConfiguratorTests : IDisposable
 		};
 
 		// First call creates the entry
-		var first = await McpConfigurator.ConfigureAsync(env, _tempDir);
+		var first = await McpConfigurator.ConfigureAsync(env);
 		Assert.True(first);
 
 		// Second call should also return true (already configured)
-		var second = await McpConfigurator.ConfigureAsync(env, _tempDir);
+		var second = await McpConfigurator.ConfigureAsync(env);
 		Assert.True(second);
 	}
 }

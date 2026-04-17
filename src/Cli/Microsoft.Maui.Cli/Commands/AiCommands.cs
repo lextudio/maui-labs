@@ -12,7 +12,6 @@ public static partial class AiCommands
 {
 	private const string DefaultRepo = "dotnet/maui-labs";
 	private const string DefaultBranch = "main";
-	private const string DefaultMarketplacePath = ".github/plugin/marketplace.json";
 
 	public static Command Create()
 	{
@@ -29,13 +28,13 @@ public static partial class AiCommands
 	/// Creates the shared --repo option used by multiple subcommands.
 	/// </summary>
 	static Option<string> CreateRepoOption() =>
-		new("--repo") { Description = "GitHub repository", DefaultValueFactory = _ => DefaultRepo };
+		new("--repo") { Description = "GitHub repository", DefaultValueFactory = _ => DefaultRepo, Hidden = true };
 
 	/// <summary>
 	/// Creates the shared --branch / -b option used by multiple subcommands.
 	/// </summary>
 	static Option<string> CreateBranchOption() =>
-		new("--branch", "-b") { Description = "GitHub branch", DefaultValueFactory = _ => DefaultBranch };
+		new("--branch", "-b") { Description = "GitHub branch", DefaultValueFactory = _ => DefaultBranch, Hidden = true };
 
 	/// <summary>
 	/// Creates the shared --force / -y option for skipping confirmation prompts.

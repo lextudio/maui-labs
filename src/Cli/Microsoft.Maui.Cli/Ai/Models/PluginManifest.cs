@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Serialization;
+
 namespace Microsoft.Maui.Cli.Ai.Models;
 
 /// <summary>
@@ -25,6 +27,20 @@ internal sealed class PluginManifest
 
 	/// <summary>
 	/// Relative paths to skill directories or skill definition globs.
+	/// Accepts both a single string and an array in plugin.json.
 	/// </summary>
+	[JsonConverter(typeof(StringOrArrayConverter))]
 	public string[] Skills { get; set; } = [];
+
+	/// <summary>
+	/// Optional relative paths to agent definition directories.
+	/// Accepts both a single string and an array in plugin.json.
+	/// </summary>
+	[JsonConverter(typeof(StringOrArrayConverter))]
+	public string[]? Agents { get; set; }
+
+	/// <summary>
+	/// Optional relative path to an LSP server configuration file.
+	/// </summary>
+	public string? LspServers { get; set; }
 }

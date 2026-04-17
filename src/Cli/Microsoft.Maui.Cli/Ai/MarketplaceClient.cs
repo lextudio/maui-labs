@@ -23,10 +23,10 @@ internal static class MarketplaceClient
 	/// <param name="repo">Repository in "owner/repo" format.</param>
 	/// <param name="branch">Branch name to read from.</param>
 	/// <returns>The deserialized manifest, or <c>null</c> on failure.</returns>
-	public static async Task<MarketplaceManifest?> GetMarketplaceAsync(HttpClient http, string repo, string branch)
+	public static async Task<MarketplaceManifest?> GetMarketplaceAsync(HttpClient http, string repo, string branch, CancellationToken ct = default)
 	{
 		var url = $"{GitHubRawBase}/{repo}/{branch}/.github/plugin/marketplace.json";
-		var json = await FetchStringAsync(http, url).ConfigureAwait(false);
+		var json = await FetchStringAsync(http, url, ct).ConfigureAwait(false);
 		if (json is null)
 			return null;
 
@@ -41,11 +41,11 @@ internal static class MarketplaceClient
 	/// <param name="branch">Branch name to read from.</param>
 	/// <param name="pluginSourcePath">Repository-relative path to the plugin directory.</param>
 	/// <returns>The deserialized plugin manifest, or <c>null</c> on failure.</returns>
-	public static async Task<PluginManifest?> GetPluginAsync(HttpClient http, string repo, string branch, string pluginSourcePath)
+	public static async Task<PluginManifest?> GetPluginAsync(HttpClient http, string repo, string branch, string pluginSourcePath, CancellationToken ct = default)
 	{
 		var path = NormalizePath($"{pluginSourcePath}/plugin.json");
 		var url = $"{GitHubRawBase}/{repo}/{branch}/{path}";
-		var json = await FetchStringAsync(http, url).ConfigureAwait(false);
+		var json = await FetchStringAsync(http, url, ct).ConfigureAwait(false);
 		if (json is null)
 			return null;
 
@@ -63,17 +63,17 @@ internal static class MarketplaceClient
 	/// <param name="pluginSourcePath">Repository-relative path to the plugin directory.</param>
 	/// <returns>List of discovered skills (empty on failure).</returns>
 	public static async Task<List<SkillInfo>> GetSkillsAsync(
-		HttpClient http, string repo, string branch, PluginManifest plugin, string pluginSourcePath)
+		HttpClient http, string repo, string branch, PluginManifest plugin, string pluginSourcePath, CancellationToken ct = default)
 	{
 		var skills = new List<SkillInfo>();
 
 		// Resolve the branch to a tree SHA, then fetch the full recursive tree.
-		var treeSha = await ResolveTreeShaAsync(http, repo, branch).ConfigureAwait(false);
+		var treeSha = await ResolveTreeShaAsync(http, repo, branch, ct).ConfigureAwait(false);
 		if (treeSha is null)
 			return skills;
 
 		var treeUrl = $"{GitHubApiBase}/repos/{repo}/git/trees/{treeSha}?recursive=1";
-		var treeJson = await FetchStringAsync(http, treeUrl).ConfigureAwait(false);
+		var treeJson = await FetchStringAsync(http, treeUrl, ct).ConfigureAwait(false);
 		if (treeJson is null)
 			return skills;
 
@@ -123,7 +123,7 @@ internal static class MarketplaceClient
 					.Select(e => e.Path)
 					.ToList();
 
-				var (name, description) = await ParseSkillFrontmatterAsync(http, repo, branch, skillMdPath).ConfigureAwait(false);
+				var (name, description) = await ParseSkillFrontmatterAsync(http, repo, branch, skillMdPath, ct).ConfigureAwait(false);
 				var dirName = skillDir.Contains('/')
 					? skillDir[(skillDir.LastIndexOf('/') + 1)..]
 					: skillDir;
@@ -150,11 +150,13 @@ internal static class MarketplaceClient
 	/// <param name="destDir">Local directory to write files into.</param>
 	/// <param name="repo">Repository in "owner/repo" format.</param>
 	/// <param name="branch">Branch name to read from.</param>
+	/// <param name="ct">Cancellation token.</param>
 	/// <returns>Count of files successfully downloaded.</returns>
 	public static async Task<int> DownloadSkillFilesAsync(
-		HttpClient http, SkillInfo skill, string destDir, string repo, string branch)
+		HttpClient http, SkillInfo skill, string destDir, string repo, string branch, CancellationToken ct = default)
 	{
 		var count = 0;
+		var fullBase = Path.GetFullPath(destDir) + Path.DirectorySeparatorChar;
 
 		foreach (var filePath in skill.Files)
 		{
@@ -165,16 +167,22 @@ internal static class MarketplaceClient
 				relativePath = filePath[remotePrefix.Length..];
 
 			var url = $"{GitHubRawBase}/{repo}/{branch}/{filePath}";
-			var content = await FetchBytesAsync(http, url).ConfigureAwait(false);
+			var content = await FetchBytesAsync(http, url, ct).ConfigureAwait(false);
 			if (content is null)
 				continue;
 
 			var destPath = Path.Combine(destDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+			// Validate the resolved path stays under the destination directory.
+			var fullDest = Path.GetFullPath(destPath);
+			if (!fullDest.StartsWith(fullBase, StringComparison.Ordinal))
+				continue;
+
 			var destFileDir = Path.GetDirectoryName(destPath);
 			if (destFileDir is not null)
 				Directory.CreateDirectory(destFileDir);
 
-			await File.WriteAllBytesAsync(destPath, content).ConfigureAwait(false);
+			await File.WriteAllBytesAsync(destPath, content, ct).ConfigureAwait(false);
 			count++;
 		}
 
@@ -189,10 +197,10 @@ internal static class MarketplaceClient
 	/// <param name="branch">Branch name.</param>
 	/// <param name="path">Repository-relative path to query.</param>
 	/// <returns>The commit SHA, or <c>null</c> on failure.</returns>
-	public static async Task<string?> GetRemoteCommitShaAsync(HttpClient http, string repo, string branch, string path)
+	public static async Task<string?> GetRemoteCommitShaAsync(HttpClient http, string repo, string branch, string path, CancellationToken ct = default)
 	{
 		var url = $"{GitHubApiBase}/repos/{repo}/commits?sha={Uri.EscapeDataString(branch)}&path={Uri.EscapeDataString(path)}&per_page=1";
-		var json = await FetchStringAsync(http, url).ConfigureAwait(false);
+		var json = await FetchStringAsync(http, url, ct).ConfigureAwait(false);
 		if (json is null)
 			return null;
 
@@ -203,10 +211,10 @@ internal static class MarketplaceClient
 	/// <summary>
 	/// Resolves the tree SHA for the given branch by fetching the latest commit.
 	/// </summary>
-	private static async Task<string?> ResolveTreeShaAsync(HttpClient http, string repo, string branch)
+	private static async Task<string?> ResolveTreeShaAsync(HttpClient http, string repo, string branch, CancellationToken ct = default)
 	{
 		var url = $"{GitHubApiBase}/repos/{repo}/commits/{Uri.EscapeDataString(branch)}";
-		var json = await FetchStringAsync(http, url).ConfigureAwait(false);
+		var json = await FetchStringAsync(http, url, ct).ConfigureAwait(false);
 		if (json is null)
 			return null;
 
@@ -218,10 +226,10 @@ internal static class MarketplaceClient
 	/// Downloads and parses the YAML frontmatter from a SKILL.md file.
 	/// </summary>
 	private static async Task<(string? Name, string? Description)> ParseSkillFrontmatterAsync(
-		HttpClient http, string repo, string branch, string skillMdPath)
+		HttpClient http, string repo, string branch, string skillMdPath, CancellationToken ct = default)
 	{
 		var url = $"{GitHubRawBase}/{repo}/{branch}/{skillMdPath}";
-		var content = await FetchStringAsync(http, url).ConfigureAwait(false);
+		var content = await FetchStringAsync(http, url, ct).ConfigureAwait(false);
 		if (content is null)
 			return (null, null);
 
@@ -288,15 +296,15 @@ internal static class MarketplaceClient
 		return normalized.TrimEnd('/');
 	}
 
-	private static async Task<string?> FetchStringAsync(HttpClient http, string url)
+	private static async Task<string?> FetchStringAsync(HttpClient http, string url, CancellationToken ct = default)
 	{
 		try
 		{
-			using var response = await http.GetAsync(url).ConfigureAwait(false);
+			using var response = await http.GetAsync(url, ct).ConfigureAwait(false);
 			if (!response.IsSuccessStatusCode)
 				return null;
 
-			return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+			return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 		}
 		catch (HttpRequestException)
 		{
@@ -308,15 +316,15 @@ internal static class MarketplaceClient
 		}
 	}
 
-	private static async Task<byte[]?> FetchBytesAsync(HttpClient http, string url)
+	private static async Task<byte[]?> FetchBytesAsync(HttpClient http, string url, CancellationToken ct = default)
 	{
 		try
 		{
-			using var response = await http.GetAsync(url).ConfigureAwait(false);
+			using var response = await http.GetAsync(url, ct).ConfigureAwait(false);
 			if (!response.IsSuccessStatusCode)
 				return null;
 
-			return await response.Content.ReadAsByteArrayAsync().ConfigureAwait(false);
+			return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
 		}
 		catch (HttpRequestException)
 		{

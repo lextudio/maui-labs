@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Text.Json.Nodes;
 using Microsoft.Maui.Cli.Ai;
+using Microsoft.Maui.Cli.Ai.Models;
 using Microsoft.Maui.Cli.Output;
 
 namespace Microsoft.Maui.Cli.Commands;
@@ -33,21 +34,38 @@ public static partial class AiCommands
 			{
 				using var http = CreateGitHubHttpClient();
 
-				List<Ai.Models.SkillInfo> allSkills;
+				List<SkillInfo> allSkills;
 				if (!useJson && formatter is SpectreOutputFormatter spectre)
 				{
 					allSkills = await spectre.StatusAsync("Fetching marketplace...", async () =>
-						await FetchAllSkillsAsync(http, repo, branch));
+						await FetchAllSkillsAsync(http, repo, branch, ct));
 				}
 				else
 				{
-					allSkills = await FetchAllSkillsAsync(http, repo, branch);
+					allSkills = await FetchAllSkillsAsync(http, repo, branch, ct);
 				}
 
 				if (allSkills.Count == 0)
 				{
 					formatter.WriteWarning("No skills found in the marketplace.");
 					return 1;
+				}
+
+				// Check installed status per skill
+				var workingDir = Directory.GetCurrentDirectory();
+				var environments = AgentEnvironmentDetector.Detect(workingDir);
+				var installedSkills = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				foreach (var env in environments)
+				{
+					if (!Directory.Exists(env.SkillsDirectory))
+						continue;
+
+					foreach (var skillDir in Directory.GetDirectories(env.SkillsDirectory))
+					{
+						var version = await SkillVersionStore.ReadAsync(skillDir, ct);
+						if (version is not null)
+							installedSkills.Add(Path.GetFileName(skillDir));
+					}
 				}
 
 				if (useJson)
@@ -57,7 +75,8 @@ public static partial class AiCommands
 						["skill"] = s.Name,
 						["plugin"] = s.PluginName,
 						["description"] = s.Description ?? "",
-						["files"] = s.Files.Count
+						["files"] = s.Files.Count,
+						["installed"] = installedSkills.Contains(s.Name)
 					}).ToArray());
 					formatter.Write(jsonArray);
 				}
@@ -67,7 +86,8 @@ public static partial class AiCommands
 						allSkills,
 						("Skill", s => s.Name),
 						("Plugin", s => s.PluginName),
-						("Description", s => s.Description ?? ""));
+						("Description", s => s.Description ?? ""),
+						("Installed", s => installedSkills.Contains(s.Name) ? "Yes" : ""));
 				}
 
 				return 0;

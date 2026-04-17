@@ -62,11 +62,11 @@ public static partial class AiCommands
 				if (!useJson && formatter is SpectreOutputFormatter spectre)
 				{
 					allSkills = await spectre.StatusAsync("Fetching marketplace...", async () =>
-						await FetchAllSkillsAsync(http, repo, branch));
+						await FetchAllSkillsAsync(http, repo, branch, ct));
 				}
 				else
 				{
-					allSkills = await FetchAllSkillsAsync(http, repo, branch);
+					allSkills = await FetchAllSkillsAsync(http, repo, branch, ct);
 				}
 
 				if (allSkills.Count == 0)
@@ -96,9 +96,9 @@ public static partial class AiCommands
 						return 1;
 					}
 
-					if (isCi)
+					if (isCi || force)
 					{
-						// In CI mode, create .claude/ by default
+						// In CI or force mode, create .claude/ by default
 						var claudeDir = Path.Combine(workingDir, ".claude");
 						Directory.CreateDirectory(claudeDir);
 						environments = AgentEnvironmentDetector.Detect(workingDir);
@@ -121,7 +121,8 @@ public static partial class AiCommands
 					}
 				}
 
-				formatter.WriteInfo($"Detected {environments.Count} environment(s): {string.Join(", ", environments.Select(e => e.Kind))}");
+				var envWord = environments.Count == 1 ? "environment" : "environments";
+				formatter.WriteInfo($"Detected {environments.Count} {envWord}: {string.Join(", ", environments.Select(e => e.Kind))}");
 
 				// Step 3: Select skills
 				List<SkillInfo> selectedSkills;
@@ -188,7 +189,7 @@ public static partial class AiCommands
 				// Step 4: Confirmation
 				if (!force && !isCi && !useJson)
 				{
-					formatter.WriteInfo($"Will install {selectedSkills.Count} skill(s) to {environments.Count} environment(s):");
+					formatter.WriteInfo($"Will install {selectedSkills.Count} skill(s) to {environments.Count} {envWord}:");
 					formatter.WriteTable(
 						selectedSkills,
 						("Skill", s => s.Name),
@@ -223,7 +224,7 @@ public static partial class AiCommands
 					foreach (var skill in selectedSkills)
 					{
 						var (filesInstalled, installPath) = await SkillInstaller.InstallSkillAsync(
-							http, skill, env, workingDir, repo, branch, force);
+							http, skill, env, workingDir, repo, branch, force, ct);
 
 						results.Add((skill.Name, env.Kind.ToString(), filesInstalled, installPath));
 
@@ -239,12 +240,15 @@ public static partial class AiCommands
 				{
 					foreach (var env in environments)
 					{
-						var ok = await McpConfigurator.ConfigureAsync(env, workingDir);
+						var ok = await McpConfigurator.ConfigureAsync(env, ct);
 						if (ok)
 							formatter.WriteSuccess($"MCP configured for {env.Kind}");
 						else
 							formatter.WriteWarning($"Could not configure MCP for {env.Kind}");
 					}
+
+					if (!useJson)
+						formatter.WriteInfo("Restart your editor to load the MCP server configuration.");
 				}
 
 				// Step 7: Summary
@@ -270,6 +274,14 @@ public static partial class AiCommands
 					};
 					formatter.Write(jsonResult);
 				}
+				else
+				{
+					AnsiConsole.WriteLine();
+					AnsiConsole.MarkupLine("[dim]Next steps:[/]");
+					AnsiConsole.MarkupLine("[dim]  Open your AI agent and try asking about .NET MAUI development.[/]");
+					AnsiConsole.MarkupLine("[dim]  Run [green]maui ai status[/] to check installed skills.[/]");
+					AnsiConsole.MarkupLine("[dim]  Run [green]maui ai update[/] to sync skills later.[/]");
+				}
 
 				return 0;
 			}
@@ -290,20 +302,20 @@ public static partial class AiCommands
 	/// <summary>
 	/// Fetches all skills from every plugin listed in the marketplace manifest.
 	/// </summary>
-	static async Task<List<SkillInfo>> FetchAllSkillsAsync(HttpClient http, string repo, string branch)
+	static async Task<List<SkillInfo>> FetchAllSkillsAsync(HttpClient http, string repo, string branch, CancellationToken ct = default)
 	{
-		var marketplace = await MarketplaceClient.GetMarketplaceAsync(http, repo, branch);
+		var marketplace = await MarketplaceClient.GetMarketplaceAsync(http, repo, branch, ct);
 		if (marketplace is null)
 			return [];
 
 		var allSkills = new List<SkillInfo>();
 		foreach (var pluginEntry in marketplace.Plugins)
 		{
-			var plugin = await MarketplaceClient.GetPluginAsync(http, repo, branch, pluginEntry.Source);
+			var plugin = await MarketplaceClient.GetPluginAsync(http, repo, branch, pluginEntry.Source, ct);
 			if (plugin is null)
 				continue;
 
-			var skills = await MarketplaceClient.GetSkillsAsync(http, repo, branch, plugin, pluginEntry.Source);
+			var skills = await MarketplaceClient.GetSkillsAsync(http, repo, branch, plugin, pluginEntry.Source, ct);
 			allSkills.AddRange(skills);
 		}
 

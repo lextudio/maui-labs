@@ -10,6 +10,7 @@ namespace Microsoft.Maui.Cli.Ai;
 	PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
 	DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull)]
 [JsonSerializable(typeof(MarketplaceManifest))]
+[JsonSerializable(typeof(MarketplaceOwner))]
 [JsonSerializable(typeof(PluginEntry))]
 [JsonSerializable(typeof(PluginEntry[]))]
 [JsonSerializable(typeof(PluginManifest))]

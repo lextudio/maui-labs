@@ -19,8 +19,9 @@ internal static class SkillVersionStore
 	/// Reads the <c>.skill-version</c> file from the specified skill directory.
 	/// </summary>
 	/// <param name="skillDir">Absolute path to the skill installation directory.</param>
+	/// <param name="ct">Cancellation token.</param>
 	/// <returns>The deserialized version info, or <c>null</c> if not found or unreadable.</returns>
-	public static async Task<InstalledSkillVersion?> ReadAsync(string skillDir)
+	public static async Task<InstalledSkillVersion?> ReadAsync(string skillDir, CancellationToken ct = default)
 	{
 		var path = Path.Combine(skillDir, VersionFileName);
 		if (!File.Exists(path))
@@ -28,7 +29,7 @@ internal static class SkillVersionStore
 
 		try
 		{
-			var json = await File.ReadAllTextAsync(path).ConfigureAwait(false);
+			var json = await File.ReadAllTextAsync(path, ct).ConfigureAwait(false);
 			return JsonSerializer.Deserialize(json, AiJsonContext.Default.InstalledSkillVersion);
 		}
 		catch (JsonException)
@@ -47,7 +48,8 @@ internal static class SkillVersionStore
 	/// </summary>
 	/// <param name="skillDir">Absolute path to the skill installation directory.</param>
 	/// <param name="version">Version metadata to persist.</param>
-	public static async Task WriteAsync(string skillDir, InstalledSkillVersion version)
+	/// <param name="ct">Cancellation token.</param>
+	public static async Task WriteAsync(string skillDir, InstalledSkillVersion version, CancellationToken ct = default)
 	{
 		Directory.CreateDirectory(skillDir);
 		var path = Path.Combine(skillDir, VersionFileName);
@@ -58,6 +60,6 @@ internal static class SkillVersionStore
 		var node = JsonNode.Parse(json);
 		var indented = node?.ToJsonString(new JsonSerializerOptions { WriteIndented = true }) ?? json;
 
-		await File.WriteAllTextAsync(path, indented).ConfigureAwait(false);
+		await File.WriteAllTextAsync(path, indented, ct).ConfigureAwait(false);
 	}
 }
