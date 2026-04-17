@@ -355,18 +355,13 @@ internal static class MarketplaceClient
 		{
 			using var response = await http.GetAsync(url, ct).ConfigureAwait(false);
 
-			// Return null for 404 (resource not found) and network errors;
-			// user cancellation (Ctrl+C) propagates via OperationCanceledException.
+			// Return null only for 404; other HTTP errors propagate to callers.
 			if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
 				return null;
 
 			response.EnsureSuccessStatusCode();
 
 			return await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-		}
-		catch (HttpRequestException)
-		{
-			return null;
 		}
 		catch (TaskCanceledException) when (!ct.IsCancellationRequested)
 		{
@@ -380,16 +375,13 @@ internal static class MarketplaceClient
 		{
 			using var response = await http.GetAsync(url, ct).ConfigureAwait(false);
 
+			// Return null only for 404; other HTTP errors propagate to callers.
 			if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
 				return null;
 
 			response.EnsureSuccessStatusCode();
 
 			return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
-		}
-		catch (HttpRequestException)
-		{
-			return null;
 		}
 		catch (TaskCanceledException) when (!ct.IsCancellationRequested)
 		{

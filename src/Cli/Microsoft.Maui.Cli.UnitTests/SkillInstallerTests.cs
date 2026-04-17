@@ -73,25 +73,24 @@ public class SkillInstallerTests : IDisposable
 			SkillsDirectory = Path.Combine(_tempDir, "skills")
 		};
 
-		// This will fail at the HTTP level (no real server), but it should NOT
-		// return -1 because the name validation passes. We expect either an
-		// exception from the HTTP call or a -2 (download returned 0 files).
-		try
-		{
-			var (filesInstalled, _) = await SkillInstaller.InstallSkillAsync(
-				new HttpClient(), skill, env, _tempDir, "owner/repo", "main", force: false);
+		// Use a mock handler that returns 404 for all requests so no real
+		// network calls are made. The install should pass name validation
+		// and return 0 or -2 (no files downloaded), but never -1 (invalid name).
+		var handler = new NotFoundHandler();
+		using var http = new HttpClient(handler);
 
-			// If it didn't throw, it should not be -1 (invalid name)
-			Assert.NotEqual(-1, filesInstalled);
-		}
-		catch (HttpRequestException)
+		var (filesInstalled, _) = await SkillInstaller.InstallSkillAsync(
+			http, skill, env, _tempDir, "owner/repo", "main", force: false);
+
+		Assert.NotEqual(-1, filesInstalled);
+	}
+
+	private sealed class NotFoundHandler : HttpMessageHandler
+	{
+		protected override Task<HttpResponseMessage> SendAsync(
+			HttpRequestMessage request, CancellationToken cancellationToken)
 		{
-			// Expected: the HttpClient has no BaseAddress so the HTTP call fails.
-			// The important thing is we got past the name validation.
-		}
-		catch (InvalidOperationException)
-		{
-			// Also acceptable: HttpClient may throw this without a BaseAddress.
+			return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
 		}
 	}
 }

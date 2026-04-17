@@ -83,7 +83,7 @@ public static partial class AiCommands
 							}
 							else
 							{
-								status = "Up to date";
+								status = "Unknown";
 							}
 						}
 

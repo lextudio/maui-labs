@@ -60,6 +60,7 @@ public static partial class AiCommands
 				// so environments sharing the same skills directory are not updated twice.
 				var updatable = new List<(DetectedEnvironment Env, string SkillDir, string SkillName, InstalledSkillVersion Version)>();
 				var processedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+				var uncheckableCount = 0;
 
 				foreach (var env in environments)
 				{
@@ -88,13 +89,18 @@ public static partial class AiCommands
 							var remoteSha = await MarketplaceClient.GetRemoteCommitShaAsync(
 								http, repo, branch, version.PluginPath, ct);
 
-							// Only update when the remote SHA is known AND differs from local,
-							// unless --force. When remoteSha is null (e.g. GitHub unreachable)
-							// we skip the update to avoid unnecessary reinstalls.
+							if (remoteSha is null)
+							{
+								uncheckableCount++;
+								if (force)
+									updatable.Add((env, skillDir, skillName, version));
+								continue;
+							}
+
+							// Only update when the remote SHA differs from local, unless --force.
 							var needsUpdate = force ||
-								(remoteSha is not null &&
-								 (version.Commit is null ||
-								  !string.Equals(remoteSha, version.Commit, StringComparison.OrdinalIgnoreCase)));
+								version.Commit is null ||
+								!string.Equals(remoteSha, version.Commit, StringComparison.OrdinalIgnoreCase);
 
 							if (needsUpdate)
 								updatable.Add((env, skillDir, skillName, version));
@@ -192,6 +198,14 @@ public static partial class AiCommands
 						}).ToArray())
 					};
 					formatter.Write(jsonResult);
+				}
+
+				if (uncheckableCount > 0)
+				{
+					var skillWord = uncheckableCount == 1 ? "skill" : "skill(s)";
+					formatter.WriteWarning($"⚠ Could not check {uncheckableCount} {skillWord} — GitHub may be unreachable.");
+					if (isCi)
+						return 1;
 				}
 
 				return 0;

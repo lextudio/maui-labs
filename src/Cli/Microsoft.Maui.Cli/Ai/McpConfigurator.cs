@@ -90,7 +90,11 @@ internal static class McpConfigurator
 	/// <returns><c>true</c> if the entry already exists (no changes needed).</returns>
 	private static bool EnsureStandardEntry(JsonObject root, JsonObject serverEntry)
 	{
-		if (root["mcpServers"] is not JsonObject mcpServers)
+		var existing = root["mcpServers"];
+		if (existing is not null and not JsonObject)
+			return false;
+
+		if (existing is not JsonObject mcpServers)
 		{
 			mcpServers = new JsonObject();
 			root["mcpServers"] = mcpServers;
@@ -109,13 +113,21 @@ internal static class McpConfigurator
 	/// <returns><c>true</c> if the entry already exists (no changes needed).</returns>
 	private static bool EnsureOpenCodeEntry(JsonObject root, JsonObject serverEntry)
 	{
-		if (root["mcp"] is not JsonObject mcp)
+		var existingMcp = root["mcp"];
+		if (existingMcp is not null and not JsonObject)
+			return false;
+
+		if (existingMcp is not JsonObject mcp)
 		{
 			mcp = new JsonObject();
 			root["mcp"] = mcp;
 		}
 
-		if (mcp["servers"] is not JsonObject servers)
+		var existingServers = mcp["servers"];
+		if (existingServers is not null and not JsonObject)
+			return false;
+
+		if (existingServers is not JsonObject servers)
 		{
 			servers = new JsonObject();
 			mcp["servers"] = servers;
