@@ -1,0 +1,183 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.CommandLine;
+using System.CommandLine.Parsing;
+using System.Text.Json.Nodes;
+using Microsoft.Maui.Cli.Ai;
+using Microsoft.Maui.Cli.Ai.Models;
+using Microsoft.Maui.Cli.Output;
+using Spectre.Console;
+
+namespace Microsoft.Maui.Cli.Commands;
+
+public static partial class AiCommands
+{
+	/// <summary>
+	/// Creates the <c>maui ai add &lt;skill&gt;</c> command that installs a specific skill by name.
+	/// </summary>
+	static Command CreateAddCommand()
+	{
+		var skillArg = new Argument<string>("skill") { Description = "Name of the skill to add" };
+
+		var envOption = new Option<string[]>("--env")
+		{
+			Description = "Target only specific environments (repeatable, e.g. Claude, VsCode)",
+			AllowMultipleArgumentsPerToken = true
+		};
+
+		var command = new Command("add", "Add a specific AI agent skill by name")
+		{
+			skillArg,
+			CreateRepoOption(),
+			CreateBranchOption(),
+			CreateForceOption(),
+			new Option<bool>("--no-mcp") { Description = "Skip MCP server configuration" },
+			envOption
+		};
+
+		command.SetAction(async (ParseResult parseResult, CancellationToken ct) =>
+		{
+			var formatter = Program.GetFormatter(parseResult);
+			var useJson = parseResult.GetValue(GlobalOptions.JsonOption);
+			var isCi = parseResult.GetValue(GlobalOptions.CiOption);
+			var dryRun = parseResult.GetValue(GlobalOptions.DryRunOption);
+			var skillName = parseResult.GetValue(skillArg) ?? string.Empty;
+			var repo = parseResult.GetOption<string>("repo") ?? DefaultRepo;
+			var branch = parseResult.GetOption<string>("branch") ?? DefaultBranch;
+			var force = parseResult.GetOption<bool>("force");
+			var noMcp = parseResult.GetOption<bool>("no-mcp");
+			var envFilter = parseResult.GetOption<string[]>("env");
+
+			if (string.IsNullOrWhiteSpace(skillName))
+			{
+				formatter.WriteError(new Exception("Skill name is required. Usage: maui ai add <skill>"));
+				return 1;
+			}
+
+			try
+			{
+				using var http = CreateGitHubHttpClient();
+
+				// Fetch marketplace to find the requested skill
+				List<SkillInfo> allSkills;
+				if (!useJson && formatter is SpectreOutputFormatter spectre)
+				{
+					allSkills = await spectre.StatusAsync("Fetching marketplace...", async () =>
+						await FetchAllSkillsAsync(http, repo, branch));
+				}
+				else
+				{
+					allSkills = await FetchAllSkillsAsync(http, repo, branch);
+				}
+
+				var skill = allSkills.FirstOrDefault(s =>
+					string.Equals(s.Name, skillName, StringComparison.OrdinalIgnoreCase));
+
+				if (skill is null)
+				{
+					formatter.WriteError(new Exception(
+						$"Skill '{skillName}' not found in the marketplace. Run 'maui ai list' to see available skills."));
+					return 1;
+				}
+
+				// Detect environments
+				var workingDir = Directory.GetCurrentDirectory();
+				var environments = AgentEnvironmentDetector.Detect(workingDir);
+
+				if (envFilter is { Length: > 0 })
+				{
+					environments = environments
+						.Where(e => envFilter.Any(f =>
+							string.Equals(f, e.Kind.ToString(), StringComparison.OrdinalIgnoreCase)))
+						.ToList();
+				}
+
+				if (environments.Count == 0)
+				{
+					formatter.WriteWarning("No agent environments detected. Run 'maui ai init' to set up environments first.");
+					return 1;
+				}
+
+				if (dryRun)
+				{
+					formatter.WriteInfo($"[Dry run] Would install skill '{skill.Name}' to:");
+					formatter.WriteTable(
+						environments,
+						("Environment", e => e.Kind.ToString()),
+						("Path", e => Path.Combine(e.SkillsDirectory, skill.Name)));
+					return 0;
+				}
+
+				// Confirm unless --force, --ci, or --json
+				if (!force && !isCi && !useJson)
+				{
+					formatter.WriteInfo($"Will install '{skill.Name}' ({skill.Files.Count} files) to {environments.Count} environment(s).");
+					if (!AnsiConsole.Confirm("Proceed?", defaultValue: true))
+					{
+						formatter.WriteInfo("Installation cancelled.");
+						return 0;
+					}
+				}
+
+				// Install
+				var results = new List<(string Env, int Files, string Path)>();
+
+				foreach (var env in environments)
+				{
+					var (filesInstalled, installPath) = await SkillInstaller.InstallSkillAsync(
+						http, skill, env, workingDir, repo, branch, force);
+
+					results.Add((env.Kind.ToString(), filesInstalled, installPath));
+
+					if (filesInstalled > 0)
+						formatter.WriteSuccess($"Installed {skill.Name} → {env.Kind} ({filesInstalled} files)");
+					else
+						formatter.WriteInfo($"Skipped {skill.Name} → {env.Kind} (already installed, use --force to overwrite)");
+				}
+
+				// Configure MCP
+				if (!noMcp)
+				{
+					foreach (var env in environments)
+					{
+						var ok = await McpConfigurator.ConfigureAsync(env, workingDir);
+						if (ok)
+							formatter.WriteSuccess($"MCP configured for {env.Kind}");
+						else
+							formatter.WriteWarning($"Could not configure MCP for {env.Kind}");
+					}
+				}
+
+				if (useJson)
+				{
+					var jsonResult = new JsonObject
+					{
+						["status"] = "success",
+						["skill"] = skill.Name,
+						["installations"] = new JsonArray(results.Select(r => (JsonNode)new JsonObject
+						{
+							["environment"] = r.Env,
+							["files"] = r.Files,
+							["path"] = r.Path
+						}).ToArray())
+					};
+					formatter.Write(jsonResult);
+				}
+
+				return 0;
+			}
+			catch (HttpRequestException ex)
+			{
+				formatter.WriteError(new Exception($"Network error: {ex.Message}. Check your connection or set GITHUB_TOKEN for higher rate limits."));
+				return 1;
+			}
+			catch (Exception ex)
+			{
+				return Program.HandleCommandException(formatter, ex);
+			}
+		});
+
+		return command;
+	}
+}

@@ -110,6 +110,9 @@ public class Program
 		// DevFlow automation commands (maui devflow ...)
 		rootCommand.Add(DevFlow.DevFlowCommands.CreateDevFlowCommand(GlobalOptions.JsonOption));
 
+		// AI agent skill management (maui ai ...)
+		rootCommand.Add(Commands.AiCommands.Create());
+
 		return rootCommand;
 	}
 
