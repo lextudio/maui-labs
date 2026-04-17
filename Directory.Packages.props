@@ -39,6 +39,7 @@
   <ItemGroup Label="Cli">
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="$(MicrosoftExtensionsDependencyInjectionVersion)" />
     <PackageVersion Include="Xamarin.Android.Tools.AndroidSdk" Version="$(XamarinAndroidToolsAndroidSdkVersion)" />
+    <PackageVersion Include="Xamarin.Apple.Tools.MaciOS" Version="$(XamarinAppleToolsMaciOSVersion)" />
   </ItemGroup>
 
   <!-- Platform extensions (pinned) -->
@@ -49,6 +50,7 @@
     <PackageVersion Include="Platform.Maui.Linux.Gtk4" Version="$(PlatformMauiLinuxGtk4Version)" />
     <PackageVersion Include="Platform.Maui.Linux.Gtk4.BlazorWebView" Version="$(PlatformMauiLinuxGtk4BlazorWebViewVersion)" />
     <PackageVersion Include="Platform.Maui.Linux.Gtk4.Essentials" Version="$(PlatformMauiLinuxGtk4EssentialsVersion)" />
+    <PackageVersion Include="GirCore.GdkPixbuf-2.0" Version="0.7.0" />
   </ItemGroup>
 
   <!-- Testing (Microsoft.NET.Test.Sdk and xunit.runner.visualstudio are

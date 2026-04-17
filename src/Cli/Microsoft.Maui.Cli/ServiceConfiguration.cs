@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Maui.Cli.DevFlow;
 using Microsoft.Maui.Cli.Output;
 using Microsoft.Maui.Cli.Providers.Android;
+using Microsoft.Maui.Cli.Providers.Apple;
 using Microsoft.Maui.Cli.Services;
 using Microsoft.Maui.Cli.Utils;
 
@@ -33,9 +35,15 @@ public static class ServiceConfiguration
 		services.AddSingleton<IJdkManager, JdkManager>();
 		services.AddSingleton<IAndroidProvider, AndroidProvider>();
 
+		// Apple providers
+		services.AddSingleton<IAppleProvider, AppleProvider>();
+
 		// Core services
 		services.AddSingleton<IDoctorService, DoctorService>();
 		services.AddSingleton<IDeviceManager, DeviceManager>();
+
+		// DevFlow output
+		services.AddSingleton<IDevFlowOutputWriter, DevFlowOutputWriter>();
 
 		// Output formatters (transient - created per request with specific config)
 		services.AddTransient<JsonOutputFormatter>();
@@ -47,9 +55,11 @@ public static class ServiceConfiguration
 	/// </summary>
 	public static IServiceProvider CreateTestServiceProvider(
 		IAndroidProvider? androidProvider = null,
+		IAppleProvider? appleProvider = null,
 		IJdkManager? jdkManager = null,
 		IDoctorService? doctorService = null,
-		IDeviceManager? deviceManager = null)
+		IDeviceManager? deviceManager = null,
+		IDevFlowOutputWriter? devFlowOutputWriter = null)
 	{
 		var services = new ServiceCollection();
 
@@ -64,6 +74,11 @@ public static class ServiceConfiguration
 		else
 			services.AddSingleton<IAndroidProvider, AndroidProvider>();
 
+		if (appleProvider != null)
+			services.AddSingleton(appleProvider);
+		else
+			services.AddSingleton<IAppleProvider, AppleProvider>();
+
 		if (doctorService != null)
 			services.AddSingleton(doctorService);
 		else
@@ -73,6 +88,11 @@ public static class ServiceConfiguration
 			services.AddSingleton(deviceManager);
 		else
 			services.AddSingleton<IDeviceManager, DeviceManager>();
+
+		if (devFlowOutputWriter != null)
+			services.AddSingleton(devFlowOutputWriter);
+		else
+			services.AddSingleton<IDevFlowOutputWriter, DevFlowOutputWriter>();
 
 		return services.BuildServiceProvider();
 	}

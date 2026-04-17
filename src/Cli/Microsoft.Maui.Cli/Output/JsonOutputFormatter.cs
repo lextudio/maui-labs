@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.Maui.Cli.Models;
 
@@ -12,12 +13,14 @@ namespace Microsoft.Maui.Cli.Output;
 /// </summary>
 public class JsonOutputFormatter : IOutputFormatter
 {
-	static readonly JsonSerializerOptions s_options = new()
+	static readonly JsonSerializerOptions s_nodeIndentedOptions = new(MauiCliJsonContext.Default.Options)
 	{
-		WriteIndented = true,
-		PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-		DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-		Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) }
+		WriteIndented = true
+	};
+
+	static readonly JsonSerializerOptions s_nodeCompactOptions = new(MauiCliJsonContext.Default.Options)
+	{
+		WriteIndented = false
 	};
 
 	readonly TextWriter _output;
@@ -34,8 +37,7 @@ public class JsonOutputFormatter : IOutputFormatter
 
 	public void WriteResult<T>(T result)
 	{
-		var json = JsonSerializer.Serialize(result, s_options);
-		_output.WriteLine(json);
+		_output.WriteLine(SerializeUntyped(result));
 	}
 
 	public void WriteError(Exception exception)
@@ -50,22 +52,39 @@ public class JsonOutputFormatter : IOutputFormatter
 
 	public void WriteSuccess(string message)
 	{
-		WriteResult(new { status = "success", message });
+		WriteResult(new StatusMessageResult
+		{
+			Status = "success",
+			Message = message
+		});
 	}
 
 	public void WriteWarning(string message)
 	{
-		WriteResult(new { status = "warning", message });
+		WriteResult(new StatusMessageResult
+		{
+			Status = "warning",
+			Message = message
+		});
 	}
 
 	public void WriteInfo(string message)
 	{
-		WriteResult(new { status = "info", message });
+		WriteResult(new StatusMessageResult
+		{
+			Status = "info",
+			Message = message
+		});
 	}
 
 	public void WriteProgress(string message, int? percentage = null)
 	{
-		WriteResult(new { status = "progress", message, percentage });
+		WriteResult(new StatusMessageResult
+		{
+			Status = "progress",
+			Message = message,
+			Percentage = percentage
+		});
 	}
 
 	public void WriteTable<T>(IEnumerable<T> items, params (string Header, Func<T, string> Selector)[] columns)
@@ -77,16 +96,44 @@ public class JsonOutputFormatter : IOutputFormatter
 
 	public void WriteVersion(string version, string runtime, string os)
 	{
-		WriteResult(new { version, runtime, os });
+		WriteResult(new VersionResult
+		{
+			Version = version,
+			Runtime = runtime,
+			Os = os
+		});
 	}
 
 	/// <summary>
 	/// Serializes an object to JSON string.
 	/// </summary>
-	public static string Serialize<T>(T obj) => JsonSerializer.Serialize(obj, s_options);
+	public static string Serialize<T>(T obj) => SerializeUntyped(obj);
 
 	/// <summary>
 	/// Deserializes JSON string to object.
 	/// </summary>
-	public static T? Deserialize<T>(string json) => JsonSerializer.Deserialize<T>(json, s_options);
+	public static T? Deserialize<T>(string json) => (T?)JsonSerializer.Deserialize(json, typeof(T), MauiCliJsonContext.Default);
+
+	static string SerializeUntyped(object? value)
+	{
+		if (value is null)
+			return "null";
+
+		return value switch
+		{
+			JsonNode node => node.ToJsonString(s_nodeIndentedOptions),
+			JsonElement element => PrettyPrint(element),
+			JsonDocument document => PrettyPrint(document.RootElement),
+			_ => JsonSerializer.Serialize(value, value.GetType(), MauiCliJsonContext.Default)
+		};
+	}
+
+	static string PrettyPrint(JsonElement element)
+	{
+		using var stream = new MemoryStream();
+		using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+		element.WriteTo(writer);
+		writer.Flush();
+		return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+	}
 }

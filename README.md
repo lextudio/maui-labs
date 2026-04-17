@@ -8,33 +8,39 @@ Experimental packages and tooling for .NET MAUI. This repository hosts pre-relea
 
 ### Cli
 
-A command-line tool for .NET MAUI development environment setup and device management.
+A command-line tool for .NET MAUI development environment setup, device management, and app automation.
 
 - **Environment diagnostics** (`maui doctor`) with auto-fix capabilities
-- **Android SDK and JDK management** — install, update, and configure
-- **Emulator management** — create, start, stop, and delete Android emulators
-- **Device listing** across all connected platforms
-- **JSON output** (`--json`) for CI pipelines and scripting
+- **Android SDK and JDK management** (`maui android`) — install, update, and configure
+- **Emulator management** (`maui android emulator`) — create, start, stop, and delete Android emulators
+- **Apple platform management** (`maui apple`) — Xcode, simulator, and runtime management (macOS)
+- **Device listing** (`maui device list`) across all connected platforms
+- **DevFlow app automation** (`maui devflow`) — visual tree inspection, element interaction, screenshots, WebView/CDP automation, network monitoring, profiling, storage access, real-time log/sensor streaming, and MCP server for AI agents
+- **Version info** (`maui version`)
+- **Global options** — `--json` for CI pipelines, `--verbose`, `--dry-run`, `--ci`
 
 | Package | Description |
 |---------|-------------|
 | `Microsoft.Maui.Cli` | CLI global tool (`maui`) |
 
 ```bash
-dotnet tool install -g Microsoft.Maui.Cli
+# Microsoft.Maui.Cli is currently released as a pre-release, so make sure to use the --prerelease flag
+dotnet tool install -g Microsoft.Maui.Cli --prerelease
 maui doctor
 ```
 
 ### DevFlow
 
-A comprehensive MAUI testing, automation, and debugging toolkit.
+A comprehensive MAUI testing, automation, and debugging toolkit. The DevFlow CLI is integrated into the `maui` CLI as `maui devflow` — see [Cli](#cli) above.
 
 - **In-app HTTP agent** for visual tree inspection, element interaction, and screenshots
 - **Blazor CDP bridge** for Chrome DevTools Protocol on Blazor WebViews
-- **CLI global tool** (`maui-devflow`) with 50+ commands
-- **MCP server** for AI agent integration
+- **MCP server** for AI agent integration (via `maui devflow mcp`)
 - **Platform drivers** for iOS, Android, Mac Catalyst, Windows, and Linux/GTK
 - **Network monitoring** and **performance profiling**
+- **Real-time streaming** — WebSocket channels for logs, network requests, sensor data, profiler samples, and UI events
+- **Storage access** — read/write app preferences and secure storage
+- **Device introspection** — battery, connectivity, geolocation, display info, and permissions
 
 | Package | Description |
 |---------|-------------|
@@ -43,13 +49,30 @@ A comprehensive MAUI testing, automation, and debugging toolkit.
 | `Microsoft.Maui.DevFlow.Agent.Gtk` | GTK/Linux agent |
 | `Microsoft.Maui.DevFlow.Blazor` | Blazor WebView CDP bridge |
 | `Microsoft.Maui.DevFlow.Blazor.Gtk` | WebKitGTK CDP bridge |
-| `Microsoft.Maui.DevFlow.CLI` | CLI global tool |
 | `Microsoft.Maui.DevFlow.Driver` | Platform driver library |
 | `Microsoft.Maui.DevFlow.Logging` | Buffered JSONL file logger |
 
 ## Getting Started
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and development setup.
+
+For the formal DevFlow HTTP and WebSocket contract, see [`docs/DevFlow/spec`](docs/DevFlow/spec/README.md).
+
+## Agent Skills
+
+This repository is also a marketplace for distributable agent skills for .NET MAUI development. Skills are organized as plugins compatible with Copilot CLI, Claude Code, and VS Code.
+
+| Plugin | Description |
+|--------|-------------|
+| [`dotnet-maui`](plugins/dotnet-maui/) | MAUI development: DevFlow automation, profiling, accessibility, platform bindings, diagnostics |
+
+```bash
+# Install via Copilot CLI
+/plugin marketplace add dotnet/maui-labs
+/plugin install dotnet-maui@dotnet-maui-labs
+```
+
+See [plugins/](plugins/) for the full catalog and [plugins/CONTRIBUTING.md](plugins/CONTRIBUTING.md) for how to add skills.
 
 ## Support
 
