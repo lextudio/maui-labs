@@ -31,6 +31,10 @@ internal sealed class StringOrArrayConverter : JsonConverter<string[]>
 					if (item is not null)
 						list.Add(item);
 				}
+				else
+				{
+					reader.Skip();
+				}
 			}
 			return [.. list];
 		}

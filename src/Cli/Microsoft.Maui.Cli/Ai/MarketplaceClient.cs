@@ -310,9 +310,9 @@ internal static class MarketplaceClient
 		{
 			return null;
 		}
-		catch (TaskCanceledException)
+		catch (TaskCanceledException) when (!ct.IsCancellationRequested)
 		{
-			return null;
+			return null; // real HTTP timeout
 		}
 	}
 
@@ -330,9 +330,9 @@ internal static class MarketplaceClient
 		{
 			return null;
 		}
-		catch (TaskCanceledException)
+		catch (TaskCanceledException) when (!ct.IsCancellationRequested)
 		{
-			return null;
+			return null; // real HTTP timeout
 		}
 	}
 }

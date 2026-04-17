@@ -189,7 +189,8 @@ public static partial class AiCommands
 				// Step 4: Confirmation
 				if (!force && !isCi && !useJson)
 				{
-					formatter.WriteInfo($"Will install {selectedSkills.Count} skill(s) to {environments.Count} {envWord}:");
+				var skillWord = selectedSkills.Count == 1 ? "skill" : "skills";
+					formatter.WriteInfo($"Will install {selectedSkills.Count} {skillWord} to {environments.Count} {envWord}:");
 					formatter.WriteTable(
 						selectedSkills,
 						("Skill", s => s.Name),
@@ -228,7 +229,11 @@ public static partial class AiCommands
 
 						results.Add((skill.Name, env.Kind.ToString(), filesInstalled, installPath));
 
-						if (filesInstalled > 0)
+						if (filesInstalled < 0)
+						{
+							formatter.WriteWarning($"Skill '{skill.Name}' has an invalid name and cannot be installed.");
+						}
+						else if (filesInstalled > 0)
 							formatter.WriteSuccess($"Installed {skill.Name} → {env.Kind} ({filesInstalled} files)");
 						else
 							formatter.WriteInfo($"Skipped {skill.Name} → {env.Kind} (already installed)");

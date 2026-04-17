@@ -1,13 +1,28 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Net;
 using Microsoft.Maui.Cli.Ai;
+using Microsoft.Maui.Cli.Ai.Models;
 using Xunit;
 
 namespace Microsoft.Maui.Cli.UnitTests;
 
-public class MarketplaceClientTests
+public class MarketplaceClientTests : IDisposable
 {
+	private readonly string _tempDir;
+
+	public MarketplaceClientTests()
+	{
+		_tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+		Directory.CreateDirectory(_tempDir);
+	}
+
+	public void Dispose()
+	{
+		if (Directory.Exists(_tempDir))
+			Directory.Delete(_tempDir, recursive: true);
+	}
 	[Fact]
 	public void ParseFrontmatter_ValidFrontmatter_ExtractsNameAndDescription()
 	{
@@ -204,5 +219,93 @@ public class MarketplaceClientTests
 
 		Assert.Equal("frontmatter-skill", name);
 		Assert.Equal("Only frontmatter matters", description);
+	}
+
+	[Fact]
+	public async Task DownloadSkillFilesAsync_RejectsPathTraversal()
+	{
+		var handler = new FakeHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
+		{
+			Content = new ByteArrayContent("malicious"u8.ToArray())
+		});
+		using var http = new HttpClient(handler);
+
+		var skill = new SkillInfo
+		{
+			Name = "evil-skill",
+			RemotePath = "plugins/evil",
+			Files = ["plugins/evil/../../../etc/passwd"]
+		};
+
+		var count = await MarketplaceClient.DownloadSkillFilesAsync(
+			http, skill, _tempDir, "owner/repo", "main");
+
+		Assert.Equal(0, count);
+		// Verify no file was written outside the dest directory
+		Assert.Empty(Directory.GetFiles(_tempDir, "*", SearchOption.AllDirectories));
+	}
+
+	[Fact]
+	public async Task DownloadSkillFilesAsync_RejectsPathTraversal_InRelativePath()
+	{
+		var handler = new FakeHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
+		{
+			Content = new ByteArrayContent("malicious"u8.ToArray())
+		});
+		using var http = new HttpClient(handler);
+
+		var skill = new SkillInfo
+		{
+			Name = "evil-skill",
+			RemotePath = "plugins/evil",
+			Files = ["plugins/evil/../../breakout.txt"]
+		};
+
+		var count = await MarketplaceClient.DownloadSkillFilesAsync(
+			http, skill, _tempDir, "owner/repo", "main");
+
+		Assert.Equal(0, count);
+		Assert.Empty(Directory.GetFiles(_tempDir, "*", SearchOption.AllDirectories));
+	}
+
+	[Fact]
+	public async Task DownloadSkillFilesAsync_AllowsSafeRelativePath()
+	{
+		var handler = new FakeHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
+		{
+			Content = new ByteArrayContent("safe content"u8.ToArray())
+		});
+		using var http = new HttpClient(handler);
+
+		var skill = new SkillInfo
+		{
+			Name = "good-skill",
+			RemotePath = "plugins/good",
+			Files = ["plugins/good/SKILL.md"]
+		};
+
+		var count = await MarketplaceClient.DownloadSkillFilesAsync(
+			http, skill, _tempDir, "owner/repo", "main");
+
+		Assert.Equal(1, count);
+		Assert.True(File.Exists(Path.Combine(_tempDir, "SKILL.md")));
+	}
+
+	/// <summary>
+	/// Minimal HttpMessageHandler that returns a fixed response for every request.
+	/// </summary>
+	private sealed class FakeHttpMessageHandler : HttpMessageHandler
+	{
+		private readonly HttpResponseMessage _response;
+
+		public FakeHttpMessageHandler(HttpResponseMessage response) => _response = response;
+
+		protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+			=> Task.FromResult(_response);
+
+		protected override void Dispose(bool disposing)
+		{
+			// Don't dispose _response — the caller owns it via the test scope
+		}
 	}
 }

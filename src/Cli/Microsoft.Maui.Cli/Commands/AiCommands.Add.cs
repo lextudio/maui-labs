@@ -112,7 +112,7 @@ public static partial class AiCommands
 				// Confirm unless --force, --ci, or --json
 				if (!force && !isCi && !useJson)
 				{
-					formatter.WriteInfo($"Will install '{skill.Name}' ({skill.Files.Count} files) to {environments.Count} environment(s).");
+					formatter.WriteInfo($"Will install '{skill.Name}' ({skill.Files.Count} files) to {environments.Count} {(environments.Count == 1 ? "environment" : "environments")}.");
 					if (!AnsiConsole.Confirm("Proceed?", defaultValue: true))
 					{
 						formatter.WriteInfo("Installation cancelled.");
@@ -130,7 +130,11 @@ public static partial class AiCommands
 
 					results.Add((env.Kind.ToString(), filesInstalled, installPath));
 
-					if (filesInstalled > 0)
+					if (filesInstalled < 0)
+					{
+						formatter.WriteWarning($"Skill '{skill.Name}' has an invalid name and cannot be installed.");
+					}
+					else if (filesInstalled > 0)
 						formatter.WriteSuccess($"Installed {skill.Name} → {env.Kind} ({filesInstalled} files)");
 					else
 						formatter.WriteInfo($"Skipped {skill.Name} → {env.Kind} (already installed, use --force to overwrite)");

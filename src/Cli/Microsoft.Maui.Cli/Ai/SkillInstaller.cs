@@ -26,7 +26,7 @@ internal static class SkillInstaller
 	/// A tuple of (filesInstalled, installPath) where filesInstalled is the number
 	/// of files written and installPath is the absolute path to the skill directory.
 	/// Returns (0, installPath) if the skill is already installed and <paramref name="force"/> is <c>false</c>.
-	/// Returns (0, string.Empty) if the skill name contains invalid characters.
+	/// Returns (-1, string.Empty) if the skill name contains invalid characters.
 	/// </returns>
 	public static async Task<(int FilesInstalled, string InstallPath)> InstallSkillAsync(
 		HttpClient http,
@@ -39,7 +39,7 @@ internal static class SkillInstaller
 		CancellationToken ct = default)
 	{
 		if (skill.Name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 || skill.Name.Contains(".."))
-			return (0, string.Empty);
+			return (-1, string.Empty);
 
 		var installPath = Path.Combine(env.SkillsDirectory, skill.Name);
 

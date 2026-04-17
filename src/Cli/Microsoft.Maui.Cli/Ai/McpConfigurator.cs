@@ -73,6 +73,10 @@ internal static class McpConfigurator
 		{
 			return false;
 		}
+		catch (UnauthorizedAccessException)
+		{
+			return false;
+		}
 		catch (JsonException)
 		{
 			return false;

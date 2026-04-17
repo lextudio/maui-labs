@@ -99,7 +99,8 @@ public static partial class AiCommands
 					return 0;
 				}
 
-				formatter.WriteInfo($"Found {updatable.Count} skill(s) with updates available.");
+			var updateWord = updatable.Count == 1 ? "skill" : "skills";
+				formatter.WriteInfo($"Found {updatable.Count} {updateWord} with updates available.");
 
 				if (dryRun)
 				{
@@ -158,7 +159,13 @@ public static partial class AiCommands
 						http, skillInfo, env, workingDir, repo, branch, force: true, ct);
 
 					results.Add((skillName, env.Kind.ToString(), filesInstalled));
-					formatter.WriteSuccess($"Updated {skillName} → {env.Kind} ({filesInstalled} files)");
+
+					if (filesInstalled < 0)
+						formatter.WriteWarning($"Skill '{skillName}' has an invalid name and cannot be updated.");
+					else if (filesInstalled > 0)
+						formatter.WriteSuccess($"Updated {skillName} → {env.Kind} ({filesInstalled} files)");
+					else
+						formatter.WriteInfo($"Skipped {skillName} → {env.Kind} (no files downloaded)");
 				}
 
 				if (useJson)
