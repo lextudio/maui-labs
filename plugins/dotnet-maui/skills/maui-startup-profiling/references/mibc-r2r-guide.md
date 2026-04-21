@@ -14,7 +14,7 @@ Use this guide when the startup trace shows significant time in .NET Runtime (JI
 
 ## Platform Support Matrix
 
-- In .NET 11+, CoreCLR is the default runtime on **all platforms** (Android, iOS, Mac Catalyst, Windows)
+- In .NET 11 and newer, CoreCLR is the default runtime on **all platforms** (Android, iOS, Mac Catalyst, Windows)
 - MIBC/R2R profiles work on any CoreCLR target — collect per-platform profiles for best results
 - For Native AOT apps, `@(_ReadyToRunPgoFiles)` does not have any effect
 
@@ -25,7 +25,7 @@ Use this guide when the startup trace shows significant time in .NET Runtime (JI
 ```sh
 maui profile startup \
   --project MyApp.csproj \
-  -f net10.0-android \
+  -f net11.0-android \
   --format mibc \
   --stopping-event-provider-name Microsoft.Maui.StartupProfiling \
   --stopping-event-event-name StartupComplete
@@ -80,7 +80,7 @@ After applying the MIBC profile, re-run the profiling to verify improvement:
 ```sh
 maui profile startup \
   --project MyApp.csproj \
-  -f net10.0-android \
+  -f net11.0-android \
   --format mibc \
   --stopping-event-provider-name Microsoft.Maui.StartupProfiling \
   --stopping-event-event-name StartupComplete

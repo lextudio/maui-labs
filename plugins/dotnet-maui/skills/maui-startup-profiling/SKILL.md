@@ -29,7 +29,7 @@ Diagnose and optimize .NET MAUI app startup time using trace-based analysis.
 ### Prerequisites
 
 - The `maui` CLI tool installed (`dotnet tool install -g Microsoft.Maui.Cli`)
-- .NET 10+ SDK (the CLI uses `dnx` to auto-resolve `dotnet-trace` and `dotnet-dsrouter` — no manual install needed)
+- .NET 11 or newer SDK (the CLI uses `dnx` to auto-resolve `dotnet-trace` and `dotnet-dsrouter` — no manual install needed)
 - A MAUI app project
 - A connected device or running emulator
 
@@ -52,8 +52,8 @@ Produces `<name>.mibc` (PGO profile for Step 4) and `<name>.nettrace` (raw trace
 
 | Platform | Framework example | Auto-stop | Notes |
 |---|---|---|---|
-| Android | `net10.0-android` | ✅ Auto-injected | CLI injects `StartupProfilingMarker` at build time |
-| iOS | `net10.0-ios` | ⚠️ Not yet wired | Build injection is not yet enabled for iOS in the CLI (the bootstrap code is platform-agnostic but the CLI skips it for iOS). App must reference `Microsoft.Maui.StartupProfiling` NuGet and call `StartupProfilingMarker.Complete()`, or use `--duration 00:00:15` instead. |
+| Android | `net11.0-android` | ✅ Auto-injected | CLI injects `StartupProfilingMarker` at build time |
+| iOS | `net11.0-ios` | ⚠️ Not yet wired | Build injection is not yet enabled for iOS in the CLI (the bootstrap code is platform-agnostic but the CLI skips it for iOS). App must reference `Microsoft.Maui.StartupProfiling` NuGet and call `StartupProfilingMarker.Complete()`, or use `--duration 00:00:15` instead. |
 
 ### iOS workaround
 
