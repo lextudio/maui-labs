@@ -1,18 +1,15 @@
 ---
 name: maui-startup-profiling
 description: >-
-  Diagnose slow .NET MAUI app startup using the `maui profile startup` CLI tool.
-  Collects startup traces with MIBC format by default (producing both .mibc and
-  .nettrace), analyzes hotspots with `dotnet-trace report topN`, and optionally
-  categorizes CPU time across platform/OS, .NET runtime, MAUI framework, bindings,
-  and app code via speedscope conversion. Recommends targeted optimizations and
-  generates MIBC profiles for ReadyToRun on Android.
-  USE FOR: "why is my app slow to start?", "what makes my MAUI app startup slow?",
-  startup performance analysis, generating MIBC/PGO profiles for R2R, reducing
-  Android/iOS app launch time, profiling MAUI startup, analyzing startup traces.
+  Diagnoses slow .NET MAUI app startup using the `maui profile startup` CLI tool.
+  Collects startup traces with MIBC format (producing both .mibc and .nettrace),
+  analyzes hotspots with `dotnet-trace report topN`, and optionally categorizes
+  CPU time by component via speedscope conversion. Recommends targeted optimizations
+  and applies MIBC profiles for ReadyToRun on all CoreCLR platforms.
+  USE FOR: "why is my app slow to start?", startup performance analysis, generating
+  MIBC/PGO profiles for R2R, reducing app launch time, profiling MAUI startup.
   DO NOT USE FOR: runtime CPU profiling after startup, memory leak analysis,
-  build performance issues, environment setup (use dotnet-maui-doctor), or
-  general .NET profiling unrelated to MAUI apps.
+  build performance, environment setup (use dotnet-maui-doctor).
 ---
 
 # MAUI Startup Profiling
@@ -24,7 +21,7 @@ Diagnose and optimize .NET MAUI app startup time using trace-based analysis.
 1. **Collect** a startup trace with `maui profile startup --format mibc`
 2. **Analyze** the trace with `dotnet-trace report topN` and/or `scripts/analyze_speedscope.cs`
 3. **Diagnose** bottlenecks using performance tips (see `references/performance-tips.md`)
-4. **Apply MIBC** profile to reduce JIT overhead on Android (see `references/mibc-r2r-guide.md`)
+4. **Apply MIBC** profile to reduce JIT overhead (see `references/mibc-r2r-guide.md`)
 5. **Re-measure** to verify improvement
 
 ## Step 1: Collect a Startup Trace
@@ -38,8 +35,6 @@ Diagnose and optimize .NET MAUI app startup time using trace-based analysis.
 
 ### Command
 
-Collect with `--format mibc` to get all three outputs at once — the MIBC profile, the raw `.nettrace`, and the data needed for analysis:
-
 ```sh
 maui profile startup \
   --project <path-to-csproj> \
@@ -49,11 +44,9 @@ maui profile startup \
   --stopping-event-event-name StartupComplete
 ```
 
-This produces:
-- `<name>.mibc` — ready-to-use PGO profile for ReadyToRun (apply directly in Step 4)
-- `<name>.nettrace` — raw companion trace (use for analysis and can be converted to speedscope)
+Produces `<name>.mibc` (PGO profile for Step 4) and `<name>.nettrace` (raw trace for analysis).
 
-**Always use an explicit stop condition.** Without `--stopping-event-*` or `--duration`, the tool waits for manual Enter, which is unsuitable for automated analysis.
+**Always use an explicit stop condition.** Without `--stopping-event-*` or `--duration`, the tool waits for manual Enter. Run `maui profile startup --help` for all options.
 
 ### Platform-specific notes
 
@@ -62,26 +55,11 @@ This produces:
 | Android | `net10.0-android` | ✅ Auto-injected | CLI injects `StartupProfilingMarker` at build time |
 | iOS | `net10.0-ios` | ⚠️ Not yet wired | Build injection is not yet enabled for iOS in the CLI (the bootstrap code is platform-agnostic but the CLI skips it for iOS). App must reference `Microsoft.Maui.StartupProfiling` NuGet and call `StartupProfilingMarker.Complete()`, or use `--duration 00:00:15` instead. |
 
-### iOS manual integration
+### iOS workaround
 
-If the iOS app does not reference `Microsoft.Maui.StartupProfiling`, either:
-
-1. Add the package and call `Complete()`:
-```xml
-<PackageReference Include="Microsoft.Maui.StartupProfiling" />
-```
-```csharp
-protected override void OnAppearing()
-{
-    base.OnAppearing();
-    StartupProfilingMarker.Complete();
-}
-```
-
-2. Or use a fixed duration:
-```sh
-maui profile startup --project MyApp.csproj -f net10.0-ios --duration 00:00:15
-```
+Until build injection is enabled for iOS (#109), either:
+1. Add `Microsoft.Maui.StartupProfiling` NuGet and call `StartupProfilingMarker.Complete()` in `OnAppearing`.
+2. Or use `--duration 00:00:15` instead of `--stopping-event-*`.
 
 ## Step 2: Analyze the Trace
 
@@ -149,51 +127,23 @@ Based on the analysis:
 - **High .NET Bindings %** → Look for excessive managed↔native transitions; batch platform calls
 - **High Platform/OS %** → Usually not directly actionable from app code; verify no redundant native init
 
-## Step 4: Apply MIBC Profile (CoreCLR)
+## Step 4: Apply MIBC Profile
 
 The `--format mibc` collection in Step 1 already produced a `.mibc` file. Apply it to pre-compile startup-critical methods with ReadyToRun. Read `references/mibc-r2r-guide.md` for the full guide.
 
-**Quick summary:**
 ```sh
-# The .mibc file was already generated in Step 1. Copy it to your project:
 mkdir -p pgo/
-cp <name>.mibc pgo/startup-<platform>.mibc # android|ios|maccatalyst|windows
+cp <name>.mibc pgo/startup-<platform>.mibc
 ```
 
-Add to `.csproj`:
+Add to `.csproj` (one item group per target platform):
 ```xml
-<!-- this sample shows `android` but it would be the same for ios, maccatalyst, or windows -->
 <ItemGroup Condition="$(TargetFramework.Contains('-android'))">
   <_ReadyToRunPgoFiles Include="pgo/startup-android.mibc" />
 </ItemGroup>
 ```
 
-Re-measure:
-```sh
-maui profile startup --project MyApp.csproj -f net10.0-android --format mibc \
-  --stopping-event-provider-name Microsoft.Maui.StartupProfiling \
-  --stopping-event-event-name StartupComplete
-```
-
-## CLI Reference
-
-```
-maui profile startup [options]
-
-Options:
-  --project <path>                  Path to .csproj or containing directory
-  -f, --framework <tfm>            Target framework (e.g., net10.0-android)
-  -d, --device <id>                Device/simulator identifier
-  -o, --output <path>              Output trace path
-  --format <nettrace|speedscope|mibc>  Output format (default: nettrace)
-  -c, --configuration <cfg>        Build configuration (default: Release)
-  --duration <hh:mm:ss>            Fixed trace duration
-  --no-build                       Skip build, use existing outputs
-  --stopping-event-provider-name   EventSource provider for auto-stop
-  --stopping-event-event-name      Event name for auto-stop
-  --trace-profile <profile>        dotnet-trace profile (e.g., dotnet-sampled-thread-time)
-  --json                           Machine-readable JSON output
-```
+Re-measure with `maui profile startup` to compare before/after.
 
 ## Interpreting Results — Common Patterns
 
