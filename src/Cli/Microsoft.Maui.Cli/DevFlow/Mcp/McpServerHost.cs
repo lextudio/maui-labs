@@ -32,6 +32,7 @@ public static class McpServerHost
 			.WithTools<QueryTools>()
 			.WithTools<AgentTools>()
 			.WithTools<CdpTools>()
+			.WithTools<WebViewTools>()
 			.WithTools<AssertTool>()
 			.WithTools<RecordingTools>()
 			.WithTools<PreferencesTools>()
