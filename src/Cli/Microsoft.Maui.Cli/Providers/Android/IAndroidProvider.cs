@@ -207,7 +207,7 @@ public record AndroidEnvironmentInfo
 public record ApiLevelInfo
 {
 	public int Api { get; init; }
-	public bool Platform { get; set; }
-	public string? BuildTools { get; set; }
+	public bool Platform { get; init; }
+	public string? BuildTools { get; init; }
 	public List<string> SystemImages { get; init; } = new();
 }
