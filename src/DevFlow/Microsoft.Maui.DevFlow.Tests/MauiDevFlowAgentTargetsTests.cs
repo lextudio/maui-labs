@@ -154,6 +154,49 @@ public sealed class MauiDevFlowAgentTargetsTests : IDisposable
         Assert.DoesNotContain("Microsoft.Maui.DevFlowDebugAppIdentitySuffix", contents);
     }
 
+    [Theory]
+    [InlineData("build/Microsoft.Maui.DevFlow.Agent.targets")]
+    [InlineData("buildTransitive/Microsoft.Maui.DevFlow.Agent.targets")]
+    public void SetMauiDevFlowPort_EmitsMessageWhenApplicationIdRewritten(string relativeTargetPath)
+    {
+        CreateTestProject(relativeTargetPath, """
+            <ApplicationId>com.example.myapp</ApplicationId>
+            """);
+
+        var output = RunSetMauiDevFlowPortTarget("/v:normal");
+
+        Assert.Contains("DevFlow: ApplicationId rewritten from 'com.example.myapp' to 'com.example.myapp.debug.", output);
+        Assert.Contains("Opt out with -p:MauiDevFlowEnableDebugAppIdentityIsolation=false", output);
+    }
+
+    [Theory]
+    [InlineData("build/Microsoft.Maui.DevFlow.Agent.targets")]
+    [InlineData("buildTransitive/Microsoft.Maui.DevFlow.Agent.targets")]
+    public void SetMauiDevFlowPort_DoesNotEmitMessage_WhenIsolationDisabled(string relativeTargetPath)
+    {
+        CreateTestProject(relativeTargetPath, """
+            <ApplicationId>com.example.myapp</ApplicationId>
+            """);
+
+        var output = RunSetMauiDevFlowPortTarget("/v:normal", "/p:MauiDevFlowEnableDebugAppIdentityIsolation=false");
+
+        Assert.DoesNotContain("DevFlow: ApplicationId rewritten", output);
+    }
+
+    [Theory]
+    [InlineData("build/Microsoft.Maui.DevFlow.Agent.targets")]
+    [InlineData("buildTransitive/Microsoft.Maui.DevFlow.Agent.targets")]
+    public void SetMauiDevFlowPort_DoesNotEmitMessage_ForReleaseBuilds(string relativeTargetPath)
+    {
+        CreateTestProject(relativeTargetPath, """
+            <ApplicationId>com.example.myapp</ApplicationId>
+            """);
+
+        var output = RunSetMauiDevFlowPortTarget("/v:normal", "/p:Configuration=Release");
+
+        Assert.DoesNotContain("DevFlow: ApplicationId rewritten", output);
+    }
+
     private string ProjectFilePath => Path.Combine(_projectDirectory, "Test.csproj");
 
     private string ConfigFilePath => Path.Combine(_projectDirectory, ".mauidevflow");
@@ -201,7 +244,7 @@ public sealed class MauiDevFlowAgentTargetsTests : IDisposable
         return $"dw{sanitized}";
     }
 
-    private void RunSetMauiDevFlowPortTarget(params string[] properties)
+    private string RunSetMauiDevFlowPortTarget(params string[] properties)
     {
         var startInfo = new ProcessStartInfo("dotnet")
         {
@@ -231,6 +274,8 @@ public sealed class MauiDevFlowAgentTargetsTests : IDisposable
         Assert.True(
             process.ExitCode == 0,
             $"dotnet msbuild failed with exit code {process.ExitCode}.{Environment.NewLine}{output}{error}");
+
+        return output;
     }
 
     private static string FindRepoRoot()

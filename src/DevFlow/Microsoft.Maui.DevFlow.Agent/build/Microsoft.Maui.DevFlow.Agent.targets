@@ -56,5 +56,8 @@
     <ItemGroup>
       <Compile Include="$(_MauiDevFlowPortFile)" />
     </ItemGroup>
+    <Message Condition="'$(_MauiDevFlowIsolationEnabled)' == 'true' and '$(MauiDevFlowBaseApplicationId)' != '$(ApplicationId)'"
+             Importance="normal"
+             Text="DevFlow: ApplicationId rewritten from '$(MauiDevFlowBaseApplicationId)' to '$(ApplicationId)' for debug identity isolation. Opt out with -p:MauiDevFlowEnableDebugAppIdentityIsolation=false" />
   </Target>
 </Project>
