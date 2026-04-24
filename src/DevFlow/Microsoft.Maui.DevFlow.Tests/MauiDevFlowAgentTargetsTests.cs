@@ -258,7 +258,10 @@ public sealed class MauiDevFlowAgentTargetsTests : IDisposable
         startInfo.ArgumentList.Add(ProjectFilePath);
         startInfo.ArgumentList.Add("/t:_SetMauiDevFlowPort");
         startInfo.ArgumentList.Add("/nologo");
-        startInfo.ArgumentList.Add("/v:minimal");
+
+        // Only default to minimal verbosity when the caller hasn't specified one
+        if (!properties.Any(p => p.StartsWith("/v:", StringComparison.OrdinalIgnoreCase)))
+            startInfo.ArgumentList.Add("/v:minimal");
 
         foreach (var property in properties)
             startInfo.ArgumentList.Add(property);
