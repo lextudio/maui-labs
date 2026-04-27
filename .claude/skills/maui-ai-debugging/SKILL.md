@@ -1,16 +1,13 @@
 ---
 name: maui-ai-debugging
 description: >
-  End-to-end workflow for building, deploying, inspecting, and debugging .NET MAUI and MAUI Blazor Hybrid apps
-  as an AI agent. Use when: (1) Building or running a MAUI app on iOS simulator, Android emulator, Mac Catalyst,
-  macOS (AppKit), or Linux/GTK, (2) Inspecting or interacting with a running app's UI (visual tree, tapping,
-  filling text, screenshots, property queries), (3) Debugging Blazor WebView content via CDP, (4) Managing
-  simulators or emulators, (5) Setting up MauiDevFlow in a MAUI project, (6) Completing a build-deploy-inspect-fix
-  feedback loop, (7) Handling permission dialogs and in-app/simulator alerts, (8) Managing multiple simultaneous
-  apps via the broker daemon. Covers: the unified `maui devflow` CLI, androidsdk.tool, appledev.tools, adb,
-  xcrun simctl, Linux `xdotool`-backed driver caveats, and dotnet build/run for all MAUI target platforms
-  including macOS (AppKit) and Linux/GTK. Do not use for generic desktop automation, AppleScript macros, or
-  arbitrary host-level `xdotool` control unrelated to MAUI app debugging.
+  Builds, deploys, inspects, and debugs .NET MAUI and MAUI Blazor Hybrid apps end-to-end from the
+  terminal as an AI agent. Use when running a build-deploy-inspect-fix loop on iOS simulator, Android
+  emulator, Mac Catalyst, macOS (AppKit), or Linux/GTK; driving a running app's UI (visual tree, tap,
+  fill, screenshot, properties); debugging Blazor WebView via CDP; managing simulators or the broker
+  daemon; or setting up MauiDevFlow in a project. Wraps the unified `maui devflow` CLI together with
+  androidsdk.tool, appledev.tools, adb, xcrun simctl, and an `xdotool`-backed Linux driver. Not for
+  generic desktop automation or AppleScript unrelated to MAUI debugging.
 ---
 
 # MAUI AI Debugging
