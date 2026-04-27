@@ -319,15 +319,17 @@ public class JdkManager : IJdkManager
 
 		if (PlatformDetector.IsWindows)
 		{
-			// Use PowerShell for zip extraction
+			// ZipFile.ExtractToDirectory in .NET 8+ throws IOException for entries
+			// with ".." segments or absolute paths, providing zip-slip protection.
 			System.IO.Compression.ZipFile.ExtractToDirectory(archivePath, targetPath);
 		}
 		else
 		{
-			// Use tar for tar.gz extraction
+			// --no-absolute-names prevents tar from extracting entries with leading '/'
+			// that could write outside the destination directory.
 			var result = await ProcessRunner.RunAsync(
 				"tar",
-				["-xzf", archivePath, "-C", targetPath, "--strip-components=1"],
+				["--no-absolute-names", "-xzf", archivePath, "-C", targetPath, "--strip-components=1"],
 				timeout: TimeSpan.FromMinutes(5),
 				cancellationToken: cancellationToken);
 
@@ -339,6 +341,8 @@ public class JdkManager : IJdkManager
 					nativeError: result.StandardError);
 			}
 		}
+
+		ValidateExtractedPaths(targetPath);
 
 		// On macOS, the JDK is inside Contents/Home
 		if (PlatformDetector.IsMacOS)
@@ -353,6 +357,64 @@ public class JdkManager : IJdkManager
 				Directory.Move(tempDir, targetPath);
 			}
 		}
+	}
+
+	/// <summary>
+	/// Validates that all files and directories extracted from an archive reside under the
+	/// intended destination. A malicious archive could use symlinks or path traversal
+	/// entries (e.g., "../../etc/passwd") to write outside the target directory. This
+	/// post-extraction check catches entries that escaped the sandbox and symlinks whose
+	/// targets resolve outside the destination (a classic tar symlink-then-write attack).
+	/// </summary>
+	internal static void ValidateExtractedPaths(string destinationDirectory)
+	{
+		var fullDestination = Path.GetFullPath(destinationDirectory)
+			.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+			+ Path.DirectorySeparatorChar;
+
+		foreach (var entry in Directory.EnumerateFileSystemEntries(destinationDirectory, "*", SearchOption.AllDirectories))
+		{
+			var fullEntry = Path.GetFullPath(entry);
+			if (!fullEntry.StartsWith(fullDestination, StringComparison.OrdinalIgnoreCase))
+			{
+				ThrowPathTraversal(destinationDirectory, entry);
+			}
+
+			// Symlinks can point outside the destination; a subsequent tar entry following
+			// the symlink would write to the resolved target. Check the resolved target.
+			var linkTarget = GetSymlinkTarget(entry);
+			if (linkTarget is not null)
+			{
+				var resolvedTarget = Path.IsPathRooted(linkTarget)
+					? Path.GetFullPath(linkTarget)
+					: Path.GetFullPath(Path.Combine(Path.GetDirectoryName(fullEntry)!, linkTarget));
+
+				if (!resolvedTarget.StartsWith(fullDestination, StringComparison.OrdinalIgnoreCase))
+				{
+					ThrowPathTraversal(destinationDirectory, entry);
+				}
+			}
+		}
+	}
+
+	static string? GetSymlinkTarget(string path)
+	{
+		var fileInfo = new FileInfo(path);
+		if (fileInfo.LinkTarget is not null)
+			return fileInfo.LinkTarget;
+
+		var dirInfo = new DirectoryInfo(path);
+		return dirInfo.LinkTarget;
+	}
+
+	static void ThrowPathTraversal(string destinationDirectory, string entry)
+	{
+		try { Directory.Delete(destinationDirectory, recursive: true); }
+		catch { /* best effort cleanup */ }
+
+		throw new MauiToolException(
+			ErrorCodes.JdkInstallFailed,
+			$"Archive contains a path traversal entry that resolves outside the destination directory: '{entry}'");
 	}
 
 	public IEnumerable<int> GetAvailableVersions() => SupportedInstallVersions;
