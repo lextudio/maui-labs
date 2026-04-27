@@ -325,11 +325,14 @@ public class JdkManager : IJdkManager
 		}
 		else
 		{
-			// --no-absolute-names prevents tar from extracting entries with leading '/'
-			// that could write outside the destination directory.
+			// Pre-validate: scan archive entries for path traversal before extracting
+			ValidateArchiveEntries(archivePath, targetPath, stripComponents: 1);
+
+			// tar strips leading '/' from entries by default (unless -P is passed),
+			// preventing absolute-path entries from escaping the destination.
 			var result = await ProcessRunner.RunAsync(
 				"tar",
-				["--no-absolute-names", "-xzf", archivePath, "-C", targetPath, "--strip-components=1"],
+				["-xzf", archivePath, "-C", targetPath, "--strip-components=1"],
 				timeout: TimeSpan.FromMinutes(5),
 				cancellationToken: cancellationToken);
 
@@ -341,8 +344,6 @@ public class JdkManager : IJdkManager
 					nativeError: result.StandardError);
 			}
 		}
-
-		ValidateExtractedPaths(targetPath);
 
 		// On macOS, the JDK is inside Contents/Home
 		if (PlatformDetector.IsMacOS)
@@ -360,61 +361,113 @@ public class JdkManager : IJdkManager
 	}
 
 	/// <summary>
-	/// Validates that all files and directories extracted from an archive reside under the
-	/// intended destination. A malicious archive could use symlinks or path traversal
-	/// entries (e.g., "../../etc/passwd") to write outside the target directory. This
-	/// post-extraction check catches entries that escaped the sandbox and symlinks whose
-	/// targets resolve outside the destination (a classic tar symlink-then-write attack).
+	/// Scans tar.gz archive entries for path traversal before extraction. Rejects any entry
+	/// whose normalized path (after applying --strip-components) would resolve outside the
+	/// destination, and any symlink whose target resolves outside it. This prevents both
+	/// direct "../" traversal and the symlink-then-write attack pattern.
 	/// </summary>
-	internal static void ValidateExtractedPaths(string destinationDirectory)
+	internal static void ValidateArchiveEntries(string archivePath, string destinationDirectory, int stripComponents = 0)
 	{
 		var fullDestination = Path.GetFullPath(destinationDirectory)
 			.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
 			+ Path.DirectorySeparatorChar;
 
-		foreach (var entry in Directory.EnumerateFileSystemEntries(destinationDirectory, "*", SearchOption.AllDirectories))
+		var comparison = OperatingSystem.IsWindows()
+			? StringComparison.OrdinalIgnoreCase
+			: StringComparison.Ordinal;
+
+		try
 		{
-			var fullEntry = Path.GetFullPath(entry);
-			if (!fullEntry.StartsWith(fullDestination, StringComparison.OrdinalIgnoreCase))
-			{
-				ThrowPathTraversal(destinationDirectory, entry);
-			}
+			using var archiveStream = File.OpenRead(archivePath);
+			using var gzipStream = new System.IO.Compression.GZipStream(
+				archiveStream, System.IO.Compression.CompressionMode.Decompress);
+			using var reader = new System.Formats.Tar.TarReader(gzipStream, leaveOpen: false);
 
-			// Symlinks can point outside the destination; a subsequent tar entry following
-			// the symlink would write to the resolved target. Check the resolved target.
-			var linkTarget = GetSymlinkTarget(entry);
-			if (linkTarget is not null)
+			System.Formats.Tar.TarEntry? entry;
+			while ((entry = reader.GetNextEntry()) is not null)
 			{
-				var resolvedTarget = Path.IsPathRooted(linkTarget)
+			var entryName = entry.Name;
+			if (string.IsNullOrWhiteSpace(entryName))
+				continue;
+
+			// Simulate --strip-components by removing the first N path segments
+			var stripped = StripPathComponents(entryName, stripComponents);
+			if (stripped is null)
+				continue; // Entry is consumed entirely by strip (e.g. top-level dir)
+
+			ValidateEntryPath(fullDestination, comparison, stripped, entryName);
+
+			// Validate symlink targets — a symlink followed by a write through it
+			// is the classic tar path traversal attack
+			if (!string.IsNullOrEmpty(entry.LinkName))
+			{
+				var linkTarget = entry.LinkName;
+				var entryDir = Path.GetDirectoryName(
+					Path.Combine(fullDestination, stripped.Replace('/', Path.DirectorySeparatorChar)));
+
+				var resolvedLink = Path.IsPathRooted(linkTarget)
 					? Path.GetFullPath(linkTarget)
-					: Path.GetFullPath(Path.Combine(Path.GetDirectoryName(fullEntry)!, linkTarget));
+					: Path.GetFullPath(Path.Combine(entryDir ?? fullDestination, linkTarget));
 
-				if (!resolvedTarget.StartsWith(fullDestination, StringComparison.OrdinalIgnoreCase))
+				if (!resolvedLink.StartsWith(fullDestination, comparison))
 				{
-					ThrowPathTraversal(destinationDirectory, entry);
+					throw new MauiToolException(
+						ErrorCodes.JdkInstallFailed,
+						$"Archive contains a symlink that targets outside the destination directory: " +
+						$"'{entryName}' -> '{linkTarget}'");
 				}
 			}
+			}
+		}
+		catch (InvalidDataException)
+		{
+			// Archive is corrupt or empty — let tar handle the error downstream
+		}
+		catch (EndOfStreamException)
+		{
+			// Truncated archive — let tar handle the error downstream
 		}
 	}
 
-	static string? GetSymlinkTarget(string path)
+	internal static void ValidateEntryPath(string fullDestination, StringComparison comparison,
+		string strippedEntry, string originalEntry)
 	{
-		var fileInfo = new FileInfo(path);
-		if (fileInfo.LinkTarget is not null)
-			return fileInfo.LinkTarget;
+		// Normalize separators for path resolution
+		var normalized = strippedEntry.Replace('/', Path.DirectorySeparatorChar);
 
-		var dirInfo = new DirectoryInfo(path);
-		return dirInfo.LinkTarget;
+		// Reject entries that are absolute (check before trimming leading separator)
+		if (Path.IsPathRooted(normalized))
+		{
+			throw new MauiToolException(
+				ErrorCodes.JdkInstallFailed,
+				$"Archive contains an absolute path entry: '{originalEntry}'");
+		}
+
+		normalized = normalized.TrimStart(Path.DirectorySeparatorChar);
+
+		var resolvedPath = Path.GetFullPath(Path.Combine(fullDestination, normalized));
+		if (!resolvedPath.StartsWith(fullDestination, comparison))
+		{
+			throw new MauiToolException(
+				ErrorCodes.JdkInstallFailed,
+				$"Archive contains a path traversal entry that resolves outside the destination directory: '{originalEntry}'");
+		}
 	}
 
-	static void ThrowPathTraversal(string destinationDirectory, string entry)
+	/// <summary>
+	/// Simulates tar's --strip-components=N by removing the first N path segments.
+	/// Returns null if the entry has N or fewer segments (fully consumed by strip).
+	/// </summary>
+	internal static string? StripPathComponents(string entryName, int stripCount)
 	{
-		try { Directory.Delete(destinationDirectory, recursive: true); }
-		catch { /* best effort cleanup */ }
+		if (stripCount <= 0)
+			return entryName;
 
-		throw new MauiToolException(
-			ErrorCodes.JdkInstallFailed,
-			$"Archive contains a path traversal entry that resolves outside the destination directory: '{entry}'");
+		var parts = entryName.Split('/', StringSplitOptions.RemoveEmptyEntries);
+		if (parts.Length <= stripCount)
+			return null;
+
+		return string.Join('/', parts[stripCount..]);
 	}
 
 	public IEnumerable<int> GetAvailableVersions() => SupportedInstallVersions;

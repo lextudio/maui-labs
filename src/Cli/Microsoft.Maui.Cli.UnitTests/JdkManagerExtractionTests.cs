@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Formats.Tar;
+using System.IO.Compression;
 using Microsoft.Maui.Cli.Errors;
 using Microsoft.Maui.Cli.Providers.Android;
 using Xunit;
@@ -24,65 +26,139 @@ public class JdkManagerExtractionTests : IDisposable
 	}
 
 	[Fact]
-	public void ValidateExtractedPaths_AllFilesUnderDestination_DoesNotThrow()
+	public void ValidateArchiveEntries_SafeArchive_DoesNotThrow()
 	{
-		// Arrange — normal directory structure
-		Directory.CreateDirectory(Path.Combine(_tempDir, "bin"));
-		File.WriteAllText(Path.Combine(_tempDir, "bin", "java"), "stub");
-		File.WriteAllText(Path.Combine(_tempDir, "release"), "stub");
+		var archivePath = CreateTarGz(
+			("jdk-21/bin/java", "stub"),
+			("jdk-21/release", "stub"),
+			("jdk-21/lib/modules", "stub"));
 
-		// Act & Assert — no exception
-		JdkManager.ValidateExtractedPaths(_tempDir);
+		var dest = Path.Combine(_tempDir, "dest");
+		Directory.CreateDirectory(dest);
+
+		JdkManager.ValidateArchiveEntries(archivePath, dest, stripComponents: 1);
 	}
 
 	[Fact]
-	public void ValidateExtractedPaths_EmptyDirectory_DoesNotThrow()
+	public void ValidateArchiveEntries_TraversalEntry_Throws()
 	{
-		// An empty extraction directory is harmless
-		JdkManager.ValidateExtractedPaths(_tempDir);
+		var archivePath = CreateTarGz(
+			("jdk-21/../../etc/cron.d/backdoor", "payload"));
+
+		var dest = Path.Combine(_tempDir, "dest");
+		Directory.CreateDirectory(dest);
+
+		var ex = Assert.Throws<MauiToolException>(() =>
+			JdkManager.ValidateArchiveEntries(archivePath, dest, stripComponents: 1));
+
+		Assert.Equal(ErrorCodes.JdkInstallFailed, ex.Code);
+		Assert.Contains("path traversal", ex.Message, StringComparison.OrdinalIgnoreCase);
 	}
 
 	[Fact]
-	public void ValidateExtractedPaths_SymlinkOutsideDestination_Throws()
+	public void ValidateEntryPath_AbsolutePathEntry_Throws()
 	{
-		if (OperatingSystem.IsWindows())
-			return; // Symlink creation requires privileges on Windows
+		// System.Formats.Tar normalizes absolute paths by stripping leading '/',
+		// so we test ValidateEntryPath directly to verify the guard works.
+		var dest = Path.GetFullPath(Path.Combine(_tempDir, "dest")) + Path.DirectorySeparatorChar;
+		var comparison = OperatingSystem.IsWindows()
+			? StringComparison.OrdinalIgnoreCase
+			: StringComparison.Ordinal;
 
-		// Arrange — create a symlink that points outside the destination
-		var outsideDir = Path.Combine(Path.GetTempPath(), $"jdk-outside-{Guid.NewGuid():N}");
-		Directory.CreateDirectory(outsideDir);
+		var ex = Assert.Throws<MauiToolException>(() =>
+			JdkManager.ValidateEntryPath(dest, comparison, "/etc/passwd", "/etc/passwd"));
 
-		try
+		Assert.Equal(ErrorCodes.JdkInstallFailed, ex.Code);
+		Assert.Contains("absolute path", ex.Message, StringComparison.OrdinalIgnoreCase);
+	}
+
+	[Fact]
+	public void ValidateArchiveEntries_SymlinkOutsideDestination_Throws()
+	{
+		var archivePath = CreateTarGzWithSymlink(
+			entryName: "jdk-21/escape",
+			linkTarget: "/etc");
+
+		var dest = Path.Combine(_tempDir, "dest");
+		Directory.CreateDirectory(dest);
+
+		var ex = Assert.Throws<MauiToolException>(() =>
+			JdkManager.ValidateArchiveEntries(archivePath, dest, stripComponents: 1));
+
+		Assert.Equal(ErrorCodes.JdkInstallFailed, ex.Code);
+		Assert.Contains("symlink", ex.Message, StringComparison.OrdinalIgnoreCase);
+	}
+
+	[Fact]
+	public void ValidateArchiveEntries_RelativeSymlinkTraversal_Throws()
+	{
+		var archivePath = CreateTarGzWithSymlink(
+			entryName: "jdk-21/escape",
+			linkTarget: "../../outside");
+
+		var dest = Path.Combine(_tempDir, "dest");
+		Directory.CreateDirectory(dest);
+
+		var ex = Assert.Throws<MauiToolException>(() =>
+			JdkManager.ValidateArchiveEntries(archivePath, dest, stripComponents: 1));
+
+		Assert.Equal(ErrorCodes.JdkInstallFailed, ex.Code);
+		Assert.Contains("symlink", ex.Message, StringComparison.OrdinalIgnoreCase);
+	}
+
+	[Fact]
+	public void ValidateArchiveEntries_EmptyArchive_DoesNotThrow()
+	{
+		var archivePath = CreateTarGz();
+
+		var dest = Path.Combine(_tempDir, "dest");
+		Directory.CreateDirectory(dest);
+
+		JdkManager.ValidateArchiveEntries(archivePath, dest, stripComponents: 1);
+	}
+
+	[Fact]
+	public void StripPathComponents_RemovesCorrectSegments()
+	{
+		Assert.Equal("bin/java", JdkManager.StripPathComponents("jdk-21/bin/java", 1));
+		Assert.Equal("java", JdkManager.StripPathComponents("jdk-21/bin/java", 2));
+		Assert.Null(JdkManager.StripPathComponents("jdk-21/", 1));
+		Assert.Null(JdkManager.StripPathComponents("jdk-21", 1));
+		Assert.Equal("jdk-21/bin/java", JdkManager.StripPathComponents("jdk-21/bin/java", 0));
+	}
+
+	string CreateTarGz(params (string name, string content)[] entries)
+	{
+		var path = Path.Combine(_tempDir, $"test-{Guid.NewGuid():N}.tar.gz");
+		using var fileStream = File.Create(path);
+		using var gzipStream = new GZipStream(fileStream, CompressionMode.Compress);
+		using var writer = new TarWriter(gzipStream, leaveOpen: false);
+
+		foreach (var (name, content) in entries)
 		{
-			var symlinkPath = Path.Combine(_tempDir, "escape");
-			Directory.CreateSymbolicLink(symlinkPath, outsideDir);
-
-			// Act & Assert — validation detects the symlink target is outside destination
-			var ex = Assert.Throws<MauiToolException>(() =>
-				JdkManager.ValidateExtractedPaths(_tempDir));
-
-			Assert.Equal(ErrorCodes.JdkInstallFailed, ex.Code);
-			Assert.Contains("path traversal", ex.Message, StringComparison.OrdinalIgnoreCase);
-
-			// The method deletes the destination on traversal detection
-			Assert.False(Directory.Exists(_tempDir));
+			var entry = new PaxTarEntry(TarEntryType.RegularFile, name)
+			{
+				DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content))
+			};
+			writer.WriteEntry(entry);
 		}
-		finally
-		{
-			try { Directory.Delete(outsideDir, recursive: true); }
-			catch { /* best effort */ }
-		}
+
+		return path;
 	}
 
-	[Fact]
-	public void ValidateExtractedPaths_DeeplyNestedFiles_DoesNotThrow()
+	string CreateTarGzWithSymlink(string entryName, string linkTarget)
 	{
-		// Arrange — deeply nested but still under destination
-		var deepPath = Path.Combine(_tempDir, "a", "b", "c", "d", "e");
-		Directory.CreateDirectory(deepPath);
-		File.WriteAllText(Path.Combine(deepPath, "file.txt"), "content");
+		var path = Path.Combine(_tempDir, $"test-{Guid.NewGuid():N}.tar.gz");
+		using var fileStream = File.Create(path);
+		using var gzipStream = new GZipStream(fileStream, CompressionMode.Compress);
+		using var writer = new TarWriter(gzipStream, leaveOpen: false);
 
-		// Act & Assert — no exception
-		JdkManager.ValidateExtractedPaths(_tempDir);
+		var entry = new PaxTarEntry(TarEntryType.SymbolicLink, entryName)
+		{
+			LinkName = linkTarget
+		};
+		writer.WriteEntry(entry);
+
+		return path;
 	}
 }
