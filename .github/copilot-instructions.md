@@ -134,6 +134,29 @@ The repo is at 0.1.0-preview so breaking changes are acceptable, but:
 - **Signing**: configured in `eng/Signing.props`. New third-party DLLs need a `3PartySHA2` entry.
 - **Version**: defined in `eng/Versions.props` (`VersionPrefix` + `VersionSuffix`). Per-product overrides in `src/{Product}/Version.props`.
 
+## CI / Pipeline Conventions
+
+Each product has **two** CI surfaces: a GitHub Actions workflow (PR validation) and a job in the Azure DevOps official pipeline (signing + NuGet publish). See `.github/CONTRIBUTING.md` § "Adding a New Product" for the full checklist.
+
+### GitHub Actions (PR & push)
+
+- One workflow file per product: `.github/workflows/ci-{product}.yml`
+- All CI workflows call the reusable `_build.yml` workflow.
+- **Always** set `pull_request` types explicitly:
+  ```yaml
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  ```
+  The `edited` type is required — without it, CI does not run when GitHub auto-retargets a PR after a stacked branch merges.
+- Scope `paths` to the product's source folder plus shared build files (`eng/**`, `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`, `global.json`, `NuGet.config`).
+
+### Azure DevOps (official build)
+
+- Single pipeline file: `eng/pipelines/devflow-official.yml`
+- Each product has a parallel build job in the `build` stage and an optional `publish_*_nuget` stage gated by a boolean parameter.
+- Build jobs use `eng\common\cibuild.cmd` with Arcade signing args.
+- New products need: a parameter, a build job, and a publish stage block.
+
 ## Maui.Client Conventions (Future — Not Yet Present)
 
 A Client product (`src/Client/`) is planned but not yet present in this repository. When added, it will use a DI-based architecture with provider interfaces:
