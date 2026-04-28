@@ -466,10 +466,17 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     {
         if (_disposed || !_options.Enabled) return;
         if (app is Application controlsApp)
-            _app = controlsApp;
-        else
-            _iApp = app;
+        {
+            BindApp(controlsApp);
+            return;
+        }
+        _iApp = app;
         Console.WriteLine("[Microsoft.Maui.DevFlow.Agent] IApplication bound to running agent");
+        PublishUiEvent("lifecycle", new
+        {
+            state = "started",
+            timestamp = DateTimeOffset.UtcNow.ToString("O")
+        });
     }
 
     /// <summary>
