@@ -18,6 +18,7 @@ internal static class CometViewResolver
 	private static PropertyInfo? _builtViewProperty;
 	private static PropertyInfo? _bodyProperty;
 	private static PropertyInfo? _currentViewProperty;
+	private static MethodInfo[]? _getEnvironmentMethods;
 
 	/// <summary>
 	/// Checks if Comet is loaded in the current app domain.
@@ -55,6 +56,12 @@ internal static class CometViewResolver
 			_getViewMethod = _cometViewType.GetMethod("GetView", BindingFlags.Public | BindingFlags.Instance);
 			_builtViewProperty = _cometViewType.GetProperty("BuiltView", BindingFlags.Public | BindingFlags.Instance);
 			_bodyProperty = _cometViewType.GetProperty("Body", BindingFlags.Public | BindingFlags.Instance);
+
+			// Cache GetEnvironment generic method overloads — used by TryExtractText to
+			// resolve Comet's environment-stored Text.Value without re-reflecting per call.
+			_getEnvironmentMethods = _cometViewType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
+				.Where(m => m.Name == "GetEnvironment" && m.IsGenericMethod && m.GetParameters().Length >= 1)
+				.ToArray();
 
 			// Cache platform-specific CometView (iOS/Android/Windows) CurrentView property
 			// Platform views are in Comet.iOS.CometView, Comet.Droid.CometView, etc.
@@ -306,6 +313,7 @@ internal static class CometViewResolver
 	public static string? TryExtractText(object cometView)
 	{
 		if (cometView == null) return null;
+		if (!IsCometAvailable()) return null;
 
 		try
 		{
@@ -374,27 +382,27 @@ internal static class CometViewResolver
 			}
 
 			// Try GetEnvironment<string>("Text.Value") — Comet stores text in environment
-			if (_cometViewType != null && _cometViewType.IsInstanceOfType(cometView))
+			if (_cometViewType != null && _getEnvironmentMethods != null && _cometViewType.IsInstanceOfType(cometView))
 			{
-				var getEnvMethods = _cometViewType.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-					.Where(m => m.Name == "GetEnvironment" && m.IsGenericMethod && m.GetParameters().Length >= 1)
-					.ToList();
-
-				foreach (var getEnvMethod in getEnvMethods)
+				foreach (var getEnvMethod in _getEnvironmentMethods)
 				{
 					try
 					{
 						var genericMethod = getEnvMethod.MakeGenericMethod(typeof(string));
 						var paramCount = genericMethod.GetParameters().Length;
-						object? result = null;
+						object? result;
 
 						if (paramCount == 1)
 							result = genericMethod.Invoke(cometView, new object[] { "Text.Value" });
 						else if (paramCount == 2)
 							result = genericMethod.Invoke(cometView, new object[] { "Text.Value", false });
+						else
+							continue; // unknown overload shape — try the next one
 
 						if (result is string envText && !string.IsNullOrEmpty(envText))
 							return envText;
+						// Invocation succeeded with a recognized overload but produced no text;
+						// no need to try other overloads of the same method.
 						break;
 					}
 					catch { continue; }

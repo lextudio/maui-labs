@@ -1283,10 +1283,13 @@ public class VisualTreeWalker
         // Comet views implement IView but NOT VisualElement — extract info from IView + handler
         else if (element is IView iView)
         {
-            // Check platform-native visibility first (handler's UIView.Hidden/Alpha on iOS, etc.)
-            // Falls back to IView.Visibility if platform check is unavailable
+            // Treat collapsed views as not visible regardless of the platform signal so behavior
+            // matches the VisualElement path (which uses ve.IsVisible == false for both Hidden
+            // and Collapsed). When platform check is unavailable, fall back to IView.Visibility:
+            // Visibility.Hidden means rendered transparently but still not visible to the user.
+            var isCollapsed = iView.Visibility == Visibility.Collapsed;
             var platformVisible = ResolveIViewPlatformVisibility(iView);
-            info.IsVisible = platformVisible ?? (iView.Visibility != Visibility.Collapsed);
+            info.IsVisible = !isCollapsed && (platformVisible ?? (iView.Visibility == Visibility.Visible));
             info.IsEnabled = iView.IsEnabled;
             info.Opacity = double.IsFinite(iView.Opacity) ? iView.Opacity : 1;
 
