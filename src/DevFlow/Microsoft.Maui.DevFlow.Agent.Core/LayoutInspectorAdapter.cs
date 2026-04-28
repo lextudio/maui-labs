@@ -14,21 +14,29 @@ internal static class LayoutInspectorAdapter
 {
     // Cache the lookup so we pay the GetType cost once per process. The interface
     // type may resolve to null if Comet isn't loaded yet — in that case we periodically
-    // retry (lazy via the ScanAttempt counter) so apps that load Comet after the
-    // agent starts still work.
+    // retry so apps that load Comet after the agent starts still work, without
+    // rescanning loaded assemblies on every call.
     private static Type? _inspectorInterface;
     private static bool _scanned;
+    private static long _lastScanTickCount;
     private static readonly object _gate = new();
+    private const int RetryIntervalMilliseconds = 5000;
 
     private static Type? InspectorInterface()
     {
-        if (_scanned && _inspectorInterface != null)
+        if (_inspectorInterface != null)
             return _inspectorInterface;
+
+        if (_scanned && (Environment.TickCount64 - Volatile.Read(ref _lastScanTickCount)) < RetryIntervalMilliseconds)
+            return null;
 
         lock (_gate)
         {
             if (_inspectorInterface != null)
                 return _inspectorInterface;
+
+            if (_scanned && (Environment.TickCount64 - _lastScanTickCount) < RetryIntervalMilliseconds)
+                return null;
 
             // Try AssemblyQualifiedName first — fast path when Comet was loaded
             // by name resolution.
@@ -57,6 +65,7 @@ internal static class LayoutInspectorAdapter
             }
 
             _scanned = true;
+            _lastScanTickCount = Environment.TickCount64;
             return _inspectorInterface;
         }
     }

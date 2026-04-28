@@ -327,33 +327,41 @@ public class VisualTreeWalker
         _usedIds.Clear();
         _elementIdToExternalId.Clear();
         _syntheticBounds.Clear();
+        var previousIncludeLayout = _includeLayout;
         _includeLayout = includeLayout;
-        var results = new List<ElementInfo>();
-        if (app is not IVisualTreeElement appElement)
-            return results;
-
-        if (windowIndex != null)
+        try
         {
-            if (windowIndex.Value < 0 || windowIndex.Value >= app.Windows.Count)
+            var results = new List<ElementInfo>();
+            if (app is not IVisualTreeElement appElement)
                 return results;
-            var window = app.Windows[windowIndex.Value];
-            if (window is IVisualTreeElement windowElement)
+
+            if (windowIndex != null)
             {
-                var info = WalkElement(windowElement, null, 1, maxDepth);
+                if (windowIndex.Value < 0 || windowIndex.Value >= app.Windows.Count)
+                    return results;
+                var window = app.Windows[windowIndex.Value];
+                if (window is IVisualTreeElement windowElement)
+                {
+                    var info = WalkElement(windowElement, null, 1, maxDepth);
+                    if (info != null)
+                        results.Add(info);
+                }
+                return results;
+            }
+
+            foreach (var child in appElement.GetVisualChildren())
+            {
+                var info = WalkElement(child, null, 1, maxDepth);
                 if (info != null)
                     results.Add(info);
             }
+
             return results;
         }
-
-        foreach (var child in appElement.GetVisualChildren())
+        finally
         {
-            var info = WalkElement(child, null, 1, maxDepth);
-            if (info != null)
-                results.Add(info);
+            _includeLayout = previousIncludeLayout;
         }
-
-        return results;
     }
 
     /// <summary>

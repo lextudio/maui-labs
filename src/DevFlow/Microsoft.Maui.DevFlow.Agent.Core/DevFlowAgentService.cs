@@ -1806,11 +1806,11 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     /// Walks up the parent chain via reflection to find a TabView parent,
     /// then sets SelectedIndex to the child's position.
     /// </summary>
-    /// <summary>
-    /// Accepts 'object' because Comet views may not match the DevFlow assembly's IView
-    /// when framework versions differ (e.g. DevFlow compiled against MAUI 10, app uses MAUI 11).
-    /// All access is via reflection.
-    /// </summary>
+    /// <remarks>
+    /// The diagnostic helper accepts <c>object</c> because Comet views may not match the
+    /// DevFlow assembly's IView when framework versions differ (e.g. DevFlow compiled against
+    /// MAUI 10, app uses MAUI 11). All access is via reflection.
+    /// </remarks>
     private static bool TrySwitchCometTabImpl(IView view) => TrySwitchCometTabDiag(view).Item1;
 
     private static (bool, string) TrySwitchCometTabDiag(object view)
@@ -1819,7 +1819,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         {
             // Walk up the parent chain to find a Comet TabView
             object current = view;
-            object tabView = null;
+            object? tabView = null;
             var walkLog = new System.Text.StringBuilder();
 
             for (int i = 0; i < 10; i++)
