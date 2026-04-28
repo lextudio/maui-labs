@@ -165,59 +165,64 @@ NuGet.config uses **internal dnceng proxy feeds only** — no direct nuget.org r
 
 ## DevFlow MCP Tools
 
-DevFlow exposes 49 MCP tools for AI agent integration (in `src/Cli/Microsoft.Maui.Cli/DevFlow/Mcp/Tools/`):
+DevFlow exposes 54 MCP tools for AI agent integration (in `src/Cli/Microsoft.Maui.Cli/DevFlow/Mcp/Tools/`):
 
 | Tool | Purpose |
 |------|---------|
-| `maui_list_agents` | List connected MAUI DevFlow agents (running apps) |
-| `maui_select_agent` | Select a specific agent for subsequent commands |
-| `maui_wait` | Wait for an agent to connect |
-| `maui_status` | Agent connection status, platform, app name |
-| `maui_tree` | Inspect visual tree — structured JSON hierarchy with IDs, types, bounds |
-| `maui_query` | Query elements by type, AutomationId, or text |
-| `maui_query_css` | Query elements by CSS selector |
-| `maui_element` | Get full element details |
-| `maui_hittest` | Find elements at screen coordinates |
-| `maui_tap` | Tap a UI element |
-| `maui_fill` | Fill text into Entry/Editor |
-| `maui_clear` | Clear text from an element |
-| `maui_scroll` | Scroll by delta, item index, or into view |
-| `maui_focus` | Set focus to an element |
-| `maui_navigate` | Shell navigation to a route |
-| `maui_resize` | Resize the app window |
-| `maui_screenshot` | Capture screenshot (page, element, or fullscreen) |
+| `maui_app_info` | App name, version, package, theme |
 | `maui_assert` | Assert element property equals expected value |
-| `maui_get_property` | Read any element property |
-| `maui_set_property` | Live-edit element properties |
-| `maui_logs` | Retrieve app logs (ILogger + WebView console) |
-| `maui_network` | List captured HTTP requests |
-| `maui_network_detail` | Full request/response details |
-| `maui_network_clear` | Clear captured request buffer |
+| `maui_back` | Go back in the app navigation stack |
+| `maui_batch` | Execute multiple UI actions in a single request |
+| `maui_battery_info` | Battery level, state, power source |
+| `maui_capabilities` | Get capabilities supported by the connected agent |
 | `maui_cdp_evaluate` | Execute JavaScript in Blazor WebView via CDP |
 | `maui_cdp_screenshot` | WebView screenshot via CDP |
 | `maui_cdp_source` | Get WebView page source |
 | `maui_cdp_webviews` | List available WebViews |
+| `maui_clear` | Clear text from an element |
+| `maui_connectivity` | Network access and connection profiles |
+| `maui_device_info` | Device manufacturer, model, OS |
+| `maui_display_info` | Screen density, size, orientation |
+| `maui_element` | Get full element details |
+| `maui_fill` | Fill text into Entry/Editor |
+| `maui_focus` | Set focus to an element |
+| `maui_geolocation` | GPS coordinates |
+| `maui_gesture` | Perform a touch gesture (swipe, longpress, etc.) |
+| `maui_get_property` | Read any element property |
+| `maui_hittest` | Find elements at screen coordinates |
+| `maui_key` | Send a key press to an element |
+| `maui_list_agents` | List connected MAUI DevFlow agents (running apps) |
+| `maui_logs` | Retrieve app logs (ILogger + WebView console) |
+| `maui_navigate` | Shell navigation to a route |
+| `maui_network` | List captured HTTP requests |
+| `maui_network_clear` | Clear captured request buffer |
+| `maui_network_detail` | Full request/response details |
+| `maui_preferences_clear` | Clear all preferences |
+| `maui_preferences_delete` | Delete a preference |
+| `maui_preferences_get` | Read a preference value |
+| `maui_preferences_list` | List preference keys |
+| `maui_preferences_set` | Write a preference value |
+| `maui_query` | Query elements by type, AutomationId, or text |
+| `maui_query_css` | Query elements by CSS selector |
 | `maui_recording_start` | Start screen recording |
-| `maui_recording_stop` | Stop screen recording |
 | `maui_recording_status` | Check recording status |
+| `maui_recording_stop` | Stop screen recording |
+| `maui_resize` | Resize the app window |
+| `maui_screenshot` | Capture screenshot (page, element, or fullscreen) |
+| `maui_scroll` | Scroll by delta, item index, or into view |
+| `maui_secure_storage_clear` | Clear all secure storage |
+| `maui_secure_storage_delete` | Delete secure storage entry |
+| `maui_secure_storage_get` | Read secure storage value |
+| `maui_secure_storage_set` | Write secure storage value |
+| `maui_select_agent` | Select a specific agent for subsequent commands |
 | `maui_sensors_list` | List available device sensors |
 | `maui_sensors_start` | Start a sensor |
 | `maui_sensors_stop` | Stop a sensor |
-| `maui_app_info` | App name, version, package, theme |
-| `maui_device_info` | Device manufacturer, model, OS |
-| `maui_display_info` | Screen density, size, orientation |
-| `maui_battery_info` | Battery level, state, power source |
-| `maui_connectivity` | Network access and connection profiles |
-| `maui_geolocation` | GPS coordinates |
-| `maui_preferences_list` | List preference keys |
-| `maui_preferences_get` | Read a preference value |
-| `maui_preferences_set` | Write a preference value |
-| `maui_preferences_delete` | Delete a preference |
-| `maui_preferences_clear` | Clear all preferences |
-| `maui_secure_storage_get` | Read secure storage value |
-| `maui_secure_storage_set` | Write secure storage value |
-| `maui_secure_storage_delete` | Delete secure storage entry |
-| `maui_secure_storage_clear` | Clear all secure storage |
+| `maui_set_property` | Live-edit element properties |
+| `maui_status` | Agent connection status, platform, app name |
+| `maui_tap` | Tap a UI element |
+| `maui_tree` | Inspect visual tree — structured JSON hierarchy with IDs, types, bounds |
+| `maui_wait` | Wait for an agent to connect |
 
 ## Important Notes
 
