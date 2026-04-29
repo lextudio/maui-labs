@@ -165,7 +165,7 @@ NuGet.config uses **internal dnceng proxy feeds only** — no direct nuget.org r
 
 ## DevFlow MCP Tools
 
-DevFlow exposes 54 MCP tools for AI agent integration (in `src/Cli/Microsoft.Maui.Cli/DevFlow/Mcp/Tools/`):
+DevFlow exposes 61 MCP tools for AI agent integration (in `src/Cli/Microsoft.Maui.Cli/DevFlow/Mcp/Tools/`):
 
 | Tool | Purpose |
 |------|---------|
@@ -184,12 +184,18 @@ DevFlow exposes 54 MCP tools for AI agent integration (in `src/Cli/Microsoft.Mau
 | `maui_device_info` | Device manufacturer, model, OS |
 | `maui_display_info` | Screen density, size, orientation |
 | `maui_element` | Get full element details |
+| `maui_files_delete` | Delete a file from an advertised app storage root |
+| `maui_files_download` | Download a file from an advertised app storage root |
+| `maui_files_list` | List files and directories under an advertised app storage root |
+| `maui_files_upload` | Upload a file to an advertised app storage root |
 | `maui_fill` | Fill text into Entry/Editor |
 | `maui_focus` | Set focus to an element |
 | `maui_geolocation` | GPS coordinates |
 | `maui_gesture` | Perform a touch gesture (swipe, longpress, etc.) |
 | `maui_get_property` | Read any element property |
 | `maui_hittest` | Find elements at screen coordinates |
+| `maui_jobs_list` | List background jobs registered on the device |
+| `maui_jobs_run` | Trigger a supported background job by identifier |
 | `maui_key` | Send a key press to an element |
 | `maui_list_agents` | List connected MAUI DevFlow agents (running apps) |
 | `maui_logs` | Retrieve app logs (ILogger + WebView console) |
@@ -220,6 +226,7 @@ DevFlow exposes 54 MCP tools for AI agent integration (in `src/Cli/Microsoft.Mau
 | `maui_sensors_stop` | Stop a sensor |
 | `maui_set_property` | Live-edit element properties |
 | `maui_status` | Agent connection status, platform, app name |
+| `maui_storage_roots` | List file storage roots advertised by the app |
 | `maui_tap` | Tap a UI element |
 | `maui_tree` | Inspect visual tree — structured JSON hierarchy with IDs, types, bounds |
 | `maui_wait` | Wait for an agent to connect |
