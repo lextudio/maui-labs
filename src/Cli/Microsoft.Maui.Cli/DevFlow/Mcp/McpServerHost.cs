@@ -46,7 +46,9 @@ public static class McpServerHost
 			.WithTools<SensorTools>()
 			.WithTools<JobTools>()
 			.WithTools<FileTools>()
-			.WithTools<BatchTools>();
+			.WithTools<BleTools>()
+			.WithTools<BatchTools>()
+			.WithTools<InvokeTools>();
 
 		await builder.Build().RunAsync();
 	}

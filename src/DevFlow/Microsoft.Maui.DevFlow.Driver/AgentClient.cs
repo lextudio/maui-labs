@@ -513,9 +513,9 @@ public class AgentClient : IDisposable
         {
             using var content = DriverJson.CreateJsonContent(body);
             var response = await _http.PostAsync($"{_baseUrl}{path}", content);
-            if (!response.IsSuccessStatusCode)
-                return null;
             var responseBody = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(responseBody))
+                return null;
             return DriverJson.Deserialize<T>(responseBody);
         }
         catch
@@ -556,6 +556,27 @@ public class AgentClient : IDisposable
         {
             return false;
         }
+    }
+
+    // ── DevFlow Actions ──
+
+    private const string InvokeApi = $"{ApiV1}/invoke";
+
+    /// <summary>
+    /// List all registered DevFlow Actions (methods annotated with [DevFlowAction]).
+    /// </summary>
+    public async Task<JsonElement> ListActionsAsync()
+        => await GetJsonAsync($"{InvokeApi}/actions");
+
+    /// <summary>
+    /// Invoke a registered DevFlow Action by name.
+    /// </summary>
+    public async Task<InvokeResult?> InvokeActionAsync(string actionName, JsonArray? args = null)
+    {
+        var body = new JsonObject();
+        if (args != null)
+            body["args"] = args;
+        return await PostJsonAsync<InvokeResult>($"{InvokeApi}/actions/{Uri.EscapeDataString(actionName)}", body);
     }
 
     // ── Preferences ──
@@ -763,6 +784,44 @@ public class AgentClient : IDisposable
     private static string BuildRootQuery(string? root)
         => string.IsNullOrEmpty(root) ? string.Empty : $"?root={Uri.EscapeDataString(root)}";
 
+    // ── BLE ──
+
+    public Task<JsonElement> GetBleStatusAsync()
+        => GetJsonAsync($"{DeviceApi}/ble");
+
+    public Task<JsonElement> GetBleEventsAsync(int limit = 100, string? type = null)
+    {
+        var path = $"{DeviceApi}/ble/events?limit={limit}";
+        if (!string.IsNullOrEmpty(type))
+            path += $"&type={Uri.EscapeDataString(type)}";
+        return GetJsonAsync(path);
+    }
+
+    public Task<bool> StartBleScanAsync()
+        => PostActionAsync($"{DeviceApi}/ble/scan/start", new JsonObject());
+
+    public Task<bool> StopBleScanAsync()
+        => PostActionAsync($"{DeviceApi}/ble/scan/stop", new JsonObject());
+
+    public Task<bool> ClearBleEventsAsync()
+        => DeleteActionAsync($"{DeviceApi}/ble/events");
+
+    /// <summary>
+    /// Returns the WebSocket URL for live BLE event streaming.
+    /// </summary>
+    public string GetBleWebSocketUrl(bool scan = false, int replay = 100, string? type = null)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(replay);
+
+        var query = new List<string> { $"replay={replay}" };
+        if (scan)
+            query.Add("scan=true");
+        if (!string.IsNullOrEmpty(type))
+            query.Add($"type={Uri.EscapeDataString(type)}");
+
+        return $"{GetWebSocketBaseUrl()}/ws/v1/ble?{string.Join("&", query)}";
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -807,9 +866,11 @@ public class AgentClient : IDisposable
     /// </summary>
     public string GetNetworkWebSocketUrl()
     {
-        var wsBase = _baseUrl.Replace("http://", "ws://").Replace("https://", "wss://");
-        return $"{wsBase}/ws/v1/network";
+        return $"{GetWebSocketBaseUrl()}/ws/v1/network";
     }
+
+    private string GetWebSocketBaseUrl()
+        => _baseUrl.Replace("http://", "ws://").Replace("https://", "wss://");
 
     internal sealed class ProfilerSessionEnvelope
     {
@@ -1127,4 +1188,21 @@ public class ProfilerCapabilities
     public bool UiThreadStallSupported { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("threadCountSupported")]
     public bool ThreadCountSupported { get; set; }
+}
+
+/// <summary>
+/// Result of a DevFlow Action invocation.
+/// </summary>
+public class InvokeResult
+{
+    [System.Text.Json.Serialization.JsonPropertyName("success")]
+    public bool Success { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("returnValue")]
+    public string? ReturnValue { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("returnType")]
+    public string? ReturnType { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("error")]
+    public string? Error { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("action")]
+    public string? Action { get; set; }
 }

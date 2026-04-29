@@ -22,7 +22,7 @@ namespace Microsoft.Maui.DevFlow.Agent.Core;
 /// The main agent service that hosts the HTTP API and coordinates
 /// visual tree inspection and element interactions.
 /// </summary>
-public class DevFlowAgentService : IDisposable, IMarkerPublisher
+public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 {
     private readonly AgentOptions _options;
     private readonly AgentHttpServer _server;
@@ -43,6 +43,11 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
     /// Manages sensor subscriptions and broadcasts readings to WebSocket clients.
     /// </summary>
     public SensorManager Sensors { get; }
+
+    /// <summary>
+    /// Monitors BLE scan results, connections, reads, writes, and notifications.
+    /// </summary>
+    public BleMonitor Ble { get; }
 
     private readonly IProfilerCollector _profilerCollector;
     private readonly ProfilerSessionStore _profilerSessions;
@@ -249,6 +254,8 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         _treeWalker = CreateTreeWalker();
         NetworkStore = new NetworkRequestStore(_options.MaxNetworkBufferSize);
         Sensors = new SensorManager();
+        Ble = CreateBleMonitor();
+        BleMonitor.Instance = Ble;
         _profilerCollector = CreateProfilerCollector();
         _profilerSessions = new ProfilerSessionStore(
             Math.Max(1, _options.MaxProfilerSamples),
@@ -257,6 +264,7 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (_options.EnableNetworkMonitoring)
             DevFlowHttp.SetStore(NetworkStore);
         NetworkStore.OnRequestCaptured += HandleCapturedNetworkRequest;
+        AppDomain.CurrentDomain.AssemblyLoad += OnAssemblyLoaded;
         RegisterRoutes();
     }
 
@@ -293,6 +301,12 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
     /// to provide native frame/CPU integrations.
     /// </summary>
     protected virtual IProfilerCollector CreateProfilerCollector() => new RuntimeProfilerCollector();
+
+    /// <summary>
+    /// Creates the BLE monitor. Override in platform-specific subclasses
+    /// to provide native scan and connection monitoring.
+    /// </summary>
+    protected virtual BleMonitor CreateBleMonitor() => new BleMonitor();
 
     /// <summary>Platform name for status reporting. Override for platforms without DeviceInfo.</summary>
     protected virtual string PlatformName => DeviceInfo.Current.Platform.ToString();
@@ -517,6 +531,12 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
 
         _server.MapGet("/api/v1/device/jobs", HandleJobsList);
         _server.MapPost("/api/v1/device/jobs/{identifier}/run", HandleJobRun);
+        _server.MapGet("/api/v1/device/ble", HandleBleStatus);
+        _server.MapGet("/api/v1/device/ble/events", HandleBleEvents);
+        _server.MapPost("/api/v1/device/ble/scan/start", HandleBleScanStart);
+        _server.MapPost("/api/v1/device/ble/scan/stop", HandleBleScanStop);
+        _server.MapDelete("/api/v1/device/ble/events", HandleBleClearEvents);
+        _server.MapWebSocket("/ws/v1/ble", HandleBleWebSocket);
 
         _server.MapGet("/api/v1/storage/preferences", HandlePreferencesList);
         _server.MapGet("/api/v1/storage/preferences/{key}", HandlePreferencesGet);
@@ -533,6 +553,10 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         _server.MapGet("/api/v1/storage/files/{path}", HandleFileDownload);
         _server.MapPut("/api/v1/storage/files/{path}", HandleFileUpload);
         _server.MapDelete("/api/v1/storage/files/{path}", HandleFileDelete);
+
+        // Invoke / reflection
+        _server.MapGet("/api/v1/invoke/actions", HandleListActions);
+        _server.MapPost("/api/v1/invoke/actions/{name}", HandleInvokeAction);
     }
 
     private async Task<HttpResponse> HandleStatus(HttpRequest request)
@@ -595,6 +619,7 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                     network = true,
                     logs = true,
                     sensors = true,
+                    ble = true,
                     storage = true,
                     profiler = IsProfilerFeatureAvailable,
                     jobs = IsJobsSupported,
@@ -657,6 +682,11 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                 supported = true,
                 features = new[] { "list", "start", "stop", "stream" }
             },
+            ble = new
+            {
+                supported = Ble.SupportedFeatures.Count > 0,
+                features = Ble.SupportedFeatures
+            },
             storage = new
             {
                 supported = true,
@@ -675,6 +705,11 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                 features = IsJobsSupported
                     ? IsJobRunSupported ? new[] { "list", "run" } : new[] { "list" }
                     : Array.Empty<string>()
+            },
+            invoke = new
+            {
+                supported = true,
+                features = new[] { "actions" }
             }
         };
 
@@ -1988,6 +2023,8 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         public string? Direction { get; set; }
         public double Distance { get; set; } = 120;
         public int DurationMs { get; set; } = 200;
+        public JsonElement[]? Args { get; set; }
+        public string? Name { get; set; }
     }
 
     private async Task<HttpResponse> HandleBack(HttpRequest request)
@@ -2265,6 +2302,18 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                             ["name"] = action.Property ?? string.Empty
                         },
                         Body = JsonSerializer.Serialize(new SetPropertyRequest { Value = action.Value ?? string.Empty })
+                    });
+                    break;
+                case "invoke-action":
+                case "invoke_action":
+                    response = await HandleInvokeAction(new HttpRequest
+                    {
+                        Method = "POST",
+                        RouteParams = new Dictionary<string, string>
+                        {
+                            ["name"] = action.Name ?? string.Empty
+                        },
+                        Body = JsonSerializer.Serialize(new InvokeActionRequest { Args = action.Args })
                     });
                     break;
                 default:
@@ -3998,8 +4047,10 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (_disposed) return;
         _disposed = true;
         NetworkStore.OnRequestCaptured -= HandleCapturedNetworkRequest;
+        AppDomain.CurrentDomain.AssemblyLoad -= OnAssemblyLoaded;
         StopAutoUiHooks();
         Sensors.Dispose();
+        Ble.Dispose();
 
         var cts = _profilerLoopCts;
         var loopTask = _profilerLoopTask;
@@ -6248,6 +6299,170 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             return HttpResponse.Error($"Running jobs is not supported on {PlatformName}", 501, "unsupported-capability");
 
         return HttpResponse.Json(result);
+    }
+
+    // ── BLE endpoints ──
+
+    private Task<HttpResponse> HandleBleStatus(HttpRequest request)
+    {
+        return Task.FromResult(HttpResponse.Json(Ble.GetStatus()));
+    }
+
+    private Task<HttpResponse> HandleBleEvents(HttpRequest request)
+    {
+        var limit = 100;
+        if (request.QueryParams.TryGetValue("limit", out var limitStr))
+        {
+            if (!int.TryParse(limitStr, out limit) || limit < 0)
+            {
+                return Task.FromResult(HttpResponse.Error(
+                    "BLE event limit must be a non-negative integer",
+                    400,
+                    "invalid_limit",
+                    new { limit = limitStr }));
+            }
+        }
+
+        var type = request.QueryParams.GetValueOrDefault("type");
+        var events = Ble.GetEvents(limit, type);
+        return Task.FromResult(HttpResponse.Json(new { count = events.Count, events }));
+    }
+
+    private Task<HttpResponse> HandleBleScanStart(HttpRequest request)
+    {
+        var error = Ble.StartScanning();
+        return Task.FromResult(error != null
+            ? HttpResponse.Error(error)
+            : HttpResponse.Ok("BLE scan started"));
+    }
+
+    private Task<HttpResponse> HandleBleScanStop(HttpRequest request)
+    {
+        var error = Ble.StopScanning();
+        return Task.FromResult(error != null
+            ? HttpResponse.Error(error)
+            : HttpResponse.Ok("BLE scan stopped"));
+    }
+
+    private Task<HttpResponse> HandleBleClearEvents(HttpRequest request)
+    {
+        Ble.ClearEvents();
+        return Task.FromResult(HttpResponse.Ok("BLE events cleared"));
+    }
+
+    private async Task HandleBleWebSocket(
+        System.Net.Sockets.TcpClient client,
+        System.Net.Sockets.NetworkStream stream,
+        HttpRequest request,
+        CancellationToken ct)
+    {
+        var autoScan = request.QueryParams.GetValueOrDefault("scan", "false")
+            .Equals("true", StringComparison.OrdinalIgnoreCase);
+
+        var replay = 100;
+        if (request.QueryParams.TryGetValue("replay", out var replayStr) &&
+            (!int.TryParse(replayStr, out replay) || replay < 0))
+        {
+            await AgentHttpServer.WebSocketSendTextAsync(stream,
+                JsonSerializer.Serialize(new
+                {
+                    type = "error",
+                    timestamp = DateTimeOffset.UtcNow.ToString("O"),
+                    error = "BLE stream replay must be a non-negative integer"
+                }), ct);
+            return;
+        }
+
+        var type = request.QueryParams.GetValueOrDefault("type");
+        List<BleEvent> replayEvents = replay > 0 ? Ble.GetEvents(replay, type) : [];
+        var queue = Ble.Subscribe(type);
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
+        var startedScan = false;
+
+        try
+        {
+            if (autoScan)
+            {
+                startedScan = Ble.TryStartScanning(out var error);
+                if (error != null)
+                {
+                    await AgentHttpServer.WebSocketSendTextAsync(stream,
+                        JsonSerializer.Serialize(new
+                        {
+                            type = "error",
+                            timestamp = DateTimeOffset.UtcNow.ToString("O"),
+                            error
+                        }), ct);
+                    return;
+                }
+            }
+
+            await AgentHttpServer.WebSocketSendTextAsync(stream,
+                JsonSerializer.Serialize(new
+                {
+                    type = "subscribed",
+                    timestamp = DateTimeOffset.UtcNow.ToString("O"),
+                    scanning = Ble.IsScanning,
+                    replay,
+                    eventType = type
+                }), ct);
+
+            if (replay > 0)
+            {
+                await AgentHttpServer.WebSocketSendTextAsync(stream,
+                    JsonSerializer.Serialize(new
+                    {
+                        type = "replay",
+                        timestamp = DateTimeOffset.UtcNow.ToString("O"),
+                        count = replayEvents.Count,
+                        events = replayEvents
+                    }), ct);
+            }
+
+            var readTask = Task.Run(async () =>
+            {
+                while (!cts.Token.IsCancellationRequested)
+                {
+                    var msg = await AgentHttpServer.WebSocketReadTextAsync(stream, cts.Token);
+                    if (msg == null) { await cts.CancelAsync(); break; }
+                }
+            }, cts.Token);
+
+            var lastPing = DateTime.UtcNow;
+            while (!cts.Token.IsCancellationRequested)
+            {
+                while (queue.TryDequeue(out var evt))
+                {
+                    try
+                    {
+                        await AgentHttpServer.WebSocketSendTextAsync(stream, evt, cts.Token);
+                    }
+                    catch { await cts.CancelAsync(); break; }
+                }
+
+                if ((DateTime.UtcNow - lastPing).TotalSeconds >= 15)
+                {
+                    try
+                    {
+                        await AgentHttpServer.WebSocketSendPingAsync(stream, cts.Token);
+                        lastPing = DateTime.UtcNow;
+                    }
+                    catch { await cts.CancelAsync(); break; }
+                }
+
+                try { await Task.Delay(20, cts.Token); }
+                catch { break; }
+            }
+
+            await readTask;
+        }
+        finally
+        {
+            Ble.Unsubscribe(queue);
+            if (startedScan)
+                Ble.StopScanning();
+        }
     }
 }
 
