@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using Microsoft.Maui.Cli.DevFlow;
 using Microsoft.Maui.Cli.DevFlow.Skills;
+using Microsoft.Maui.Cli.Skills;
 using Xunit;
 
 namespace Microsoft.Maui.Cli.UnitTests;
@@ -11,6 +12,20 @@ namespace Microsoft.Maui.Cli.UnitTests;
 [Collection("CLI")]
 public sealed class DevFlowSkillManagerTests
 {
+    [Fact]
+    public void BundledSkillResources_AreLoadedFromSkillsAssembly()
+    {
+        var skillsAssembly = MauiCliSkillResources.Assembly;
+        var cliAssembly = typeof(DevFlowSkillManager).Assembly;
+        var skillsResources = skillsAssembly.GetManifestResourceNames();
+        var cliResources = cliAssembly.GetManifestResourceNames();
+
+        Assert.NotSame(cliAssembly, skillsAssembly);
+        Assert.Contains($"{MauiCliSkillResources.ResourceRoot}/maui-devflow-onboard/SKILL.md", skillsResources);
+        Assert.Contains($"{MauiCliSkillResources.ResourceRoot}/maui-devflow-debug/SKILL.md", skillsResources);
+        Assert.DoesNotContain(cliResources, resource => resource.StartsWith($"{MauiCliSkillResources.ResourceRoot}/maui-devflow-", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task InstallRecommended_ProjectScope_WritesBundledSkillsAndUserLevelState()
     {

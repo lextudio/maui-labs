@@ -3,12 +3,13 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Microsoft.Maui.Cli.Skills;
 
 namespace Microsoft.Maui.Cli.DevFlow.Skills;
 
 internal static class DevFlowSkillManager
 {
-    const string ResourceRoot = "devflow.skills";
+    const string ResourceRoot = MauiCliSkillResources.ResourceRoot;
     const string PackageId = "Microsoft.Maui.Cli";
     const string StateRootEnvironmentVariable = "MAUIDEVFLOW_STATE_ROOT";
     const string AutoTarget = "auto";
@@ -19,11 +20,9 @@ internal static class DevFlowSkillManager
     static readonly TimeSpan FreshnessCheckInterval = TimeSpan.FromDays(7);
     static readonly TimeSpan FreshnessPromptInterval = TimeSpan.FromDays(1);
 
-    static readonly DevFlowSkillDefinition[] s_skills =
-    [
-        new("maui-devflow-onboard", "MAUI DevFlow Onboard", "Guides first-time MAUI DevFlow project integration.", Recommended: true),
-        new("maui-devflow-debug", "MAUI DevFlow Debug", "Guides build, deploy, connection recovery, inspect, and debug loops with MAUI DevFlow.", Recommended: true)
-    ];
+    static readonly DevFlowSkillDefinition[] s_skills = MauiCliSkillResources.BundledSkills
+        .Select(skill => new DevFlowSkillDefinition(skill.Id, skill.DisplayName, skill.Description, skill.Recommended))
+        .ToArray();
 
     static readonly string[] s_legacySkillIds =
     [
@@ -463,7 +462,7 @@ internal static class DevFlowSkillManager
 
     static async Task<SkillBundle> LoadSkillBundleAsync(DevFlowSkillDefinition skill, CancellationToken cancellationToken)
     {
-        var assembly = typeof(DevFlowSkillManager).Assembly;
+        var assembly = MauiCliSkillResources.Assembly;
         var prefix = $"{ResourceRoot}/{skill.Id}/";
         var resources = assembly.GetManifestResourceNames()
             .Where(name => name.StartsWith(prefix, StringComparison.Ordinal))
@@ -488,7 +487,7 @@ internal static class DevFlowSkillManager
             files.Add(new SkillAssetFile(relativePath, content, HashContent(content)));
         }
 
-        return new SkillBundle(skill.Id, GetCurrentCliVersion(), files, HashBundle(files));
+        return new SkillBundle(skill.Id, GetBundledSkillVersion(), files, HashBundle(files));
     }
 
     static bool ShouldExcludeSkillAsset(string relativePath)
@@ -1143,6 +1142,12 @@ internal static class DevFlowSkillManager
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
            ?? typeof(DevFlowSkillManager).Assembly.GetName().Version?.ToString()
            ?? "unknown";
+
+    static string GetBundledSkillVersion()
+        => MauiCliSkillResources.Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+           ?? MauiCliSkillResources.Assembly.GetName().Version?.ToString()
+           ?? GetCurrentCliVersion();
 
     static string? GetString(JsonObject node, string propertyName)
         => node.TryGetPropertyValue(propertyName, out var value) ? value?.GetValue<string>() : null;
