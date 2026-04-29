@@ -180,7 +180,7 @@ Each product requires source setup **and** CI/CD configuration across two system
 
 ## DevFlow MCP Tools
 
-DevFlow exposes 61 MCP tools for AI agent integration (in `src/Cli/Microsoft.Maui.Cli/DevFlow/Mcp/Tools/`):
+DevFlow exposes MCP tools for AI agent integration from `src/Cli/Microsoft.Maui.Cli/DevFlow/Mcp/Tools/`. The table below highlights representative tools; it is not exhaustive. Additional exposed tool groups include `maui_ble_*`, `maui_list_actions`, and `maui_invoke_action`.
 
 | Tool | Purpose |
 |------|---------|
