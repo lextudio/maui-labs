@@ -39,10 +39,16 @@ Use this skill to add MAUI DevFlow to a project after `maui devflow init` has in
 7. Verify with:
 
    ```bash
-   maui devflow diagnose
+   maui doctor                # environment health check (supports --json)
+   maui devflow diagnose      # connectivity diagnostic
    maui devflow wait
    maui devflow ui tree --depth 1
    ```
+
+   For programmatic use, pass `--json` to any of the above and read
+   `error.code` and `error.remediation.command` to recover automatically. See
+   `maui-devflow-debug` references/troubleshooting.md for the full code
+   taxonomy (E1xxx tool, E2xxx platform/SDK, E3xxx user action, etc.).
 
 If verification fails after integration, switch to `maui-devflow-debug` for connectivity recovery.
 

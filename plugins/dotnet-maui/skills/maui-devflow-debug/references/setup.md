@@ -15,13 +15,25 @@ Complete guide for integrating MAUI DevFlow into a .NET MAUI app.
 
 ## 1. Install CLI Tools
 
+The unified `maui` CLI is the only required global tool:
+
 ```bash
 dotnet tool install --global Microsoft.Maui.Cli --prerelease
-dotnet tool install --global androidsdk.tool               # android (Android only)
-dotnet tool install --global appledev.tools                # apple (iOS/Mac only)
 ```
 
-Verify: `maui devflow version`
+Verify: `maui devflow version` and `maui doctor` (with optional `--json`).
+
+### Optional extras for operations not yet in `maui` CLI
+
+These standalone tools cover a few operations that the `maui` CLI does not yet
+wrap (simulator create/erase/install/launch/privacy/appearance, advanced
+Android SDK manager flows). Install only if you need them; raw `xcrun simctl`
+and `adb` already cover most gaps without an extra global tool.
+
+```bash
+dotnet tool install --global androidsdk.tool               # `android` (Android only)
+dotnet tool install --global appledev.tools                # `apple` (iOS/Mac only)
+```
 
 ## 2. Add NuGet Packages
 
@@ -249,9 +261,12 @@ instead of the home directory root. This path is not TCC-protected.
 
 ## 6. Android: Port Forwarding
 
-After deploying to an Android emulator, set up port forwarding for the broker and agent:
+After deploying to an Android emulator, set up port forwarding for the broker
+and agent. Port forwarding is **not yet wrapped by the `maui` CLI** — use raw
+`adb`:
 
 ```bash
+# Not yet wrapped by 'maui' CLI — use raw adb
 adb reverse tcp:19223 tcp:19223  # Broker (lets agent register with host broker)
 adb forward tcp:<port> tcp:<port> # Agent (lets CLI reach agent — get port from `maui devflow list`)
 ```
@@ -272,6 +287,8 @@ adb forward tcp:9223 tcp:9223    # Direct agent port (single port for Agent + CD
 After building and running the app:
 
 ```bash
+maui doctor                       # Environment health check (--json supported)
+maui devflow diagnose             # Connectivity diagnostic
 maui devflow list                 # Should show registered agents (via broker)
 maui devflow ui status            # Should show agent info, platform, app name
 maui devflow webview status       # Should show "Connected" (Blazor Hybrid only)
@@ -282,12 +299,13 @@ If status commands fail:
 - **Agent not registered?** `maui devflow list` — wait a few seconds for the agent to register
 - **Mac Catalyst:** Check entitlements (Step 5)
 - **macOS (AppKit):** Ensure `AddMacOSEssentials()` is called — see [references/macos.md](macos.md)
-- **Android:** Check port forwarding (Step 6) — need both `adb reverse tcp:19223` and `adb forward tcp:<port>`
+- **Android:** Check port forwarding (Step 6) — need both `adb reverse tcp:19223` and `adb forward tcp:<port>` (raw `adb`; not yet wrapped by `maui`)
 - **iOS Simulator:** Should work without extra config
 - **Linux/GTK:** Should work without extra config — runs directly on localhost
 - **All platforms:** Ensure the app is running and the `#if DEBUG` block is active
-- **Port conflict:** Check if another process holds the port: `lsof -i :9223` (or your configured port)
+- **Port conflict:** Check if another process holds the port: `lsof -i :9223` (raw; not yet wrapped by `maui`)
 - **Wrong port:** Use `maui devflow list` to find the assigned port, or ensure CLI is run from the project directory
+- **Reading errors:** Pass `--json` to any failing `maui` command and inspect `error.code` / `error.remediation` (see [troubleshooting.md](troubleshooting.md#reading-machine-readable-output-and-errors))
 
 ## Quick Checklist
 

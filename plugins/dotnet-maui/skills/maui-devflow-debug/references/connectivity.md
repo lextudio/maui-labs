@@ -45,10 +45,13 @@ Use this when a project already has DevFlow package references and `builder.AddM
 
 ### Android emulator
 
-Android emulators run in a separate network namespace. Broker registration and CLI-to-agent traffic need opposite forwarding directions:
+Android emulators run in a separate network namespace. Broker registration and CLI-to-agent traffic need opposite forwarding directions. Discovery uses the unified `maui` CLI; the actual port forwarding is not yet wrapped by `maui` — use raw `adb`:
 
 ```bash
 maui devflow list                 # note the assigned agent port
+maui device list --platform android  # confirm the emulator is connected
+
+# Not yet wrapped by 'maui' CLI — use raw adb
 adb reverse tcp:19223 tcp:19223   # app in emulator -> host broker
 adb forward tcp:<port> tcp:<port> # host CLI -> app agent
 adb reverse --list
@@ -73,7 +76,7 @@ and `--agent-port <port>` until broker registration is restored.
 No forwarding is normally needed because simulators share host networking:
 
 ```bash
-xcrun simctl list devices booted
+maui apple simulator list
 ```
 
 ### Mac Catalyst and macOS
@@ -85,7 +88,7 @@ Mac Catalyst needs Debug entitlements that allow the agent and CDP servers to bi
 <true/>
 ```
 
-macOS AppKit and Mac Catalyst otherwise use direct localhost access. Check for explicit port conflicts only after confirming broker discovery:
+macOS AppKit and Mac Catalyst otherwise use direct localhost access. Check for explicit port conflicts only after confirming broker discovery (`lsof` is not yet wrapped by `maui` — use raw):
 
 ```bash
 lsof -i :9223
@@ -98,6 +101,38 @@ These use direct localhost access. On Linux, verify the app process started:
 ```bash
 pgrep -f "YourApp"
 ```
+
+## Reading errors from the CLI
+
+`maui` commands accept `--json` to emit a structured output that an AI agent
+can parse. On failure, errors include a code, message, and remediation hint:
+
+```json
+{
+  "error": {
+    "code": "E2106",
+    "message": "No running emulator found with name 'Pixel8'",
+    "remediation": {
+      "type": "AutoFixable",
+      "command": "maui android emulator start Pixel8"
+    }
+  }
+}
+```
+
+Common code prefixes (see [troubleshooting.md](troubleshooting.md#reading-machine-readable-output-and-errors) for the full taxonomy):
+
+| Prefix | Meaning |
+|--------|---------|
+| `E1xxx` | Tool error (likely a bug) |
+| `E2xxx` | Platform / SDK (Android, Apple, .NET) |
+| `E3xxx` | User action required |
+| `E4xxx` | Network |
+| `E5xxx` | Permission |
+
+Branch on `error.code`. When `error.remediation.type` is `AutoFixable`, run
+`error.remediation.command` and retry. For `UserAction`, present
+`error.remediation.manualSteps`.
 
 ## Common symptoms
 

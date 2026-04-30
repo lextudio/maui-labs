@@ -1,11 +1,23 @@
 # iOS & Mac Catalyst Reference
 
+Prefer the unified `maui` CLI for simulator/runtime/Xcode discovery and basic
+lifecycle. Raw `xcrun simctl` is kept only for operations not yet wrapped by
+the `maui` CLI (create / erase / install / launch / privacy / appearance /
+openurl / push / location / addmedia). Those are grouped under
+[Raw fallbacks not yet in `maui` CLI](#raw-fallbacks-not-yet-in-maui-cli).
+
+The standalone `apple` command from `appledev.tools` covers some of the same
+gaps and can be used interchangeably with `xcrun simctl`; install it only if
+you cannot use raw `xcrun simctl`.
+
 ## Table of Contents
 - [Simulator Management](#simulator-management)
 - [Building and Deploying](#building-and-deploying)
-- [Apple CLI Tool](#apple-cli-tool)
-- [xcrun simctl Reference](#xcrun-simctl-reference)
+- [Xcode and Runtime Discovery](#xcode-and-runtime-discovery)
+- [Raw fallbacks not yet in `maui` CLI](#raw-fallbacks-not-yet-in-maui-cli)
 - [Troubleshooting](#troubleshooting)
+- [Permission & Dialog Handling](#permission--dialog-handling)
+- [Dark Mode Testing](#dark-mode-testing)
 
 ## Simulator Management
 
@@ -17,14 +29,17 @@ will replace each other — only the last-deployed app survives.
 
 **Before creating or booting a simulator, check what's already in use:**
 ```bash
-maui devflow list                             # shows agents with platform + port
-xcrun simctl list devices booted              # shows all booted simulators
+maui devflow list                                # agents with platform + port
+maui apple simulator list                        # all simulators (use --json for parsing)
+maui device list --platform apple                # cross-platform device discovery
 ```
 
-If a booted simulator is already running another project's agent, create a new one:
+If a booted simulator is already running another project's agent, create a new one
+(creation is not yet wrapped by `maui` — use raw `xcrun simctl`):
 ```bash
+# Not yet wrapped by 'maui' CLI — use raw xcrun simctl
 xcrun simctl create "ProjectName-iPhone17Pro" "iPhone 17 Pro" "iOS 26.2"
-# Use the returned UDID in your build command
+# Use the returned UDID with maui apple simulator start <UDID>
 ```
 
 **Naming convention:** Use `<ProjectName>-<DeviceType>` (e.g. `TodoApp-iPhone17Pro`) so
@@ -32,59 +47,29 @@ it's clear which simulator belongs to which project.
 
 ### List simulators
 ```bash
-xcrun simctl list devices                     # all devices by runtime
-xcrun simctl list devices booted              # only booted
-xcrun simctl list devices available            # only available
-apple simulator list                          # formatted table
-apple simulator list --booted                 # booted only
+maui apple simulator list                        # formatted table (or --json)
 ```
 
-### Create simulator
+### Boot / shutdown / delete
 ```bash
-# List available device types and runtimes first
-xcrun simctl list devicetypes                 # e.g. "iPhone 16 Pro"
-xcrun simctl list runtimes                    # e.g. "iOS 18.2"
-
-xcrun simctl create "My iPhone" "iPhone 16 Pro" "iOS 18.2"
-apple simulator create "My iPhone" --device-type "iPhone 16 Pro" --runtime "iOS 18.2"
+maui apple simulator start <name-or-udid>
+maui apple simulator stop <name-or-udid>         # accepts 'all' to stop everything
+maui apple simulator delete <name-or-udid>
 ```
 
-### Boot / shutdown
-```bash
-xcrun simctl boot <UDID>
-xcrun simctl shutdown <UDID>
-apple simulator boot <UDID>
-apple simulator shutdown <UDID>
-```
+### Screenshots (Mac Catalyst, macOS, iOS — when DevFlow agent is connected)
 
-### Install and launch app
-```bash
-xcrun simctl install booted /path/to/App.app
-xcrun simctl launch booted com.company.appid
-```
-
-### Screenshots (iOS Simulator)
-```bash
-xcrun simctl io booted screenshot output.png
-apple simulator screenshot <UDID> --output output.png
-```
-
-### Screenshots (Mac Catalyst)
-
-**Use `maui devflow ui screenshot`** for Mac Catalyst apps — it captures the UI in-process
-and does NOT require the app to be in the foreground. Never use `osascript` to bring the window
-to the front or `screencapture` for Mac Catalyst screenshots; they are unnecessary and unreliable.
+**Use `maui devflow ui screenshot`** for any running MAUI app — it captures the UI in-process
+and does NOT require the app to be in the foreground (important for Mac Catalyst). Never use
+`osascript` to bring the window to the front or `screencapture` for Mac Catalyst screenshots;
+they are unnecessary and unreliable.
 
 ```bash
 maui devflow ui screenshot --output screen.png
 ```
 
-### Delete / erase
-```bash
-xcrun simctl erase <UDID>                     # factory reset
-xcrun simctl delete <UDID>                    # permanently remove
-xcrun simctl delete unavailable               # clean up old sims
-```
+For pre-launch / system-level simulator captures, use raw `xcrun simctl` (see
+[Raw fallbacks](#raw-fallbacks-not-yet-in-maui-cli)).
 
 ## Building and Deploying
 
@@ -152,51 +137,56 @@ grep -i TargetFramework *.csproj
 ```
 Common values: `net9.0-ios`, `net9.0-maccatalyst`, `net10.0-ios`, `net10.0-maccatalyst`.
 
-## Apple CLI Tool
+## Xcode and Runtime Discovery
 
-The `apple` command (from `appledev.tools` NuGet) provides higher-level wrappers.
-
-### Simulator commands
-```
-apple simulator list [--booted|--available|--unavailable|--name "..."]
-apple simulator create <name> --device-type "..." [--runtime "..."]
-apple simulator boot <target>
-apple simulator shutdown <target>
-apple simulator erase <target>
-apple simulator delete <target>
-apple simulator screenshot <target> [--output path.png]
-apple simulator app install <target> <app-path>
-apple simulator app launch <target> <bundle-id>
-apple simulator app uninstall <target> <bundle-id>
-apple simulator open [<target>]
-apple simulator open-url <target> <url>
-apple simulator logs <target> [--filter "..."]
-apple simulator push <target> <bundle-id> [--payload "..."]
-apple simulator location set <target> --lat <lat> --lon <lon>
-apple simulator privacy grant <target> <service> <bundle-id>
+```bash
+maui apple xcode list                            # installed Xcode versions
+maui apple runtime list                          # installed simulator runtimes
+maui apple runtime list --platform ios           # filter by platform
 ```
 
-### Device commands
+All accept `--json` for machine-readable output.
+
+## Raw fallbacks not yet in `maui` CLI
+
+These operations are not wrapped by the `maui` CLI today. Use raw `xcrun
+simctl` (preferred — built into Xcode) or the `apple` command from
+`appledev.tools` if installed.
+
+### Create / erase / delete
+```bash
+xcrun simctl list devicetypes                    # discover device types
+xcrun simctl list runtimes                       # discover runtimes
+xcrun simctl create "My iPhone" "iPhone 16 Pro" "iOS 18.2"
+xcrun simctl erase <UDID>                        # factory reset
+xcrun simctl delete <UDID>                       # permanently remove
+xcrun simctl delete unavailable                  # clean up old sims
 ```
-apple device list
-apple xcode list                                # installed Xcode versions
+
+### Install / launch / uninstall apps on simulator
+```bash
+xcrun simctl install booted /path/to/App.app
+xcrun simctl launch booted com.company.appid
+xcrun simctl uninstall booted com.company.appid
+xcrun simctl listapps <UDID>
+xcrun simctl get_app_container <UDID> com.company.appid
 ```
 
-## xcrun simctl Reference
+### System-level simulator screenshots
+```bash
+xcrun simctl io booted screenshot output.png
+```
 
-Key subcommands beyond the basics:
-
+### Other simctl utilities
 | Command | Use |
 |---------|-----|
-| `simctl addmedia <UDID> file.jpg` | Add photos/videos to sim |
-| `simctl openurl <UDID> "url"` | Open URL / deep link |
-| `simctl push <UDID> bundle payload.json` | Simulate push notification |
-| `simctl privacy <UDID> grant location bundle` | Grant permissions |
-| `simctl location <UDID> set 37.33,-122.03` | Set GPS location |
-| `simctl pbcopy <UDID>` | Copy stdin to clipboard |
-| `simctl pbpaste <UDID>` | Read clipboard |
-| `simctl get_app_container <UDID> bundle` | App container path |
-| `simctl listapps <UDID>` | Installed apps |
+| `xcrun simctl addmedia <UDID> file.jpg` | Add photos/videos to sim |
+| `xcrun simctl openurl <UDID> "url"` | Open URL / deep link |
+| `xcrun simctl push <UDID> bundle payload.json` | Simulate push notification |
+| `xcrun simctl location <UDID> set 37.33,-122.03` | Set GPS location |
+| `xcrun simctl pbcopy <UDID>` / `pbpaste <UDID>` | Clipboard bridge |
+| `xcrun simctl ui <UDID> appearance dark\|light` | Toggle dark mode |
+| `xcrun simctl privacy <UDID> grant\|revoke\|reset …` | Permission management |
 
 ## Troubleshooting
 
@@ -209,7 +199,8 @@ Key subcommands beyond the basics:
   If the "Reopen windows?" dialog is already on screen, ask the user to dismiss it manually,
   then relaunch. Do not use AppleScript here by default — it steals focus from the user's
   desktop session.
-- **"Unable to lookup in current state: Shutdown"**: Simulator not booted. Run `xcrun simctl boot <UDID>`.
+- **"Unable to lookup in current state: Shutdown"**: Simulator not booted. Run
+  `maui apple simulator start <UDID>`.
 - **Build error NETSDK1005 "Assets file doesn't have a target"**: Wrong TFM. Check
   `<TargetFrameworks>` in .csproj and use matching version (e.g. `net10.0-ios` not `net9.0-ios`).
 - **Agent not connecting after deploy**: The app may still be launching. Poll
@@ -222,8 +213,12 @@ Key subcommands beyond the basics:
 ## Permission & Dialog Handling
 
 ### Pre-grant permissions (prevents dialogs from appearing)
+
+Permissions are not yet wrapped by the `maui` CLI — use raw `xcrun simctl
+privacy`:
+
 ```bash
-# Grant specific permission before the app requests it
+# Not yet wrapped by 'maui' CLI — use raw xcrun simctl
 xcrun simctl privacy <UDID> grant location com.company.appid
 xcrun simctl privacy <UDID> grant camera com.company.appid
 xcrun simctl privacy <UDID> grant photos com.company.appid
@@ -238,9 +233,6 @@ xcrun simctl privacy <UDID> revoke location com.company.appid
 
 # Reset (next request will show dialog again)
 xcrun simctl privacy <UDID> reset all com.company.appid
-
-# Via apple CLI
-apple simulator privacy grant <UDID> location com.company.appid
 ```
 
 Available services: `all`, `calendar`, `contacts`, `contacts-limited`, `location`, `location-always`, `photos`, `photos-add`, `media-library`, `microphone`, `motion`, `reminders`, `siri`.
@@ -305,9 +297,10 @@ Use these to test and validate dialog detection and dismissal workflows.
 
 ### Toggle dark mode
 ```bash
-# Preferred when available: use an in-app theme toggle so the host desktop is unaffected.
+# Preferred: use an in-app theme toggle so the host desktop is unaffected.
 #
-# iOS Simulator (safe: affects the simulator only)
+# iOS Simulator (safe: affects the simulator only) —
+# not yet wrapped by 'maui' CLI, use raw xcrun simctl:
 xcrun simctl ui <UDID> appearance dark
 xcrun simctl ui <UDID> appearance light
 ```

@@ -8,8 +8,10 @@ description: >-
   Blazor WebView CDP debugging, reading DevFlow logs, and iterative app
   debugging. DO NOT USE FOR: first-time DevFlow package setup (use
   maui-devflow-onboard), or generic desktop automation unrelated to MAUI. INVOKES:
-  maui devflow CLI, dotnet CLI, Android adb/android tools, and Apple simctl
-  tools.
+  the unified `maui` CLI (devflow, device, android, apple, doctor command
+  groups) and dotnet CLI. Falls back to raw `adb` and `xcrun simctl` only for
+  operations not yet wrapped by the `maui` CLI (port forwarding, APK install,
+  logcat, simulator create/install/launch/privacy/appearance).
 ---
 
 # DevFlow Debug
@@ -81,6 +83,20 @@ packages and `builder.AddMauiDevFlowAgent()` registered.
    relying on text, coordinates, screenshots, or brittle tree positions.
 
 7. Inspect, interact, capture evidence, then edit the app and repeat from launch.
+
+## Reading machine-readable output
+
+Always prefer the unified `maui` CLI surface for device prep and DevFlow
+operations. For programmatic consumption:
+
+- Pass `--json` to any command an agent will parse. Errors are emitted as a
+  structured envelope (see `references/troubleshooting.md`).
+- Inspect `error.code` to branch logic. Categories: `E1xxx` tool, `E2xxx`
+  platform/SDK, `E3xxx` user action, `E4xxx` network, `E5xxx` permission.
+- When `error.remediation.type` is `AutoFixable`, run
+  `error.remediation.command` and retry. When it is `UserAction`, follow
+  `error.remediation.manualSteps`.
+- Use `--ci` for non-interactive failure-fast runs (no prompts, fail on first error).
 
 ## Critical Anti-patterns
 
