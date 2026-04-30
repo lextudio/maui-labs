@@ -1,16 +1,21 @@
 ---
 name: maui-ai-debugging
-description: >
-  Builds, deploys, inspects, and debugs .NET MAUI and MAUI Blazor Hybrid apps end-to-end from the
-  terminal as an AI agent. Use when running a build-deploy-inspect-fix loop on iOS simulator, Android
-  emulator, Mac Catalyst, macOS (AppKit), or Linux/GTK; driving a running app's UI (visual tree, tap,
-  fill, screenshot, properties); debugging Blazor WebView via CDP; managing simulators or the broker
-  daemon; or setting up MauiDevFlow in a project. Wraps the unified `maui devflow` CLI together with
-  androidsdk.tool, appledev.tools, adb, xcrun simctl, and an `xdotool`-backed Linux driver. Not for
-  generic desktop automation or AppleScript unrelated to MAUI debugging.
+description: >-
+  Legacy end-to-end workflow for building, deploying, inspecting, and debugging
+  .NET MAUI and MAUI Blazor Hybrid apps with `maui devflow`. USE FOR: older
+  clients that still request `maui-ai-debugging`, app launch, visual tree
+  inspection, screenshots, Blazor WebView CDP debugging, simulator/emulator
+  management, and build-deploy-inspect-fix loops. DO NOT USE FOR: new DevFlow
+  setup when `maui-devflow-onboard` or `maui-devflow-debug` are available,
+  generic desktop automation, AppleScript macros, or host-level xdotool control
+  unrelated to MAUI app debugging.
 ---
 
 # MAUI AI Debugging
+
+Compatibility note: this legacy skill name is retained for older clients. The canonical
+replacement is `maui-devflow-debug`, installed through `maui devflow init` /
+`maui devflow skills update`.
 
 Build, deploy, inspect, and debug .NET MAUI apps from the terminal. This skill enables a complete
 feedback loop: **build → deploy → inspect → fix → rebuild**.
@@ -23,9 +28,9 @@ dotnet tool install --global androidsdk.tool    # Android only
 dotnet tool install --global appledev.tools     # iOS/Mac only
 ```
 
-Keep the skill up to date: `maui devflow update-skill`. Check installed version vs remote
-with `maui devflow skill-version`. For full update procedures, see
-[references/setup.md](references/setup.md#checking-for-updates).
+Keep DevFlow skills up to date with `maui devflow skills update`. The hidden
+`maui devflow update-skill` compatibility command runs the same bundled updater
+and may remove this legacy skill after installing current replacements.
 
 ## Integrating MauiDevFlow into a MAUI App
 
