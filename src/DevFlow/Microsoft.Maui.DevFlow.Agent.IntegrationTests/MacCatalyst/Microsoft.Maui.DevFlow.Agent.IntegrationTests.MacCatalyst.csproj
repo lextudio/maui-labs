@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DevFlowSamplePlatform>maccatalyst</DevFlowSamplePlatform>
+  </PropertyGroup>
+
+  <Import Project="..\IntegrationTests.Common.props" />
+
+</Project>

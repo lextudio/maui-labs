@@ -1,0 +1,86 @@
+<Project>
+
+  <!--
+    Shared configuration for the four platform-specific DevFlow integration test projects:
+
+      Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android.csproj
+      Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS.csproj
+      Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst.csproj
+      Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows.csproj
+
+    All four sit in this directory and share the same .cs sources via the SDK's default
+    Compile glob. They differ only in $(DevFlowSamplePlatform), which selects the sample
+    TFM to build (via a no-op ProjectReference) and is also stamped into the test
+    assembly as [AssemblyMetadata("DevFlowTestPlatform", "<platform>")] so the fixture
+    factory can pick the correct platform at runtime without any environment variable.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>Microsoft.Maui.DevFlow.Agent.IntegrationTests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Microsoft.Maui.DevFlow.Driver\Microsoft.Maui.DevFlow.Driver.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- Pull all the .cs sources from the parent directory (shared across all four platform projects). -->
+  <ItemGroup>
+    <Compile Include="..\*.cs" />
+    <Compile Include="..\Fixtures\**\*.cs" />
+  </ItemGroup>
+
+  <!-- Stamp the platform identity into the test assembly so AppFixtureFactory can read it. -->
+  <ItemGroup>
+    <AssemblyMetadata Include="DevFlowTestPlatform" Value="$(DevFlowSamplePlatform)" />
+  </ItemGroup>
+
+  <!-- Compute iOS simulator RID at evaluation time based on host architecture. -->
+  <PropertyGroup Condition="'$(DevFlowSamplePlatform)' == 'ios'">
+    <_DevFlowSampleIosRid Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">iossimulator-arm64</_DevFlowSampleIosRid>
+    <_DevFlowSampleIosRid Condition="'$(_DevFlowSampleIosRid)' == ''">iossimulator-x64</_DevFlowSampleIosRid>
+  </PropertyGroup>
+
+  <!--
+    Map the user-facing platform name to the sample's TFM and any extra MSBuild
+    properties the sample build needs.
+  -->
+  <PropertyGroup>
+    <_DevFlowSampleTfm Condition="'$(DevFlowSamplePlatform)' == 'android'">net10.0-android</_DevFlowSampleTfm>
+    <_DevFlowSampleTfm Condition="'$(DevFlowSamplePlatform)' == 'ios'">net10.0-ios</_DevFlowSampleTfm>
+    <_DevFlowSampleTfm Condition="'$(DevFlowSamplePlatform)' == 'maccatalyst'">net10.0-maccatalyst</_DevFlowSampleTfm>
+    <_DevFlowSampleTfm Condition="'$(DevFlowSamplePlatform)' == 'windows'">net10.0-windows10.0.19041.0</_DevFlowSampleTfm>
+
+    <_DevFlowSampleAdditionalProps Condition="'$(DevFlowSamplePlatform)' == 'android'">EmbedAssembliesIntoApk=true;MauiDevFlowPort=58100</_DevFlowSampleAdditionalProps>
+    <_DevFlowSampleAdditionalProps Condition="'$(DevFlowSamplePlatform)' == 'ios'">_DeviceTarget=simulator;RuntimeIdentifier=$(_DevFlowSampleIosRid)</_DevFlowSampleAdditionalProps>
+  </PropertyGroup>
+
+  <!--
+    No-op ProjectReference to DevFlow.Sample: the sample is built (so its app/apk/bundle/exe
+    is on disk for the fixture to launch) but its output assemblies are never linked into
+    this test project, copied to its bin, or packed.
+  -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\..\samples\DevFlow.Sample\DevFlow.Sample.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      UndefineProperties="TargetFramework"
+                      Private="false"
+                      ExcludeAssets="all"
+                      OutputItemType="_DevFlowSampleBuildOutput"
+                      SetTargetFramework="TargetFramework=$(_DevFlowSampleTfm)"
+                      AdditionalProperties="$(_DevFlowSampleAdditionalProps)" />
+  </ItemGroup>
+
+</Project>

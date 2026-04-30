@@ -26,16 +26,36 @@
       "cache": false
     },
     "build": {
+      "dependsOn": [
+        "^build",
+        "restore"
+      ],
       "outputs": [
         "{workspaceRoot}/artifacts/bin/{projectName}",
         "{workspaceRoot}/artifacts/obj/{projectName}"
-      ]
+      ],
+      "options": {
+        "args": [
+          "--no-restore"
+        ]
+      }
     },
     "build:release": {
+      "dependsOn": [
+        "^build:release",
+        "restore"
+      ],
       "outputs": [
         "{workspaceRoot}/artifacts/bin/{projectName}",
         "{workspaceRoot}/artifacts/obj/{projectName}"
-      ]
+      ],
+      "options": {
+        "args": [
+          "--no-restore",
+          "--configuration",
+          "Release"
+        ]
+      }
     },
     "test": {
       "outputs": [

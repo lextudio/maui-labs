@@ -33,7 +33,10 @@
     <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Analyzers/Microsoft.Maui.DevFlow.Analyzers.csproj" />
     <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Agent.Gtk/Microsoft.Maui.DevFlow.Agent.Gtk.csproj" />
     <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Agent/Microsoft.Maui.DevFlow.Agent.csproj" />
-    <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Agent.IntegrationTests/Microsoft.Maui.DevFlow.Agent.IntegrationTests.csproj" />
+    <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Agent.IntegrationTests/Android/Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android.csproj" />
+    <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Agent.IntegrationTests/iOS/Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS.csproj" />
+    <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Agent.IntegrationTests/MacCatalyst/Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst.csproj" />
+    <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Agent.IntegrationTests/Windows/Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows.csproj" />
     <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Blazor.Gtk/Microsoft.Maui.DevFlow.Blazor.Gtk.csproj" />
     <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Blazor/Microsoft.Maui.DevFlow.Blazor.csproj" />
     <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Driver/Microsoft.Maui.DevFlow.Driver.csproj" />

@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <DevFlowSamplePlatform>windows</DevFlowSamplePlatform>
+  </PropertyGroup>
+
+  <Import Project="..\IntegrationTests.Common.props" />
+
+</Project>
