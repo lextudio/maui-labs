@@ -171,7 +171,7 @@ adb shell pm list packages | grep <name>
 ### Logs
 Once a DevFlow agent is connected, prefer in-app logs:
 ```bash
-maui devflow ui logs --limit 50
+maui devflow logs --limit 50
 ```
 Pre-agent or for system-level traces, use `adb logcat`:
 ```bash

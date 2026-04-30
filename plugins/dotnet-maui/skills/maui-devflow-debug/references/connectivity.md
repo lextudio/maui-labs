@@ -112,13 +112,18 @@ can parse. On failure, error fields are at the **top level** of stdout (no
 {
   "code": "E2106",
   "category": "platform",
-  "message": "No running emulator found with name 'Pixel8'",
+  "severity": "error",
+  "message": "Android emulator not installed",
   "remediation": {
     "type": "autofixable",
-    "command": "maui android emulator start Pixel8"
+    "command": "maui android sdk install emulator"
   }
 }
 ```
+
+Note: the same `E2106` code is also thrown for "no AVD with that name" — that
+throw site emits the code **without** a `remediation` block. Always treat
+`remediation` as optional and fall back to surfacing `message`.
 
 Common code prefixes (see [troubleshooting.md](troubleshooting.md#reading-machine-readable-output-and-errors) for the full taxonomy):
 
