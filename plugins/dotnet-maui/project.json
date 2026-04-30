@@ -1,0 +1,29 @@
+{
+  "name": "dotnet-maui-skills",
+  "implicitDependencies": [
+    "dotnet-maui-plugin-marketplace"
+  ],
+  "namedInputs": {
+    "default": [
+      "{projectRoot}/**/*",
+      "{workspaceRoot}/.github/plugin/marketplace.json",
+      "{workspaceRoot}/.github/workflows/skill-check.yml",
+      "{workspaceRoot}/eng/allowed-external-deps.txt"
+    ]
+  },
+  "tags": [
+    "scope:skills"
+  ],
+  "targets": {
+    "check": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": [
+        "default"
+      ],
+      "options": {
+        "command": "skill-validator check --plugin plugins/dotnet-maui --allowed-external-deps eng/allowed-external-deps.txt"
+      }
+    }
+  }
+}

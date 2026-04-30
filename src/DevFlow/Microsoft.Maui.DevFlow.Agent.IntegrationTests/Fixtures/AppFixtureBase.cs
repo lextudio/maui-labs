@@ -112,39 +112,6 @@ public abstract class AppFixtureBase : IAppFixture
             $"Last error: {lastException?.GetType().Name}: {lastException?.Message}");
     }
 
-    protected static async Task BuildSampleAsync(string projectPath, string targetFramework, string? extraArgs = null)
-    {
-        CleanBuildOutputs(projectPath, targetFramework);
-
-        var dotnetPath = File.Exists("/usr/local/share/dotnet/dotnet")
-            ? "/usr/local/share/dotnet/dotnet"
-            : "dotnet";
-
-        var args = $"build \"{projectPath}\" -f {targetFramework} -c Debug --nologo -v q";
-        if (!string.IsNullOrEmpty(extraArgs))
-            args += $" {extraArgs}";
-
-        var psi = new ProcessStartInfo(dotnetPath, args)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-
-        using var process = Process.Start(psi)
-            ?? throw new InvalidOperationException("Failed to start dotnet build");
-
-        var stdout = await process.StandardOutput.ReadToEndAsync();
-        var stderr = await process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-
-        if (process.ExitCode != 0)
-        {
-            throw new InvalidOperationException(
-                $"dotnet build failed (exit code {process.ExitCode}).\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}");
-        }
-    }
-
     protected static async Task WithBuildLockAsync(Func<Task> action, TimeSpan? timeout = null)
     {
         var repoRoot = FindRepoRoot();
@@ -173,28 +140,6 @@ public abstract class AppFixtureBase : IAppFixture
         throw new TimeoutException($"Timed out waiting for integration build lock: {lockFilePath}");
     }
 
-    private static void CleanBuildOutputs(string projectPath, string targetFramework)
-    {
-        var projectDir = Path.GetDirectoryName(projectPath)
-            ?? throw new InvalidOperationException($"Could not determine project directory for '{projectPath}'.");
-        var projectName = Path.GetFileNameWithoutExtension(projectPath);
-        var repoRoot = FindRepoRoot();
-
-        var paths = new[]
-        {
-            Path.Combine(repoRoot, "artifacts", "bin", projectName, "Debug", targetFramework),
-            Path.Combine(repoRoot, "artifacts", "obj", projectName, "Debug", targetFramework),
-            Path.Combine(projectDir, "bin", "Debug", targetFramework),
-            Path.Combine(projectDir, "obj", "Debug", targetFramework),
-        };
-
-        foreach (var path in paths)
-        {
-            if (Directory.Exists(path))
-                Directory.Delete(path, recursive: true);
-        }
-    }
-
     protected static string FindRepoRoot()
     {
         var dir = AppContext.BaseDirectory;
@@ -211,14 +156,21 @@ public abstract class AppFixtureBase : IAppFixture
             "Ensure tests are run from within the repository.");
     }
 
-    protected static string GetSampleProjectPath()
+    protected static string? GetPrebuiltSampleAppPath()
     {
-        var repoRoot = FindRepoRoot();
-        var path = Path.Combine(repoRoot, "samples", "DevFlow.Sample", "DevFlow.Sample.csproj");
-        if (!File.Exists(path))
-            throw new InvalidOperationException($"Sample project not found at: {path}");
+        var path = Environment.GetEnvironmentVariable("DEVFLOW_TEST_SAMPLE_APP_PATH");
+        if (string.IsNullOrWhiteSpace(path))
+            return null;
 
-        return path;
+        var fullPath = Path.IsPathRooted(path)
+            ? Path.GetFullPath(path)
+            : Path.GetFullPath(Path.Combine(FindRepoRoot(), path));
+
+        if (!File.Exists(fullPath) && !Directory.Exists(fullPath))
+            throw new InvalidOperationException(
+                $"DEVFLOW_TEST_SAMPLE_APP_PATH points to a path that does not exist: {fullPath}");
+
+        return fullPath;
     }
 
     protected static string GetSampleBuildOutputRoot()

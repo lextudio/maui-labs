@@ -304,6 +304,9 @@ FakesAssemblies/
 # Node.js Tools for Visual Studio
 .ntvs_analysis.dat
 node_modules/
+.nx/cache/
+.nx/installation/
+.nx/workspace-data/
 
 # Visual Studio 6 build log
 *.plg
@@ -432,3 +435,9 @@ sim_tap.py
 # Personal / per-machine agent state
 .claude/settings.local.json
 .claude/skills/**/.skill-version
+.claude/worktrees
+
+# Nx
+.nx/installation
+.nx/self-healing
+.nx/polygraph

@@ -118,6 +118,11 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
       - name: Install Android MAUI workload
         run: dotnet workload install maui-android
 
@@ -156,10 +161,7 @@ jobs:
           script: >
             export DEVFLOW_TEST_ANDROID_SERIAL="$(adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ { print $1; exit }')";
             echo "Using Android emulator serial: ${DEVFLOW_TEST_ANDROID_SERIAL:-<none found>}";
-            dotnet test $TEST_PROJECT -c Debug
-            --logger "trx;LogFileName=devflow-integration-android.trx"
-            --logger "console;verbosity=normal"
-            --results-directory ./artifacts/TestResults/devflow-integration/android
+            ./nx run Microsoft.Maui.DevFlow.Agent.IntegrationTests:test:android
 
       - name: Upload test results
         if: always()
@@ -214,6 +216,11 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
       - name: Install Apple MAUI workloads
         run: dotnet workload install maui ios macos
 
@@ -221,12 +228,7 @@ jobs:
         run: xcrun simctl list devices available
 
       - name: Run DevFlow integration tests (ios)
-        run: >
-          dotnet test $TEST_PROJECT
-          -c Debug
-          --logger "trx;LogFileName=devflow-integration-ios.trx"
-          --logger "console;verbosity=normal"
-          --results-directory ./artifacts/TestResults/devflow-integration/ios
+        run: ./nx run Microsoft.Maui.DevFlow.Agent.IntegrationTests:test:ios
 
       - name: Upload test results
         if: always()
@@ -280,16 +282,16 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
       - name: Install Apple MAUI workloads
         run: dotnet workload install maui maccatalyst macos
 
       - name: Run DevFlow integration tests (maccatalyst)
-        run: >
-          dotnet test $TEST_PROJECT
-          -c Debug
-          --logger "trx;LogFileName=devflow-integration-maccatalyst.trx"
-          --logger "console;verbosity=normal"
-          --results-directory ./artifacts/TestResults/devflow-integration/maccatalyst
+        run: ./nx run Microsoft.Maui.DevFlow.Agent.IntegrationTests:test:maccatalyst
 
       - name: Upload test results
         if: always()
@@ -314,17 +316,17 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
       - name: Install MAUI workloads
         run: dotnet workload install maui
 
       - name: Run DevFlow integration tests (windows)
         shell: pwsh
-        run: >
-          dotnet test $env:TEST_PROJECT
-          -c Debug
-          --logger "trx;LogFileName=devflow-integration-windows.trx"
-          --logger "console;verbosity=normal"
-          --results-directory .\artifacts\TestResults\devflow-integration\windows
+        run: .\nx.bat run Microsoft.Maui.DevFlow.Agent.IntegrationTests:test:windows
 
       - name: Upload test results
         if: always()

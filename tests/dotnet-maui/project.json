@@ -1,0 +1,29 @@
+{
+  "name": "dotnet-maui-skill-evals",
+  "implicitDependencies": [
+    "dotnet-maui-skills"
+  ],
+  "namedInputs": {
+    "default": [
+      "{projectRoot}/**/*",
+      "{workspaceRoot}/.github/workflows/skill-evaluation.yml"
+    ]
+  },
+  "tags": [
+    "scope:skills",
+    "type:test"
+  ],
+  "targets": {
+    "evaluate": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "inputs": [
+        "default",
+        "^default"
+      ],
+      "options": {
+        "command": "skill-validator evaluate --verdict-warn-only --results-dir artifacts/eval-results/dotnet-maui --reporter console --reporter json --reporter markdown --runs 3 --tests-dir ./tests/dotnet-maui ./plugins/dotnet-maui/skills"
+      }
+    }
+  }
+}

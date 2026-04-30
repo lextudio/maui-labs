@@ -23,10 +23,9 @@ public sealed class iOSSimulatorFixture : AppFixtureBase
 
         await WithBuildLockAsync(async () =>
         {
-            var projectPath = GetSampleProjectPath();
-            await BuildSampleAsync(projectPath, "net10.0-ios",
-                $"-p:_DeviceTarget=simulator -p:RuntimeIdentifier={GetSimulatorRuntimeIdentifier()}");
-
+            // Sample is built by MSBuild as a no-op ProjectReference when this test
+            // project is built with -p:DevFlowIntegrationPlatform=ios. The fixture
+            // only needs to locate the resulting .app bundle.
             var appBundle = FindSimulatorAppBundle();
             _appBundleId = ReadBundleId(appBundle);
 
@@ -154,14 +153,25 @@ public sealed class iOSSimulatorFixture : AppFixtureBase
 
     static string FindSimulatorAppBundle()
     {
+        var prebuiltPath = GetPrebuiltSampleAppPath();
+        if (prebuiltPath != null)
+            return FindAppBundle(prebuiltPath);
+
         var binDir = Path.Combine(GetSampleBuildOutputRoot(), "net10.0-ios", GetSimulatorRuntimeIdentifier());
+        return FindAppBundle(binDir);
+    }
 
-        if (!Directory.Exists(binDir))
-            throw new InvalidOperationException($"iOS simulator build output not found at: {binDir}");
+    static string FindAppBundle(string path)
+    {
+        if (Directory.Exists(path) && Path.GetExtension(path).Equals(".app", StringComparison.OrdinalIgnoreCase))
+            return path;
 
-        var appBundles = Directory.GetDirectories(binDir, "*.app", SearchOption.AllDirectories);
+        if (!Directory.Exists(path))
+            throw new InvalidOperationException($"iOS simulator build output not found at: {path}");
+
+        var appBundles = Directory.GetDirectories(path, "*.app", SearchOption.AllDirectories);
         if (appBundles.Length == 0)
-            throw new InvalidOperationException($"No .app bundle found under {binDir}");
+            throw new InvalidOperationException($"No .app bundle found under {path}");
 
         return appBundles[0];
     }

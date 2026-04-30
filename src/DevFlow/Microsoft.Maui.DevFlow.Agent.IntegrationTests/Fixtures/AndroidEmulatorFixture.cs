@@ -46,10 +46,9 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
                 // Best-effort only; some emulator states reject logcat clear briefly.
             }
 
-            var projectPath = GetSampleProjectPath();
-            await BuildSampleAsync(projectPath, "net10.0-android",
-                $"-p:EmbedAssembliesIntoApk=true -p:MauiDevFlowPort={AgentPort}");
-
+            // Sample is built by MSBuild as a no-op ProjectReference when this test
+            // project is built with -p:DevFlowIntegrationPlatform=android. The fixture
+            // only needs to locate the resulting APK.
             var apkPath = FindApk();
             await InstallApkAsync(apkPath);
 
@@ -513,17 +512,33 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
 
     static string FindApk()
     {
+        var prebuiltPath = GetPrebuiltSampleAppPath();
+        if (prebuiltPath != null)
+            return FindApk(prebuiltPath);
+
         var binDir = Path.Combine(GetSampleBuildOutputRoot(), "net10.0-android");
+        return FindApk(binDir);
+    }
 
-        if (!Directory.Exists(binDir))
-            throw new InvalidOperationException($"Android build output not found at: {binDir}");
+    static string FindApk(string path)
+    {
+        if (File.Exists(path))
+        {
+            if (Path.GetExtension(path).Equals(".apk", StringComparison.OrdinalIgnoreCase))
+                return path;
 
-        var apks = Directory.GetFiles(binDir, "*-Signed.apk", SearchOption.AllDirectories);
+            throw new InvalidOperationException($"Prebuilt Android sample path is not an APK: {path}");
+        }
+
+        if (!Directory.Exists(path))
+            throw new InvalidOperationException($"Android build output not found at: {path}");
+
+        var apks = Directory.GetFiles(path, "*-Signed.apk", SearchOption.AllDirectories);
         if (apks.Length == 0)
-            apks = Directory.GetFiles(binDir, "*.apk", SearchOption.AllDirectories);
+            apks = Directory.GetFiles(path, "*.apk", SearchOption.AllDirectories);
 
         if (apks.Length == 0)
-            throw new InvalidOperationException($"No APK found under {binDir}");
+            throw new InvalidOperationException($"No APK found under {path}");
 
         return apks[0];
     }

@@ -19,4 +19,68 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <!--
+    DevFlow integration tests build the DevFlow sample app as a *no-op* ProjectReference:
+    the sample is built (so its app/apk/bundle/exe is on disk for the fixture to launch),
+    but its output assemblies are never linked into this test project, copied to its bin,
+    or packed. The sample is multi-targeted; this single-TFM (net10.0) test project picks
+    a specific sample TFM via SetTargetFramework, gated by the DevFlowIntegrationPlatform
+    MSBuild property. Each CI job sets exactly one platform value so only that platform's
+    workload needs to be installed on the runner.
+
+    Set DevFlowIntegrationPlatform to one of: android, ios, maccatalyst, windows.
+    When unset (default), no sample build is triggered — useful for CI lanes/IDEs that
+    only restore/build/lint the test project without launching the app.
+  -->
+  <PropertyGroup Condition="'$(DevFlowIntegrationPlatform)' == 'ios'">
+    <_DevFlowSampleIosRid Condition="'$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)' == 'Arm64'">iossimulator-arm64</_DevFlowSampleIosRid>
+    <_DevFlowSampleIosRid Condition="'$(_DevFlowSampleIosRid)' == ''">iossimulator-x64</_DevFlowSampleIosRid>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(DevFlowIntegrationPlatform)' == 'android'">
+    <ProjectReference Include="..\..\..\samples\DevFlow.Sample\DevFlow.Sample.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      UndefineProperties="TargetFramework"
+                      Private="false"
+                      ExcludeAssets="all"
+                      OutputItemType="_DevFlowSampleBuildOutput"
+                      SetTargetFramework="TargetFramework=net10.0-android"
+                      AdditionalProperties="EmbedAssembliesIntoApk=true;MauiDevFlowPort=58100" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DevFlowIntegrationPlatform)' == 'ios'">
+    <ProjectReference Include="..\..\..\samples\DevFlow.Sample\DevFlow.Sample.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      UndefineProperties="TargetFramework"
+                      Private="false"
+                      ExcludeAssets="all"
+                      OutputItemType="_DevFlowSampleBuildOutput"
+                      SetTargetFramework="TargetFramework=net10.0-ios"
+                      AdditionalProperties="_DeviceTarget=simulator;RuntimeIdentifier=$(_DevFlowSampleIosRid)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DevFlowIntegrationPlatform)' == 'maccatalyst'">
+    <ProjectReference Include="..\..\..\samples\DevFlow.Sample\DevFlow.Sample.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      UndefineProperties="TargetFramework"
+                      Private="false"
+                      ExcludeAssets="all"
+                      OutputItemType="_DevFlowSampleBuildOutput"
+                      SetTargetFramework="TargetFramework=net10.0-maccatalyst" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DevFlowIntegrationPlatform)' == 'windows'">
+    <ProjectReference Include="..\..\..\samples\DevFlow.Sample\DevFlow.Sample.csproj"
+                      ReferenceOutputAssembly="false"
+                      SkipGetTargetFrameworkProperties="true"
+                      UndefineProperties="TargetFramework"
+                      Private="false"
+                      ExcludeAssets="all"
+                      OutputItemType="_DevFlowSampleBuildOutput"
+                      SetTargetFramework="TargetFramework=net10.0-windows10.0.19041.0" />
+  </ItemGroup>
+
 </Project>

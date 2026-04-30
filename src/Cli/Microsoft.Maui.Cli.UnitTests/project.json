@@ -1,0 +1,15 @@
+{
+  "name": "Microsoft.Maui.Cli.UnitTests",
+  "namedInputs": {
+    "default": [
+      "{projectRoot}/**/*",
+      "{workspaceRoot}/src/DevFlow/Microsoft.Maui.DevFlow.Agent.Core/DevFlowAgentService.cs"
+    ],
+    "production": [
+      "default",
+      "!{projectRoot}/**/*.Tests/**/*",
+      "!{projectRoot}/**/bin/**/*",
+      "!{projectRoot}/**/obj/**/*"
+    ]
+  }
+}

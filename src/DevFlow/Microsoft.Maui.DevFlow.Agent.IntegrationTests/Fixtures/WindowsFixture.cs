@@ -15,9 +15,9 @@ public sealed class WindowsFixture : AppFixtureBase
     {
         await WithBuildLockAsync(async () =>
         {
-            var projectPath = GetSampleProjectPath();
-            await BuildSampleAsync(projectPath, "net10.0-windows10.0.19041.0");
-
+            // Sample is built by MSBuild as a no-op ProjectReference when this test
+            // project is built with -p:DevFlowIntegrationPlatform=windows. The fixture
+            // only needs to locate the resulting executable.
             var exePath = FindExecutable();
             var psi = new ProcessStartInfo(exePath)
             {
@@ -45,11 +45,31 @@ public sealed class WindowsFixture : AppFixtureBase
 
     static string FindExecutable()
     {
+        var prebuiltPath = GetPrebuiltSampleAppPath();
+        if (prebuiltPath != null)
+            return FindExecutable(prebuiltPath);
+
         var binDir = GetSampleBuildOutputRoot();
-        var exes = Directory.GetFiles(binDir, "DevFlow.Sample.exe", SearchOption.AllDirectories);
+        return FindExecutable(binDir);
+    }
+
+    static string FindExecutable(string path)
+    {
+        if (File.Exists(path))
+        {
+            if (Path.GetFileName(path).Equals("DevFlow.Sample.exe", StringComparison.OrdinalIgnoreCase))
+                return path;
+
+            throw new InvalidOperationException($"Prebuilt Windows sample path is not DevFlow.Sample.exe: {path}");
+        }
+
+        if (!Directory.Exists(path))
+            throw new InvalidOperationException($"Windows build output not found at: {path}");
+
+        var exes = Directory.GetFiles(path, "DevFlow.Sample.exe", SearchOption.AllDirectories);
 
         if (exes.Length == 0)
-            throw new InvalidOperationException($"No DevFlow.Sample.exe found under {binDir}");
+            throw new InvalidOperationException($"No DevFlow.Sample.exe found under {path}");
 
         return exes[0];
     }

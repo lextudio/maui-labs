@@ -16,9 +16,9 @@ public sealed class MacCatalystFixture : AppFixtureBase
     {
         await WithBuildLockAsync(async () =>
         {
-            var projectPath = GetSampleProjectPath();
-            await BuildSampleAsync(projectPath, "net10.0-maccatalyst");
-
+            // Sample is built by MSBuild as a no-op ProjectReference when this test
+            // project is built with -p:DevFlowIntegrationPlatform=maccatalyst. The
+            // fixture only needs to locate the resulting .app bundle.
             var appPath = FindAppBundle();
             LaunchApp(appPath);
             _weOwnTheProcess = true;
@@ -38,15 +38,26 @@ public sealed class MacCatalystFixture : AppFixtureBase
 
     static string FindAppBundle()
     {
+        var prebuiltPath = GetPrebuiltSampleAppPath();
+        if (prebuiltPath != null)
+            return FindAppBundle(prebuiltPath);
+
         var sampleBinDir = Path.Combine(GetSampleBuildOutputRoot(), "net10.0-maccatalyst");
+        return FindAppBundle(sampleBinDir);
+    }
 
-        if (!Directory.Exists(sampleBinDir))
-            throw new InvalidOperationException($"Build output directory not found: {sampleBinDir}");
+    static string FindAppBundle(string path)
+    {
+        if (Directory.Exists(path) && Path.GetExtension(path).Equals(".app", StringComparison.OrdinalIgnoreCase))
+            return path;
 
-        var appBundles = Directory.GetDirectories(sampleBinDir, "*.app", SearchOption.AllDirectories);
+        if (!Directory.Exists(path))
+            throw new InvalidOperationException($"Build output directory not found: {path}");
+
+        var appBundles = Directory.GetDirectories(path, "*.app", SearchOption.AllDirectories);
 
         if (appBundles.Length == 0)
-            throw new InvalidOperationException($"No .app bundle found under {sampleBinDir}");
+            throw new InvalidOperationException($"No .app bundle found under {path}");
 
         return appBundles[0];
     }
