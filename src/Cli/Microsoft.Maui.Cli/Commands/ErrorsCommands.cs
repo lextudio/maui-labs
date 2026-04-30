@@ -30,11 +30,11 @@ public static class ErrorsCommands
 			var category = parseResult.GetValue(categoryOption);
 			var prefix = parseResult.GetValue(prefixOption);
 
-			IReadOnlyList<ErrorCodeDescriptor> codes = category is not null
-				? ErrorCodeCatalogue.ByCategory(category)
-				: prefix is not null
-					? ErrorCodeCatalogue.ByPrefix(prefix)
-					: ErrorCodeCatalogue.All;
+			IReadOnlyList<ErrorCodeDescriptor> codes = ErrorCodeCatalogue.All;
+			if (category is not null)
+				codes = ErrorCodeCatalogue.ByCategory(category);
+			if (prefix is not null)
+				codes = [.. codes.Where(d => d.Code.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))];
 
 			if (useJson)
 			{
