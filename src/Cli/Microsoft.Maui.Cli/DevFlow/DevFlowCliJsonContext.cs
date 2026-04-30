@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Microsoft.Maui.Cli.DevFlow.Broker;
+using Microsoft.Maui.Cli.Models;
 using Microsoft.Maui.DevFlow.Driver;
 
 namespace Microsoft.Maui.Cli.DevFlow;
@@ -22,4 +23,6 @@ namespace Microsoft.Maui.Cli.DevFlow;
 [JsonSerializable(typeof(AgentRegistration[]))]
 [JsonSerializable(typeof(BrokerState))]
 [JsonSerializable(typeof(RegistrationMessage))]
+[JsonSerializable(typeof(DiagnoseResult))]
+[JsonSerializable(typeof(List<DiagnoseCheckResult>))]
 internal sealed partial class DevFlowCliJsonContext : JsonSerializerContext;
