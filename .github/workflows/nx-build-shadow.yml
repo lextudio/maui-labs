@@ -1,0 +1,203 @@
+name: Nx build (shadow)
+
+# Runs in parallel with the existing per-product workflows so we can compare
+# Nx-driven affected builds against the baseline. Non-gating: every job uses
+# continue-on-error so failures here don't block PRs.
+#
+# Today the per-OS routing uses a hardcoded exclusion list. The longer-term
+# answer is project tags (e.g. os:linux, os:macos, os:windows, os:any) emitted
+# by a small inference plugin that reads each csproj's TFMs, then filtering
+# with `--projects=tag:os:<runner>`. See plan.md "dynamic dependency emission".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  NX_DAEMON: false
+  NX_CLOUD: false
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
+jobs:
+  affected:
+    name: Compute affected
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    outputs:
+      base: ${{ steps.range.outputs.base }}
+      head: ${{ steps.range.outputs.head }}
+      count: ${{ steps.affected.outputs.count }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Export MSBuild SDK resolver environment
+        run: node eng/nx/nx-msbuild-resolvers.js --export-github-env
+
+      - name: Compute base/head
+        id: range
+        shell: bash
+        env:
+          NX_BASE_INPUT: ${{ github.event.pull_request.base.sha || github.event.before }}
+          NX_HEAD_INPUT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          base="$NX_BASE_INPUT"
+          head="$NX_HEAD_INPUT"
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            base="$(git rev-parse "${head}~1" 2>/dev/null || echo "$head")"
+          fi
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+
+      - name: List affected projects
+        id: affected
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./nx show projects --affected \
+            --base=${{ steps.range.outputs.base }} \
+            --head=${{ steps.range.outputs.head }} \
+            --json > affected.json
+          count=$(node -e 'const a=JSON.parse(require("fs").readFileSync("affected.json","utf8"));console.log(Array.isArray(a)?a.length:Object.keys(a).length)')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Nx affected (shadow build)"
+            echo
+            echo "Base: \`${{ steps.range.outputs.base }}\`"
+            echo "Head: \`${{ steps.range.outputs.head }}\`"
+            echo
+            echo "Affected projects: **$count**"
+            echo
+            node -e 'const a=JSON.parse(require("fs").readFileSync("affected.json","utf8"));(Array.isArray(a)?a:Object.keys(a)).sort().forEach(p=>console.log("- `"+p+"`"))'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Build affected (${{ matrix.os }})
+    needs: affected
+    if: needs.affected.outputs.count != '0'
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            # Linux runners can't build MAUI multi-target apple/windows/android lanes.
+            # Restrict to net10.0-only projects + the Linux.Gtk4 family.
+            exclude_projects: >-
+              DevFlow.Sample,DevFlow.Sample.MacOS,
+              Microsoft.Maui.DevFlow.Agent,
+              Microsoft.Maui.DevFlow.Blazor,
+              Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android,
+              Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS,
+              Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst,
+              Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows
+            install_workloads: false
+            native_deps: |
+              sudo apt-get update
+              sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+          - os: macos-latest
+            exclude_projects: >-
+              Linux.Gtk4,Linux.Gtk4.Sample,Linux.Gtk4.BlazorWebView,
+              Linux.Gtk4.Essentials,Linux.Gtk4.Templates,MauiLinuxApp,
+              DevFlow.Sample.Linux,
+              Microsoft.Maui.DevFlow.Agent.Gtk,Microsoft.Maui.DevFlow.Blazor.Gtk,
+              Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows
+            install_workloads: true
+            native_deps: ''
+          - os: windows-latest
+            exclude_projects: >-
+              Linux.Gtk4,Linux.Gtk4.Sample,Linux.Gtk4.BlazorWebView,
+              Linux.Gtk4.Essentials,Linux.Gtk4.Templates,MauiLinuxApp,
+              DevFlow.Sample.Linux,DevFlow.Sample.MacOS,
+              Microsoft.Maui.DevFlow.Agent.Gtk,Microsoft.Maui.DevFlow.Blazor.Gtk,
+              Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS,
+              Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst
+            install_workloads: true
+            native_deps: ''
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install native dependencies
+        if: matrix.native_deps != ''
+        shell: bash
+        run: ${{ matrix.native_deps }}
+
+      - name: Install MAUI workloads
+        if: matrix.install_workloads
+        run: dotnet workload install maui macos maui-tizen
+
+      - name: Export MSBuild SDK resolver environment
+        shell: bash
+        run: node eng/nx/nx-msbuild-resolvers.js --export-github-env
+
+      - name: Normalize exclude list
+        id: excl
+        shell: bash
+        run: |
+          # collapse whitespace and trailing commas
+          list="$(echo '${{ matrix.exclude_projects }}' | tr -d '[:space:]')"
+          list="${list%,}"
+          echo "list=$list" >> "$GITHUB_OUTPUT"
+
+      - name: Restore (Nx cached)
+        uses: raegen/nx@72461f06bf34d4e37cf1274a3b48aebe48b20951
+        with:
+          nx: >-
+            affected -t restore
+            --base=${{ needs.affected.outputs.base }}
+            --head=${{ needs.affected.outputs.head }}
+            --exclude=${{ steps.excl.outputs.list }}
+
+      - name: Build (Nx cached)
+        uses: raegen/nx@72461f06bf34d4e37cf1274a3b48aebe48b20951
+        with:
+          nx: >-
+            affected -t build
+            --base=${{ needs.affected.outputs.base }}
+            --head=${{ needs.affected.outputs.head }}
+            --exclude=${{ steps.excl.outputs.list }}
+
+      - name: Test (Nx cached)
+        # Skip platform integration tests in shadow build — they need
+        # devices/sims/emulators handled by devflow-integration.yml.
+        uses: raegen/nx@72461f06bf34d4e37cf1274a3b48aebe48b20951
+        with:
+          nx: >-
+            affected -t test
+            --base=${{ needs.affected.outputs.base }}
+            --head=${{ needs.affected.outputs.head }}
+            --exclude=Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android,Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS,Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst,Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows,${{ steps.excl.outputs.list }}
