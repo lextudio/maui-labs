@@ -3,6 +3,7 @@
 
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Microsoft.Maui.Cli.Errors;
 using Microsoft.Maui.Cli.Models;
 using Microsoft.Maui.Cli.Providers.Android;
 using Microsoft.Maui.Cli.Providers.Apple;
@@ -45,4 +46,7 @@ namespace Microsoft.Maui.Cli.Output;
 [JsonSerializable(typeof(StatusMessageResult))]
 [JsonSerializable(typeof(VersionResult))]
 [JsonSerializable(typeof(CliCommandResult))]
+[JsonSerializable(typeof(ErrorCodeDescriptor))]
+[JsonSerializable(typeof(List<ErrorCodeDescriptor>))]
+[JsonSerializable(typeof(ErrorCodeCatalogueResult))]
 internal sealed partial class MauiCliJsonContext : JsonSerializerContext;
