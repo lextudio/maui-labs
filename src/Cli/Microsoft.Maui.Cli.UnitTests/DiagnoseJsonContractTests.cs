@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Microsoft.Maui.Cli.DevFlow;
 using Microsoft.Maui.Cli.Models;
 using Xunit;
 
@@ -9,19 +10,19 @@ namespace Microsoft.Maui.Cli.UnitTests;
 
 public class DiagnoseJsonContractTests
 {
-    private static readonly JsonSerializerOptions _opts = new()
-    {
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-    };
-
-    private static string Serialize(DiagnoseResult result) => JsonSerializer.Serialize(result, _opts);
+    // Use the production source-gen context so tests catch issues that would
+    // surface only at runtime under JsonSerializerIsReflectionEnabledByDefault=false.
+    private static string Serialize(DiagnoseResult result) =>
+        JsonSerializer.Serialize(result, DevFlowCliJsonContext.Default.DiagnoseResult);
 
     [Fact]
-    public void TopLevel_HasStatusMessageChecksKeys()
+    public void TopLevel_HasVersionStatusMessageChecksKeys()
     {
         var result = new DiagnoseResult { Status = DiagnoseStatus.Passed, Message = "ok", Checks = [] };
         using var doc = JsonDocument.Parse(Serialize(result));
         var root = doc.RootElement;
+        Assert.True(root.TryGetProperty("version", out var ver));
+        Assert.Equal(1, ver.GetInt32());
         Assert.True(root.TryGetProperty("status", out _));
         Assert.True(root.TryGetProperty("message", out _));
         Assert.True(root.TryGetProperty("checks", out _));
@@ -146,6 +147,12 @@ public class DiagnoseJsonContractTests
         Assert.Equal("broker", arr[0].GetProperty("id").GetString());
         Assert.Equal("agents", arr[1].GetProperty("id").GetString());
         Assert.Equal("devflow-projects", arr[2].GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public void ComputeStatus_EmptyChecks_ReturnsPassed()
+    {
+        Assert.Equal(DiagnoseStatus.Passed, DiagnoseResult.ComputeStatus([]));
     }
 
     private static DiagnoseCheckResult Check(DiagnoseCheckStatus status) =>

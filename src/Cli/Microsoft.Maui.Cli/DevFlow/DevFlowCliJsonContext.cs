@@ -24,5 +24,8 @@ namespace Microsoft.Maui.Cli.DevFlow;
 [JsonSerializable(typeof(BrokerState))]
 [JsonSerializable(typeof(RegistrationMessage))]
 [JsonSerializable(typeof(DiagnoseResult))]
+[JsonSerializable(typeof(DiagnoseCheckResult))]
+[JsonSerializable(typeof(IReadOnlyList<DiagnoseCheckResult>))]
 [JsonSerializable(typeof(List<DiagnoseCheckResult>))]
+[JsonSerializable(typeof(RemediationResult))]
 internal sealed partial class DevFlowCliJsonContext : JsonSerializerContext;

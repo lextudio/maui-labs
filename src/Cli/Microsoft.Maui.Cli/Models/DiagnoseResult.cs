@@ -8,6 +8,13 @@ namespace Microsoft.Maui.Cli.Models;
 
 public record DiagnoseResult
 {
+    /// <summary>
+    /// Schema version. Increment when introducing breaking changes to the JSON shape.
+    /// Consumers should treat unknown future versions as best-effort.
+    /// </summary>
+    [JsonPropertyName("version")]
+    public int Version { get; init; } = 1;
+
     [JsonPropertyName("status")]
     public required DiagnoseStatus Status { get; init; }
 

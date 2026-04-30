@@ -4116,7 +4116,7 @@ public class DevFlowCommands
             DiagnoseStatus.Passed => "All checks passed",
             DiagnoseStatus.Warning => "One or more checks require attention",
             DiagnoseStatus.Failed => "One or more checks failed",
-            _ => string.Empty,
+            _ => throw new System.Diagnostics.UnreachableException($"Unhandled DiagnoseStatus: {rollupStatus}"),
         };
 
         var result = new DiagnoseResult
