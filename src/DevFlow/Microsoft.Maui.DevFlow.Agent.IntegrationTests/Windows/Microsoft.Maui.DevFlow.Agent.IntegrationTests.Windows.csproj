@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <DevFlowSamplePlatform>windows</DevFlowSamplePlatform>
+    <NxBuildableOn>windows</NxBuildableOn>
   </PropertyGroup>
 
   <Import Project="..\IntegrationTests.Common.props" />

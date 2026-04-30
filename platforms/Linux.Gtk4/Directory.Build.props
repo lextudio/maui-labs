@@ -8,6 +8,8 @@
     <MauiVersion>10.0.41</MauiVersion>
     <!-- Set to false when the maui-labs DevFlow projects should not be referenced by the sample -->
     <EnableMauiDevFlow Condition="'$(EnableMauiDevFlow)' == ''">false</EnableMauiDevFlow>
+    <!-- GTK4 toolchain (libgtk-4-dev, libwebkitgtk-6.0-dev) is Linux-only. -->
+    <NxBuildableOn>linux</NxBuildableOn>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(EnableMauiDevFlow)' == 'true'">

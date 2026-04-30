@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <DevFlowSamplePlatform>maccatalyst</DevFlowSamplePlatform>
+    <NxBuildableOn>macos</NxBuildableOn>
   </PropertyGroup>
 
   <Import Project="..\IntegrationTests.Common.props" />

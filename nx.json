@@ -8,7 +8,8 @@
   "$schema": "./node_modules/nx/schemas/nx-schema.json",
   "analytics": false,
   "plugins": [
-    "@nx/dotnet"
+    "@nx/dotnet",
+    "./eng/nx/nx-os-tags.js"
   ],
   "namedInputs": {
     "default": [
