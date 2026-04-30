@@ -1,9 +1,11 @@
 # iOS & Mac Catalyst Reference
 
 Prefer the unified `maui` CLI for simulator/runtime/Xcode discovery and basic
-lifecycle. Raw `xcrun simctl` is kept only for operations not yet wrapped by
-the `maui` CLI (create / erase / install / launch / privacy / appearance /
-openurl / push / location / addmedia). Those are grouped under
+lifecycle. Permission management uses `maui devflow ui permission` (wraps
+`xcrun simctl privacy` with auto-detection). Raw `xcrun simctl` is kept only
+for operations not yet wrapped by the `maui` CLI (create / erase / install /
+launch / appearance / openurl / push / location / addmedia). Those are
+grouped under
 [Raw fallbacks not yet in `maui` CLI](#raw-fallbacks-not-yet-in-maui-cli).
 
 The standalone `apple` command from `appledev.tools` covers some of the same
@@ -186,7 +188,7 @@ xcrun simctl io booted screenshot output.png
 | `xcrun simctl location <UDID> set 37.33,-122.03` | Set GPS location |
 | `xcrun simctl pbcopy <UDID>` / `pbpaste <UDID>` | Clipboard bridge |
 | `xcrun simctl ui <UDID> appearance dark\|light` | Toggle dark mode |
-| `xcrun simctl privacy <UDID> grant\|revoke\|reset …` | Permission management |
+| `xcrun simctl privacy <UDID> grant\|revoke\|reset …` | Permission management — prefer `maui devflow ui permission` (see [Permission & Dialog Handling](#permission--dialog-handling)) |
 
 ## Troubleshooting
 
@@ -214,28 +216,42 @@ xcrun simctl io booted screenshot output.png
 
 ### Pre-grant permissions (prevents dialogs from appearing)
 
-Permissions are not yet wrapped by the `maui` CLI — use raw `xcrun simctl
-privacy`:
+Use the `maui devflow ui permission` command — it wraps `xcrun simctl
+privacy` and auto-detects the booted simulator UDID and bundle id when the
+DevFlow agent is connected:
 
 ```bash
-# Not yet wrapped by 'maui' CLI — use raw xcrun simctl
-xcrun simctl privacy <UDID> grant location com.company.appid
-xcrun simctl privacy <UDID> grant camera com.company.appid
-xcrun simctl privacy <UDID> grant photos com.company.appid
-xcrun simctl privacy <UDID> grant contacts com.company.appid
-xcrun simctl privacy <UDID> grant microphone com.company.appid
+maui devflow ui permission grant location  --bundle-id com.company.appid
+maui devflow ui permission grant camera    --bundle-id com.company.appid
+maui devflow ui permission grant photos    --bundle-id com.company.appid
+maui devflow ui permission grant contacts  --bundle-id com.company.appid
+maui devflow ui permission grant microphone --bundle-id com.company.appid
 
 # Grant all permissions at once
-xcrun simctl privacy <UDID> grant all com.company.appid
+maui devflow ui permission grant all --bundle-id com.company.appid
 
 # Revoke (deny) a permission
-xcrun simctl privacy <UDID> revoke location com.company.appid
+maui devflow ui permission revoke location --bundle-id com.company.appid
 
 # Reset (next request will show dialog again)
-xcrun simctl privacy <UDID> reset all com.company.appid
+maui devflow ui permission reset all --bundle-id com.company.appid
 ```
 
-Available services: `all`, `calendar`, `contacts`, `contacts-limited`, `location`, `location-always`, `photos`, `photos-add`, `media-library`, `microphone`, `motion`, `reminders`, `siri`.
+`--udid <UDID>` is optional and only needed if multiple simulators are
+booted; `--bundle-id` may be omitted when the DevFlow agent has it cached.
+
+Available services (passed straight through to `simctl privacy`): `all`,
+`calendar`, `contacts`, `contacts-limited`, `location`, `location-always`,
+`photos`, `photos-add`, `media-library`, `microphone`, `motion`,
+`reminders`, `siri`.
+
+If the agent is not connected and you need raw access:
+
+```bash
+# Not yet covered by 'maui devflow ui permission' — use raw xcrun simctl
+xcrun simctl privacy <UDID> grant all com.company.appid
+xcrun simctl privacy <UDID> reset all com.company.appid
+```
 
 ### Using MAUI DevFlow Driver for permissions
 ```csharp

@@ -105,17 +105,17 @@ pgrep -f "YourApp"
 ## Reading errors from the CLI
 
 `maui` commands accept `--json` to emit a structured output that an AI agent
-can parse. On failure, errors include a code, message, and remediation hint:
+can parse. On failure, error fields are at the **top level** of stdout (no
+`"error"` wrapper) with `snake_case` property names:
 
 ```json
 {
-  "error": {
-    "code": "E2106",
-    "message": "No running emulator found with name 'Pixel8'",
-    "remediation": {
-      "type": "AutoFixable",
-      "command": "maui android emulator start Pixel8"
-    }
+  "code": "E2106",
+  "category": "platform",
+  "message": "No running emulator found with name 'Pixel8'",
+  "remediation": {
+    "type": "autofixable",
+    "command": "maui android emulator start Pixel8"
   }
 }
 ```
@@ -130,9 +130,10 @@ Common code prefixes (see [troubleshooting.md](troubleshooting.md#reading-machin
 | `E4xxx` | Network |
 | `E5xxx` | Permission |
 
-Branch on `error.code`. When `error.remediation.type` is `AutoFixable`, run
-`error.remediation.command` and retry. For `UserAction`, present
-`error.remediation.manualSteps`.
+Branch on `code`. When `remediation.type` is `autofixable` (lowercase!), run
+`remediation.command` and retry. For `useraction`, present
+`remediation.manual_steps`. If `remediation` is absent, surface `message`
+and stop retrying.
 
 ## Common symptoms
 

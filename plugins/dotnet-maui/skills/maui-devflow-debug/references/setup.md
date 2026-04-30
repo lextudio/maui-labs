@@ -305,7 +305,7 @@ If status commands fail:
 - **All platforms:** Ensure the app is running and the `#if DEBUG` block is active
 - **Port conflict:** Check if another process holds the port: `lsof -i :9223` (raw; not yet wrapped by `maui`)
 - **Wrong port:** Use `maui devflow list` to find the assigned port, or ensure CLI is run from the project directory
-- **Reading errors:** Pass `--json` to any failing `maui` command and inspect `error.code` / `error.remediation` (see [troubleshooting.md](troubleshooting.md#reading-machine-readable-output-and-errors))
+- **Reading errors:** Pass `--json` to any failing `maui` command and inspect the top-level `code` / `remediation` fields (no `error` wrapper; see [troubleshooting.md](troubleshooting.md#reading-machine-readable-output-and-errors))
 
 ## Quick Checklist
 

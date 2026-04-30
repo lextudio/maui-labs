@@ -96,19 +96,20 @@ Then verify: `maui devflow ui status` and `maui devflow webview status`.
 
 ### SDK
 ```bash
-maui android sdk check                           # status with --json support
-maui android sdk info                            # SDK location, tool versions
-maui android sdk list                            # all packages
-maui android sdk list --installed
-maui android sdk list --available
-maui android sdk install --package "platforms;android-35"
-maui android sdk install --package "system-images;android-35;google_apis;arm64-v8a"
-maui android sdk install --package "emulator"
-maui android sdk install --package "platform-tools"
-maui android sdk uninstall --package <package-name>
+maui android sdk check                           # status with --json support (also reports SDK path)
+maui android sdk list                            # installed packages
+maui android sdk list --available                # all available packages
+maui android sdk list --all                      # both installed and available
+maui android sdk install "platforms;android-35"
+maui android sdk install "system-images;android-35;google_apis;arm64-v8a"
+maui android sdk install "emulator"
+maui android sdk install "platform-tools"
+maui android sdk uninstall <package-name>
 maui android sdk accept-licenses
-maui android sdk download                        # download cmdline-tools
 ```
+
+`install` and `uninstall` accept package names as **positional** arguments
+(no `--package` flag); pass multiple packages by space-separating them.
 
 For a guided full-stack setup, run:
 ```bash
@@ -118,19 +119,18 @@ maui android install                             # interactive: platform + scope
 ### Typical setup for MAUI Android development
 ```bash
 maui android sdk accept-licenses
-maui android sdk install --package "platforms;android-35"
-maui android sdk install --package "build-tools;35.0.0"
-maui android sdk install --package "system-images;android-35;google_apis;arm64-v8a"
-maui android sdk install --package "emulator"
-maui android sdk install --package "platform-tools"
+maui android sdk install "platforms;android-35"
+maui android sdk install "build-tools;35.0.0"
+maui android sdk install "system-images;android-35;google_apis;arm64-v8a"
+maui android sdk install "emulator"
+maui android sdk install "platform-tools"
 ```
 
 ### JDK
 ```bash
-maui android jdk check                           # current JDK status
+maui android jdk check                           # current JDK status (path, version)
 maui android jdk install --version 17            # install OpenJDK 17 or 21
 maui android jdk list                            # available JDKs
-maui android jdk info                            # current JDK info
 ```
 
 ### Environment variables
@@ -206,14 +206,14 @@ adb -s <serial> shell
 - **Agent not connecting on emulator**: Forgot `adb reverse tcp:19223 tcp:19223`
   for the broker. Run port forwarding, then check `maui devflow list`.
 - **Emulator won't start**: Check installed system images with
-  `maui android sdk list --installed`. Install one with
-  `maui android sdk install --package "system-images;android-XX;..."`.
+  `maui android sdk list`. Install one with
+  `maui android sdk install "system-images;android-XX;..."`.
 - **Build error "No Android devices found"**: Ensure emulator is booted
   (`maui device list --platform android`).
 - **Slow emulator**: Use hardware acceleration. Prefer `arm64-v8a` images on
   Apple Silicon Macs.
 - **JSON error envelope**: When a `maui` command fails with `--json`, parse
-  `error.code` and `error.remediation` (see `troubleshooting.md`). Common
-  Android codes: `E2101` AndroidSdkNotFound, `E2103`
-  AndroidLicensesNotAccepted, `E2106` AndroidEmulatorNotFound, `E2110`
-  AndroidAdbNotFound, `E2111` AndroidDeviceNotFound.
+  the top-level `code` and `remediation` fields (no `error` wrapper; see
+  `troubleshooting.md`). Common Android codes: `E2101` AndroidSdkNotFound,
+  `E2103` AndroidLicensesNotAccepted, `E2106` AndroidEmulatorNotFound,
+  `E2110` AndroidAdbNotFound, `E2111` AndroidDeviceNotFound.

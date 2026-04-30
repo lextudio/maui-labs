@@ -11,7 +11,7 @@ description: >-
   the unified `maui` CLI (devflow, device, android, apple, doctor command
   groups) and dotnet CLI. Falls back to raw `adb` and `xcrun simctl` only for
   operations not yet wrapped by the `maui` CLI (port forwarding, APK install,
-  logcat, simulator create/install/launch/privacy/appearance).
+  logcat, simulator create/install/launch/appearance).
 ---
 
 # DevFlow Debug
@@ -90,12 +90,14 @@ Always prefer the unified `maui` CLI surface for device prep and DevFlow
 operations. For programmatic consumption:
 
 - Pass `--json` to any command an agent will parse. Errors are emitted as a
-  structured envelope (see `references/troubleshooting.md`).
-- Inspect `error.code` to branch logic. Categories: `E1xxx` tool, `E2xxx`
+  structured envelope at the **top level** of stdout (no `"error"` wrapper),
+  with `snake_case` property names. See `references/troubleshooting.md`.
+- Inspect `code` to branch logic. Categories: `E1xxx` tool, `E2xxx`
   platform/SDK, `E3xxx` user action, `E4xxx` network, `E5xxx` permission.
-- When `error.remediation.type` is `AutoFixable`, run
-  `error.remediation.command` and retry. When it is `UserAction`, follow
-  `error.remediation.manualSteps`.
+- When `remediation` is present and `remediation.type` is `autofixable`
+  (lowercase), run `remediation.command` and retry. When it is `useraction`,
+  follow `remediation.manual_steps`. If `remediation` is absent, surface
+  `message` and stop retrying — there is no auto-fix.
 - Use `--ci` for non-interactive failure-fast runs (no prompts, fail on first error).
 
 ## Critical Anti-patterns
