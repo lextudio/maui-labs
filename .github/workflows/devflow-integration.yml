@@ -172,8 +172,10 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: >
+            export PATH="$HOME/.dotnet/tools:$PATH";
             export DEVFLOW_TEST_ANDROID_SERIAL="$(adb devices | awk '/^emulator-[0-9]+[[:space:]]+device$/ { print $1; exit }')";
             echo "Using Android emulator serial: ${DEVFLOW_TEST_ANDROID_SERIAL:-<none found>}";
+            which nxdn;
             nxdn nx -- run Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android:test
 
       - name: Upload test results
