@@ -15,6 +15,9 @@ env:
   NX_CLOUD: false
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_NOLOGO: 1
+  # NuGet credentials for the RedthDotnetNx GitHub Packages feed.
+  # Source name has no hyphens so the env-var lookup works directly.
+  NuGetPackageSourceCredentials_RedthDotnetNx: Username=USERNAME;Password=${{ secrets.GITHUB_TOKEN }}
 
 jobs:
   report:
@@ -26,9 +29,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/auth-gh-packages
+      - name: Setup Node.js (with GH Packages auth)
+        uses: actions/setup-node@v6
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          node-version: '22'
+          registry-url: https://npm.pkg.github.com
+          scope: '@redth'
+
+      - name: Install npm dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
         uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
@@ -71,9 +82,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: ./.github/actions/auth-gh-packages
+      - name: Setup Node.js (with GH Packages auth)
+        uses: actions/setup-node@v6
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          node-version: '22'
+          registry-url: https://npm.pkg.github.com
+          scope: '@redth'
+
+      - name: Install npm dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
         uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
