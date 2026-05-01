@@ -4,11 +4,10 @@ name: Nx build (shadow)
 # Nx-driven affected builds against the baseline. Non-gating: every job uses
 # continue-on-error so failures here don't block PRs.
 #
-# Per-OS routing is driven by project tags emitted by eng/nx/nx-os-tags.js.
-# Each project declares <NxBuildableOn> in its csproj or a Directory.Build.props
-# above it (default: linux;macos;windows). Each runner picks up only the
-# affected projects whose tag set includes its os-tag, so the workflow doesn't
-# carry a centralized exclusion list.
+# Per-OS routing is driven by project tags emitted by the @redth/dotnet-nx Nx
+# plugin (DotnetNx), backed by <NxBuildableOn> evaluated through MSBuild. Each
+# runner picks up only the affected projects whose tag set includes its os-tag,
+# so the workflow doesn't carry a centralized exclusion list.
 
 on:
   push:
@@ -31,66 +30,20 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true
     outputs:
-      base: ${{ steps.range.outputs.base }}
-      head: ${{ steps.range.outputs.head }}
+      base: ${{ steps.affected.outputs.base }}
+      head: ${{ steps.affected.outputs.head }}
       count: ${{ steps.affected.outputs.count }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v5
-        with:
-          global-json-file: global.json
+      - name: Setup nxdn (DotnetNx)
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
 
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      - name: Export MSBuild SDK resolver environment
-        run: node eng/nx/nx-msbuild-resolvers.js --export-github-env
-
-      - name: Compute base/head
-        id: range
-        shell: bash
-        env:
-          NX_BASE_INPUT: ${{ github.event.pull_request.base.sha || github.event.before }}
-          NX_HEAD_INPUT: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          base="$NX_BASE_INPUT"
-          head="$NX_HEAD_INPUT"
-          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
-            base="$(git rev-parse "${head}~1" 2>/dev/null || echo "$head")"
-          fi
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "head=$head" >> "$GITHUB_OUTPUT"
-
-      - name: List affected projects
+      - name: Compute affected
         id: affected
-        shell: bash
-        run: |
-          set -euo pipefail
-          ./nx show projects --affected \
-            --base=${{ steps.range.outputs.base }} \
-            --head=${{ steps.range.outputs.head }} \
-            --json > affected.json
-          count=$(node -e 'const a=JSON.parse(require("fs").readFileSync("affected.json","utf8"));console.log(Array.isArray(a)?a.length:Object.keys(a).length)')
-          echo "count=$count" >> "$GITHUB_OUTPUT"
-
-          {
-            echo "## Nx affected (shadow build)"
-            echo
-            echo "Base: \`${{ steps.range.outputs.base }}\`"
-            echo "Head: \`${{ steps.range.outputs.head }}\`"
-            echo
-            echo "Affected projects: **$count**"
-            echo
-            node -e 'const a=JSON.parse(require("fs").readFileSync("affected.json","utf8"));(Array.isArray(a)?a:Object.keys(a)).sort().forEach(p=>console.log("- `"+p+"`"))'
-          } >> "$GITHUB_STEP_SUMMARY"
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-info@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
 
   build:
     name: Build affected (${{ matrix.os }})
@@ -121,56 +74,42 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v5
-        with:
-          global-json-file: global.json
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
       - name: Install native dependencies
         if: matrix.native_deps != ''
         shell: bash
         run: ${{ matrix.native_deps }}
 
+      - name: Setup nxdn (DotnetNx)
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
+
       - name: Install MAUI workloads
         if: matrix.install_workloads
+        shell: bash
         run: dotnet workload install maui macos maui-tizen
 
-      - name: Export MSBuild SDK resolver environment
-        shell: bash
-        run: node eng/nx/nx-msbuild-resolvers.js --export-github-env
-
       - name: Restore (Nx cached)
-        uses: raegen/nx@72461f06bf34d4e37cf1274a3b48aebe48b20951
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
         with:
-          nx: >-
-            affected -t restore
-            --base=${{ needs.affected.outputs.base }}
-            --head=${{ needs.affected.outputs.head }}
-            --projects=tag:os:${{ matrix.os-tag }}
+          target: restore
+          base: ${{ needs.affected.outputs.base }}
+          head: ${{ needs.affected.outputs.head }}
+          os-tag: ${{ matrix.os-tag }}
 
       - name: Build (Nx cached)
-        uses: raegen/nx@72461f06bf34d4e37cf1274a3b48aebe48b20951
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
         with:
-          nx: >-
-            affected -t build
-            --base=${{ needs.affected.outputs.base }}
-            --head=${{ needs.affected.outputs.head }}
-            --projects=tag:os:${{ matrix.os-tag }}
+          target: build
+          base: ${{ needs.affected.outputs.base }}
+          head: ${{ needs.affected.outputs.head }}
+          os-tag: ${{ matrix.os-tag }}
 
       - name: Test (Nx cached)
         # Platform integration tests need devices/sims/emulators handled by
         # devflow-integration.yml, so skip them in the shadow build.
-        uses: raegen/nx@72461f06bf34d4e37cf1274a3b48aebe48b20951
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
         with:
-          nx: >-
-            affected -t test
-            --base=${{ needs.affected.outputs.base }}
-            --head=${{ needs.affected.outputs.head }}
-            --projects=tag:os:${{ matrix.os-tag }}
-            --exclude=Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android,Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS,Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst,Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows
+          target: test
+          base: ${{ needs.affected.outputs.base }}
+          head: ${{ needs.affected.outputs.head }}
+          os-tag: ${{ matrix.os-tag }}
+          exclude: Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android,Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS,Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst,Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows

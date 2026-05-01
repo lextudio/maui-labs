@@ -9,98 +9,41 @@ on:
 permissions:
   contents: read
 
+env:
+  NX_DAEMON: false
+  NX_CLOUD: false
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+
 jobs:
   report:
     name: Report affected projects
     runs-on: ubuntu-latest
     continue-on-error: true
-    env:
-      NX_DAEMON: false
-      NX_CLOUD: false
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          global-json-file: global.json
+      - name: Setup nxdn (DotnetNx)
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
+      - name: Compute affected projects
+        id: affected
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-info@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
 
-      - name: Compute affected project report
+      - name: Capture affected project graph
         shell: bash
-        env:
-          NX_BASE_INPUT: ${{ github.event.pull_request.base.sha || github.event.before }}
-          NX_HEAD_INPUT: ${{ github.sha }}
         run: |
           set -euo pipefail
-
           mkdir -p artifacts/nx
-
-          base="$NX_BASE_INPUT"
-          head="$NX_HEAD_INPUT"
-
-          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
-            if git rev-parse "${head}~1" >/dev/null 2>&1; then
-              base="$(git rev-parse "${head}~1")"
-            else
-              base="$head"
-            fi
-          fi
-
-          echo "NX_BASE=$base" >> "$GITHUB_ENV"
-          echo "NX_HEAD=$head" >> "$GITHUB_ENV"
-
-          ./nx show projects --affected --base="$base" --head="$head" --json \
-            > artifacts/nx/affected-projects.json
-          ./nx graph --affected --base="$base" --head="$head" \
-            --file=artifacts/nx/affected-project-graph.json --open=false
-
-      - name: Summarize affected project report
-        if: always()
-        shell: bash
-        run: |
-          node <<'JS'
-          const fs = require('fs');
-
-          let projects = [];
-          const reportPath = 'artifacts/nx/affected-projects.json';
-          if (fs.existsSync(reportPath)) {
-            const raw = fs.readFileSync(reportPath, 'utf8').trim();
-            if (raw) {
-              const parsed = JSON.parse(raw);
-              projects = Array.isArray(parsed) ? parsed : Object.keys(parsed);
-            }
-          }
-
-          const lines = [
-            '## Nx affected report',
-            '',
-            `Base: \`${process.env.NX_BASE || '<unknown>'}\``,
-            `Head: \`${process.env.NX_HEAD || '<unknown>'}\``,
-            '',
-            `Affected projects: **${projects.length}**`,
-            ''
-          ];
-
-          if (projects.length === 0) {
-            lines.push('_No affected projects reported by Nx._');
-          } else {
-            for (const project of projects.sort()) {
-              lines.push(`- \`${project}\``);
-            }
-          }
-
-          lines.push('');
-          lines.push('This is report-only telemetry from Nx and `@nx/dotnet`; existing build workflows are unchanged.');
-
-          fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${lines.join('\n')}\n`);
-          JS
+          cp "${{ steps.affected.outputs.projects-json }}" artifacts/nx/affected-projects.json
+          nxdn nx -- graph \
+            --affected \
+            --base="${{ steps.affected.outputs.base }}" \
+            --head="${{ steps.affected.outputs.head }}" \
+            --file=artifacts/nx/affected-project-graph.json \
+            --open=false
 
       - name: Upload affected project report
         if: always()
@@ -113,65 +56,36 @@ jobs:
     name: Nx cache canary
     runs-on: ubuntu-latest
     continue-on-error: true
-    env:
-      NX_DAEMON: false
-      NX_CLOUD: false
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v5
-        with:
-          global-json-file: global.json
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install Nx dependencies
-        run: npm ci
-
-      - name: Export MSBuild SDK resolver environment
-        run: node eng/nx/nx-msbuild-resolvers.js --export-github-env
+      - name: Setup nxdn (DotnetNx)
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
 
       - name: Compute affected range
         id: affected
-        shell: bash
-        env:
-          NX_BASE_INPUT: ${{ github.event.pull_request.base.sha || github.event.before }}
-          NX_HEAD_INPUT: ${{ github.sha }}
-        run: |
-          set -euo pipefail
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-info@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
 
-          base="$NX_BASE_INPUT"
-          head="$NX_HEAD_INPUT"
-
-          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
-            if git rev-parse "${head}~1" >/dev/null 2>&1; then
-              base="$(git rev-parse "${head}~1")"
-            else
-              base="$head"
-            fi
-          fi
-
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-          echo "head=$head" >> "$GITHUB_OUTPUT"
-
-      - name: Restore affected projects through Nx cache canary
-        uses: raegen/nx@72461f06bf34d4e37cf1274a3b48aebe48b20951
+      - name: Restore affected
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
         with:
-          nx: affected -t restore --base=${{ steps.affected.outputs.base }} --head=${{ steps.affected.outputs.head }}
+          target: restore
+          base: ${{ steps.affected.outputs.base }}
+          head: ${{ steps.affected.outputs.head }}
 
-      - name: Build affected projects through Nx cache canary
-        uses: raegen/nx@72461f06bf34d4e37cf1274a3b48aebe48b20951
+      - name: Build affected
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
         with:
-          nx: affected -t build --base=${{ steps.affected.outputs.base }} --head=${{ steps.affected.outputs.head }}
+          target: build
+          base: ${{ steps.affected.outputs.base }}
+          head: ${{ steps.affected.outputs.head }}
 
-      - name: Test affected projects through Nx cache canary
-        uses: raegen/nx@72461f06bf34d4e37cf1274a3b48aebe48b20951
+      - name: Test affected
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
         with:
-          nx: affected -t test --base=${{ steps.affected.outputs.base }} --head=${{ steps.affected.outputs.head }} --exclude=Microsoft.Maui.DevFlow.Agent.IntegrationTests
+          target: test
+          base: ${{ steps.affected.outputs.base }}
+          head: ${{ steps.affected.outputs.head }}
+          exclude: Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android,Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS,Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst,Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows
