@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "dotnetnx.tool": {
+      "version": "0.1.0-local",
+      "commands": [
+        "nxdn"
+      ],
+      "rollForward": false
+    }
+  }
+}

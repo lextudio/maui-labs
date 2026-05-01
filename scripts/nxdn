@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Shim used as DOTNET_NX_NXDN so the @redth/dotnet-nx Nx plugin can locate the
+# nxdn .NET local tool without requiring it on PATH. The local tool manifest
+# lives at .config/dotnet-tools.json.
+exec dotnet nxdn "$@"

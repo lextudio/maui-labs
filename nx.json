@@ -9,7 +9,7 @@
   "analytics": false,
   "plugins": [
     "@nx/dotnet",
-    "./eng/nx/nx-os-tags.js"
+    "@redth/dotnet-nx"
   ],
   "namedInputs": {
     "default": [

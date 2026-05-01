@@ -1,10 +1,7 @@
 @ECHO OFF
 SETLOCAL
 SET path_to_root=%~dp0
-WHERE node >nul 2>nul
-IF %ERRORLEVEL% NEQ 0 (ECHO Nx requires NodeJS to be available. To install NodeJS and NPM, see: https://nodejs.org/en/download/ . & GOTO exit)
-WHERE npm >nul 2>nul
-IF %ERRORLEVEL% NEQ 0 (ECHO Nx requires npm to be available. To install NodeJS and NPM, see: https://nodejs.org/en/download/ . & GOTO exit)
-node "%path_to_root%eng\nx\nx-msbuild-resolvers.js" %*
-:exit
-  cmd /c exit /b %ERRORLEVEL%
+WHERE dotnet >nul 2>nul
+IF %ERRORLEVEL% NEQ 0 (ECHO nx wrapper requires the .NET SDK on PATH. & EXIT /B 1)
+SET DOTNET_NX_NXDN=%path_to_root%scripts\nxdn.cmd
+dotnet nxdn nx -- %*

@@ -3,6 +3,7 @@
   "private": true,
   "devDependencies": {
     "@nx/dotnet": "22.7.0",
+    "@redth/dotnet-nx": "file:eng/nx/redth-dotnet-nx-0.1.0-alpha.0.tgz",
     "nx": "^22.6.5"
   }
 }

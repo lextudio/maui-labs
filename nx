@@ -1,5 +1,9 @@
-#!/bin/bash
-command -v node >/dev/null 2>&1 || { echo >&2 "Nx requires NodeJS to be available. To install NodeJS and NPM, see: https://nodejs.org/en/download/ ."; exit 1; }
-command -v npm >/dev/null 2>&1 || { echo >&2 "Nx requires npm to be available. To install NodeJS and NPM, see: https://nodejs.org/en/download/ ."; exit 1; }
+#!/usr/bin/env bash
+# Trial wrapper: delegates to the nxdn .NET local tool (DotnetNx) instead of the
+# previous eng/nx/nx-msbuild-resolvers.js bootstrap. nxdn computes the MSBuild
+# SDK resolver environment from MSBuild itself and forwards to Nx.
+set -e
 path_to_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-node "$path_to_root/eng/nx/nx-msbuild-resolvers.js" "$@"
+command -v dotnet >/dev/null 2>&1 || { echo >&2 "nx wrapper requires the .NET SDK on PATH."; exit 1; }
+export DOTNET_NX_NXDN="$path_to_root/scripts/nxdn"
+exec dotnet nxdn nx -- "$@"
