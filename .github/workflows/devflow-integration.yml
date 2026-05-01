@@ -126,16 +126,15 @@ jobs:
       - name: Install Android MAUI workload
         run: dotnet workload install maui-android
 
-      # Use the prebuilt maui-containers/maui-emulator-linux image (AVD + emulator
-      # baked in, plus Appium server) instead of provisioning an AVD from scratch
-      # via reactivecircus/android-emulator-runner@v2. The image boots the
-      # emulator on container start and exposes adb on port 5555.
+      # The image (maui-containers/maui-emulator-linux) ships with a
+      # deterministic boot sequence and a Docker HEALTHCHECK that waits for
+      # both `sys.boot_completed=1` and Appium /status before reporting
+      # healthy. We just `docker run -d` and poll `.State.Health.Status`.
       - name: Start Android emulator container
         run: |
           docker run -d \
             --name maui-emulator \
             --device /dev/kvm \
-            --privileged \
             -p 5554:5554 \
             -p 5555:5555 \
             -e EMULATOR_BOOT_TIMEOUT=600 \
@@ -144,16 +143,15 @@ jobs:
       - name: Wait for emulator to be healthy
         run: |
           set -euo pipefail
+          # HEALTHCHECK has a 120s start-period; container reports `starting`
+          # until then. We just wait for `healthy` and let the outer timeout
+          # bound the wall clock (60 * 10s = 10 minutes).
+          status=unknown
           for i in $(seq 1 60); do
             status=$(docker inspect --format='{{.State.Health.Status}}' maui-emulator 2>/dev/null || echo unknown)
             echo "[$i] container health: $status"
             if [ "$status" = "healthy" ]; then
               break
-            fi
-            if [ "$status" = "unhealthy" ] && [ "$i" -gt 5 ]; then
-              echo "Container reported unhealthy; dumping logs"
-              docker logs --tail 200 maui-emulator || true
-              exit 1
             fi
             sleep 10
           done
