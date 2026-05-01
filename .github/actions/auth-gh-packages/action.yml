@@ -1,9 +1,10 @@
 name: Authenticate to GitHub Packages
 description: |
-  Sets up .NET, configures NuGet credentials for the Redth-DotnetNx feed
-  (https://nuget.pkg.github.com/Redth), authenticates npm against
-  https://npm.pkg.github.com for the @redth scope, and runs `npm ci` so
-  the @redth/dotnet-nx Nx plugin is available before nxdn / Nx run.
+  Sets up .NET + Node, configures NuGet credentials for the Redth-DotnetNx
+  feed (https://nuget.pkg.github.com/Redth) at user level, configures npm
+  for the @redth scope on https://npm.pkg.github.com via actions/setup-node,
+  and runs `npm ci` so the @redth/dotnet-nx Nx plugin is available before
+  nxdn / Nx run.
 
 inputs:
   github-token:
@@ -29,10 +30,18 @@ runs:
       with:
         global-json-file: ${{ inputs.global-json-file }}
 
+    # actions/setup-node natively handles GH Packages auth: with registry-url
+    # + scope it writes a properly-scoped ~/.npmrc that picks up NODE_AUTH_TOKEN
+    # at install time. Avoids hand-rolling .npmrc.
     - uses: actions/setup-node@v6
       with:
         node-version: '22'
+        registry-url: https://npm.pkg.github.com
+        scope: '@redth'
 
+    # No comparable marketplace action exists for GH Packages NuGet auth, so we
+    # add the credential at user-level NuGet.Config at runtime. Needed because
+    # `dotnet tool update --global` (run by setup-nxdn) reads user-level config.
     - name: Configure NuGet auth (Redth-DotnetNx)
       shell: bash
       env:
@@ -40,8 +49,6 @@ runs:
         GH_ACTOR: ${{ inputs.github-actor }}
       run: |
         set -euo pipefail
-        # `add source` fails if the source already exists; on retries (or when
-        # the runner caches a prior user-level config) fall through to update.
         if ! dotnet nuget add source "https://nuget.pkg.github.com/Redth/index.json" \
               --name "Redth-DotnetNx" \
               --username "$GH_ACTOR" \
@@ -53,18 +60,9 @@ runs:
             --store-password-in-clear-text
         fi
 
-    - name: Configure npm auth (npm.pkg.github.com)
-      shell: bash
-      env:
-        GH_TOKEN: ${{ inputs.github-token }}
-      run: |
-        set -euo pipefail
-        {
-          echo "//npm.pkg.github.com/:_authToken=${GH_TOKEN}"
-          echo "@redth:registry=https://npm.pkg.github.com"
-        } >> "$HOME/.npmrc"
-
     - name: Install npm packages (npm ci)
       if: inputs.run-npm-ci == 'true'
       shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ inputs.github-token }}
       run: npm ci
