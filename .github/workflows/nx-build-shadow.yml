@@ -44,13 +44,13 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.1
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.2
         with:
           setup-node: 'false'
 
       - name: Compute affected
         id: affected
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-info@v0.1
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-info@v0.2
 
   build:
     name: Build affected (${{ matrix.os }})
@@ -91,7 +91,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.1
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.2
         with:
           setup-node: 'false'
 
@@ -101,7 +101,7 @@ jobs:
         run: dotnet workload install maui macos maui-tizen
 
       - name: Restore (Nx cached)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.1
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.2
         with:
           target: restore
           base: ${{ needs.affected.outputs.base }}
@@ -109,7 +109,7 @@ jobs:
           os-tag: ${{ matrix.os-tag }}
 
       - name: Build (Nx cached)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.1
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.2
         with:
           target: build
           base: ${{ needs.affected.outputs.base }}
@@ -119,7 +119,7 @@ jobs:
       - name: Test (Nx cached)
         # Platform integration tests need devices/sims/emulators handled by
         # devflow-integration.yml, so skip them in the shadow build.
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.1
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.2
         with:
           target: test
           base: ${{ needs.affected.outputs.base }}
