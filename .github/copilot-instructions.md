@@ -183,66 +183,24 @@ You can also pass a pre-built binary: `./eng/smoke-tests/apple-cli-smoke-test.sh
 
 ## CI/CD — New Product Checklist
 
-When adding a new product to this repo you **must** set up two CI surfaces: a GitHub Actions workflow for PR validation and a build job + publish stage in the Azure DevOps official pipeline for signing and NuGet.org publishing.
+When adding a new product to this repo you only need to wire it into the **Azure DevOps official pipeline** for signing and NuGet.org publishing. PR validation on GitHub Actions is handled by the consolidated `.github/workflows/ci.yml`, which discovers projects via Nx.
 
 ### Step 1: GitHub Actions PR / Push Workflow
 
-Create `.github/workflows/ci-{product}.yml`. Use the template below — replace every `{Product}` (PascalCase) and `{product}` (lowercase) placeholder.
+**Nothing to create.** `.github/workflows/ci.yml` runs Nx's `affected-matrix` action against every project in `MauiLabs.slnx`. New products are picked up automatically.
 
-```yaml
-name: CI - {Product}
+To control which OS legs build the new product, set `<NxBuildableOn>` in the product's `Directory.Build.props` (or per-csproj where finer-grained):
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'src/{Product}/**'
-      # CUSTOMIZE: add paths for cross-product ProjectReference dependencies, e.g.:
-      # - 'src/OtherProduct/SharedLib/**'
-      - 'eng/**'
-      - 'Directory.Build.props'
-      - 'Directory.Build.targets'
-      - 'Directory.Packages.props'
-      - 'global.json'
-      - 'NuGet.config'
-  pull_request:
-    # IMPORTANT: 'edited' is required — without it CI does not run when
-    # GitHub auto-retargets a PR after a stacked branch merges.
-    types: [opened, synchronize, reopened, edited]
-    branches: [main]
-    paths:
-      - 'src/{Product}/**'
-      # CUSTOMIZE: add paths for cross-product ProjectReference dependencies, e.g.:
-      # - 'src/OtherProduct/SharedLib/**'
-      - 'eng/**'
-      - 'Directory.Build.props'
-      - 'Directory.Build.targets'
-      - 'Directory.Packages.props'
-      - 'global.json'
-      - 'NuGet.config'
-
-jobs:
-  build:
-    uses: ./.github/workflows/_build.yml
-    with:
-      project-path: src/{Product}/{Product}.slnf   # CUSTOMIZE: path to solution filter (.slnf or .slnx)
-      project-name: {product}                       # CUSTOMIZE: lowercase, used in artifact names
-      run-tests: true
-      pack: true
-      install-workloads: true                       # CUSTOMIZE: set false for net10.0-only products (no MAUI TFMs)
-      # os: '["macos-latest", "windows-latest"]'    # CUSTOMIZE: default is macOS + Windows
-      # native-deps: 'sudo apt-get install ...'     # CUSTOMIZE: if Linux-only with native libs
+```xml
+<PropertyGroup>
+  <!-- One or more of: linux, macos, windows. Omit for all three. -->
+  <NxBuildableOn>macos,windows</NxBuildableOn>
+</PropertyGroup>
 ```
 
-#### `_build.yml` inputs reference
+The `@redth/dotnet-nx` plugin emits `os:linux` / `os:macos` / `os:windows` Nx tags from this property; the matrix leg for an OS only runs if at least one affected project carries that tag. Nx's `affected` graph (project + dependency edges + workspace files) replaces the old hand-maintained `paths:` filters — there is **nothing to keep in sync** when you add cross-product `ProjectReference`s.
 
-| Input | Default | When to change |
-|-------|---------|---------------|
-| `install-workloads` | `true` | Set `false` if the product targets only `net10.0` (no MAUI TFMs) |
-| `os` | `["macos-latest", "windows-latest"]` | Override to `["ubuntu-24.04"]` for Linux-only products |
-| `native-deps` | *(empty)* | Provide an `apt-get install` command if the product needs native libraries (e.g., GTK4) |
-| `pack` | `false` | Set `true` if the product produces NuGet packages |
-| `run-tests` | `true` | Set `false` only if there are no tests yet |
+If a product needs special build prerequisites (native apt deps, additional workloads, extra SDKs) on a specific OS leg, edit `ci.yml` directly. The `build` job already conditionalizes Linux apt deps and Windows/macOS Android SDK installs on `osTag`.
 
 ### Step 2: Azure DevOps Official Pipeline
 

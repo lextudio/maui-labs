@@ -42,10 +42,13 @@ dotnet test --logger "console;verbosity=detailed"
 
 ## CI Matrix
 
-Tests run on **macOS and Windows** in CI (`.github/workflows/_build.yml`):
+Tests run via the consolidated **Nx-driven** workflow `.github/workflows/ci.yml`. The `affected` job computes per-OS project lists from `<NxBuildableOn>` tags; the `build` job fans out across `linux` / `macos` / `windows` legs that have affected work, invoking `nx affected -t test` (via `Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3`).
 
-- **macOS**: `./eng/common/cibuild.sh --configuration Release --prepareMachine --projects src/DevFlow/DevFlow.slnf`
-- **Windows**: `eng\common\cibuild.cmd -configuration Release -prepareMachine -projects src/DevFlow/DevFlow.slnf`
+To run the same selective test pass locally:
+
+```bash
+./nx affected -t test
+```
 
 Test results are uploaded as artifacts: `artifacts/TestResults/**/*.xml`
 

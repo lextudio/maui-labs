@@ -34,18 +34,25 @@ This repository hosts experimental .NET MAUI packages. It is a **multi-product m
 ### Build Commands
 
 ```bash
-# Build everything
+# Build everything (raw MSBuild — does not use the Nx graph or cache)
 dotnet build MauiLabs.sln
 
 # Build a single product (recommended for focused development)
 dotnet build src/DevFlow/DevFlow.slnf
 
-# Build via Arcade CI scripts (matches what CI runs for DevFlow)
+# Nx-driven affected build/test (matches what CI runs)
+./nx affected -t build       # only rebuild projects affected by your branch
+./nx affected -t test
+./nx run-many -t build       # build everything via Nx (uses the cache)
+
+# Build via Arcade CI scripts (used inside the AzDO official pipeline)
 # macOS/Linux:
 ./eng/common/cibuild.sh --configuration Release --prepareMachine --projects src/DevFlow/DevFlow.slnf
 # Windows:
 eng\common\cibuild.cmd -configuration Release -prepareMachine -projects src/DevFlow/DevFlow.slnf
 ```
+
+> CI uses Nx (`nx affected`) for selective builds. Running `./nx affected` locally mirrors what `.github/workflows/ci.yml` will execute for your PR.
 
 ### Build Troubleshooting
 
@@ -149,14 +156,15 @@ maui-labs/
 
 ### GitHub Actions (PR validation)
 
-Each product has its own workflow file: `.github/workflows/ci-{product}.yml`, calling the shared `_build.yml` reusable workflow.
+A **single** workflow drives all PR validation: `.github/workflows/ci.yml`. It uses Nx (`@redth/dotnet-nx`) to compute the **affected** project set and run only the work that's needed for the change.
 
-- **Matrix**: macOS + Windows (configurable per product via `os` input)
-- **Path-filtered**: only triggers for changed product paths + shared build infrastructure (`eng/**`, `Directory.Build.props`, etc.)
-- **`pull_request.types`**: Must always include `[opened, synchronize, reopened, edited]` — the `edited` type ensures CI re-runs when GitHub auto-retargets a PR after a stacked branch merges
-- Steps: restore → build → test → upload test results + packages
+- **Two jobs**: `affected` (computes the matrix using `affected-matrix@v0.3`) and `build` (matrix runs `restore` → `build` → `test` → `pack` per OS leg via `run-affected@v0.3`).
+- **No path filters.** Selection is entirely Nx-driven from the `<NxBuildableOn>` MSBuild property on each project. The matrix legs are `linux`, `macos`, `windows`; a leg only runs if there are affected projects tagged `os:<leg>`.
+- **`<NxBuildableOn>` controls platform fan-out**: `linux`, `macos`, `windows`, or comma-separated subset. Default (omitted) = all three. Set in `Directory.Build.props` for products that are platform-restricted (e.g., GTK4 → `linux` only).
+- **`pull_request.types`** still includes `[opened, synchronize, reopened, edited]` so re-targeted PRs re-run CI.
+- **Comet** is a self-contained sub-product with its own `global.json` (.NET 11 preview) and is not in the Nx graph; it has its own `ci-comet.yml` workflow.
 
-Existing workflows: `ci-cli.yml`, `ci-devflow.yml`, `ci-linux-gtk4.yml`
+Existing workflows: `ci.yml` (consolidated), `ci-comet.yml` (self-contained Comet), `devflow-integration.yml` (manually-triggered emulator/simulator integration tests).
 
 ### Azure DevOps (official builds)
 
@@ -186,10 +194,10 @@ Each product requires source setup **and** CI/CD configuration across two system
 
 ### CI/CD Setup
 
-5. **GitHub Actions**: Create `.github/workflows/ci-{newproduct}.yml` calling the reusable `_build.yml` workflow. Must include `pull_request.types: [opened, synchronize, reopened, edited]` and path filters scoped to the product source plus shared build files.
+5. **GitHub Actions**: *No new workflow file needed.* The consolidated `.github/workflows/ci.yml` discovers the new product automatically via Nx. To control which OS legs build it, set `<NxBuildableOn>` in the product's `Directory.Build.props` (values: `linux`, `macos`, `windows`, or omit for all three). Nx's `affected` query handles change detection — no path filters to maintain.
 6. **Azure DevOps**: Edit `eng/pipelines/devflow-official.yml` — add a publish parameter, a build job in the `build` stage, and a conditional publish stage for NuGet.org.
 
-> **Complete copy-paste templates** for both the GitHub Actions workflow and all three Azure DevOps blocks (parameter, build job, publish stage) are in `.github/copilot-instructions.md` under **"CI/CD — New Product Checklist"**.
+> **Complete copy-paste templates** for the Azure DevOps blocks (parameter, build job, publish stage) are in `.github/copilot-instructions.md` under **"CI/CD — New Product Checklist"**. GitHub Actions PR validation requires no per-product workflow — `ci.yml` picks up new products automatically via Nx.
 
 ## DevFlow MCP Tools
 
