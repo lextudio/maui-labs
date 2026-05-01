@@ -27,10 +27,10 @@ env:
   NuGetPackageSourceCredentials_RedthDotnetNx: Username=USERNAME;Password=${{ secrets.GITHUB_TOKEN }}
   CI_PACKAGE_VERSION_SUFFIX: ci.${{ github.run_number }}.${{ github.run_attempt }}
   # Integration-test projects need real devices/sims/emulators and run only
-  # from devflow-integration.yml. They share a stable name prefix, so a
-  # single glob pattern keeps them out of the affected build without a
-  # hand-maintained block list.
-  INTEGRATION_TEST_EXCLUDES: 'Microsoft.Maui.DevFlow.Agent.IntegrationTests.*'
+  # from devflow-integration.yml. They self-tag via <NxTags>type:integration-test</NxTags>
+  # in IntegrationTests.Common.props, so this exclude is metadata-driven and
+  # doesn't depend on project naming.
+  INTEGRATION_TEST_EXCLUDES: 'tag:type:integration-test'
 
 jobs:
   affected:
@@ -59,16 +59,16 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.4
         with:
           setup-node: 'false'
 
       - name: Run DotnetNx doctor
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/doctor@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/doctor@v0.4
 
       - name: Compute affected matrix
         id: matrix
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-matrix@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-matrix@v0.4
 
       - name: Capture affected project graph
         if: steps.matrix.outputs.has-work == 'true'
@@ -138,12 +138,12 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.4
         with:
           setup-node: 'false'
 
       - name: Setup DotnetNx cache
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-cache@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-cache@v0.4
 
       - name: Install MAUI workloads
         if: matrix.osTag != 'linux'
@@ -161,7 +161,7 @@ jobs:
         run: dotnet build -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=true src/DevFlow/Microsoft.Maui.DevFlow.Agent/Microsoft.Maui.DevFlow.Agent.csproj
 
       - name: Restore (Nx cached)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.4
         with:
           target: restore
           base: ${{ needs.affected.outputs.base }}
@@ -169,7 +169,7 @@ jobs:
           os-tag: ${{ matrix.osTag }}
 
       - name: Build (Nx cached)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.4
         with:
           target: build
           base: ${{ needs.affected.outputs.base }}
@@ -177,7 +177,7 @@ jobs:
           os-tag: ${{ matrix.osTag }}
 
       - name: Test (Nx cached)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.4
         with:
           target: test
           base: ${{ needs.affected.outputs.base }}
@@ -186,7 +186,7 @@ jobs:
           exclude: ${{ env.INTEGRATION_TEST_EXCLUDES }}
 
       - name: Pack (Nx cached)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.4
         with:
           target: pack
           base: ${{ needs.affected.outputs.base }}

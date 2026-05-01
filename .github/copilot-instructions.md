@@ -200,6 +200,29 @@ To control which OS legs build the new product, set `<NxBuildableOn>` in the pro
 
 The `@redth/dotnet-nx` plugin emits `os:linux` / `os:macos` / `os:windows` Nx tags from this property; the matrix leg for an OS only runs if at least one affected project carries that tag. Nx's `affected` graph (project + dependency edges + workspace files) replaces the old hand-maintained `paths:` filters — there is **nothing to keep in sync** when you add cross-product `ProjectReference`s.
 
+### Declaring arbitrary Nx tags via `<NxTags>` / `<NxTag>`
+
+Set arbitrary `tag:value` metadata on a project to drive workflow selection without hard-coding project names:
+
+```xml
+<PropertyGroup>
+  <!-- Semicolon/comma/whitespace-separated. -->
+  <NxTags>type:integration-test;device:android;requires:emulator</NxTags>
+</PropertyGroup>
+
+<ItemGroup>
+  <!-- Or use NxTag items when you want conditions. -->
+  <NxTag Include="device:android" Condition="'$(TargetFramework)' == 'net10.0-android'" />
+</ItemGroup>
+```
+
+Workflows then select with `--projects=tag:<key>:<value>` and exclude with `--exclude=tag:<key>:<value>`. Examples in this repo:
+
+- `ci.yml` excludes integration tests via `INTEGRATION_TEST_EXCLUDES: 'tag:type:integration-test'`.
+- `devflow-integration.yml` runs each platform variant via `nxdn nx -- run-many --projects=tag:device:<platform> -t test`.
+
+Inferred tags (no MSBuild change required): `os:<host>`, `tfm:<tfm>`, `tfm-platform:<platform>`, `type:test`/`type:packable`/`type:tool`/`type:nuget`, `package-id:<id>`, `sdk:maui`. See the [Maui.BuildHelpers DotnetNx README](https://github.com/Redth/Maui.BuildHelpers/tree/main/DotnetNx#nx-tags-from-msbuild) for the full list.
+
 If a product needs special build prerequisites (native apt deps, additional workloads, extra SDKs) on a specific OS leg, edit `ci.yml` directly. The `build` job already conditionalizes Linux apt deps and Windows/macOS Android SDK installs on `osTag`.
 
 ### Step 2: Azure DevOps Official Pipeline

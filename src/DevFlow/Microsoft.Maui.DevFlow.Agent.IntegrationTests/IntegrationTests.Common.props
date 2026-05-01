@@ -20,6 +20,17 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
     <RootNamespace>Microsoft.Maui.DevFlow.Agent.IntegrationTests</RootNamespace>
+    <!--
+      Nx tags consumed by the @redth/dotnet-nx plugin (Maui.BuildHelpers v0.4+).
+
+        type:integration-test  -> ci.yml excludes this from the standard PR
+                                  validation matrix; integration tests only
+                                  run from devflow-integration.yml.
+        device:<platform>      -> devflow-integration.yml selects exactly the
+                                  test variant for each runner via
+                                  --projects=tag:device:<platform>.
+    -->
+    <NxTags>type:integration-test;device:$(DevFlowSamplePlatform)</NxTags>
   </PropertyGroup>
 
   <ItemGroup>

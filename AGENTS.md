@@ -161,6 +161,7 @@ A **single** workflow drives all PR validation: `.github/workflows/ci.yml`. It u
 - **Two jobs**: `affected` (computes the matrix using `affected-matrix@v0.3`) and `build` (matrix runs `restore` → `build` → `test` → `pack` per OS leg via `run-affected@v0.3`).
 - **No path filters.** Selection is entirely Nx-driven from the `<NxBuildableOn>` MSBuild property on each project. The matrix legs are `linux`, `macos`, `windows`; a leg only runs if there are affected projects tagged `os:<leg>`.
 - **`<NxBuildableOn>` controls platform fan-out**: `linux`, `macos`, `windows`, or comma-separated subset. Default (omitted) = all three. Set in `Directory.Build.props` for products that are platform-restricted (e.g., GTK4 → `linux` only).
+- **`<NxTags>` declares arbitrary Nx tags**: e.g. `<NxTags>type:integration-test;device:android</NxTags>` in a project's `.csproj` or shared props. The CI workflow excludes integration tests via `tag:type:integration-test`, and `devflow-integration.yml` selects each platform variant via `--projects=tag:device:<platform>` — no project names hard-coded in YAML.
 - **`pull_request.types`** still includes `[opened, synchronize, reopened, edited]` so re-targeted PRs re-run CI.
 - **Comet** is a self-contained sub-product with its own `global.json` (.NET 11 preview) and is not in the Nx graph; it has its own `ci-comet.yml` workflow.
 

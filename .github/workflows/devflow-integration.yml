@@ -12,6 +12,11 @@ name: DevFlow Integration Tests
 #   iOS       -> src/DevFlow/Microsoft.Maui.DevFlow.Agent.IntegrationTests/Fixtures/iOSSimulatorFixture.cs
 #   Mac Catalyst -> src/DevFlow/Microsoft.Maui.DevFlow.Agent.IntegrationTests/Fixtures/MacCatalystFixture.cs
 #   Windows   -> src/DevFlow/Microsoft.Maui.DevFlow.Agent.IntegrationTests/Fixtures/WindowsFixture.cs
+#
+# Each integration project self-tags via <NxTags>type:integration-test;device:<platform></NxTags>
+# in IntegrationTests.Common.props. The job selects its variant with
+# `nxdn nx -- run-many --projects=tag:device:<platform>`, so adding a new platform
+# variant is a one-csproj change with no workflow edits.
 
 on:
   workflow_dispatch:
@@ -119,7 +124,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.4
         with:
           setup-node: 'false'
 
@@ -164,9 +169,7 @@ jobs:
           adb devices
 
       - name: Run DevFlow integration tests (android)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.3
-        with:
-          target: Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android:test
+        run: nxdn nx -- run-many --projects=tag:device:android -t test
 
       - name: Dump emulator logs on failure
         if: failure()
@@ -233,7 +236,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.4
         with:
           setup-node: 'false'
 
@@ -244,10 +247,7 @@ jobs:
         run: xcrun simctl list devices available
 
       - name: Run DevFlow integration tests (ios)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.3
-        with:
-          project: Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS
-          target: test
+        run: nxdn nx -- run-many --projects=tag:device:ios -t test
 
       - name: Upload test results
         if: always()
@@ -309,7 +309,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.4
         with:
           setup-node: 'false'
 
@@ -317,10 +317,7 @@ jobs:
         run: dotnet workload install maui maccatalyst macos
 
       - name: Run DevFlow integration tests (maccatalyst)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.3
-        with:
-          project: Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst
-          target: test
+        run: nxdn nx -- run-many --projects=tag:device:maccatalyst -t test
 
       - name: Upload test results
         if: always()
@@ -353,7 +350,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.4
         with:
           setup-node: 'false'
 
@@ -362,10 +359,8 @@ jobs:
         run: dotnet workload install maui
 
       - name: Run DevFlow integration tests (windows)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.3
-        with:
-          project: Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows
-          target: test
+        shell: bash
+        run: nxdn nx -- run-many --projects=tag:device:windows -t test
 
       - name: Upload test results
         if: always()
