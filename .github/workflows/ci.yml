@@ -26,9 +26,11 @@ env:
   # Source name has no hyphens so the env-var lookup works directly.
   NuGetPackageSourceCredentials_RedthDotnetNx: Username=USERNAME;Password=${{ secrets.GITHUB_TOKEN }}
   CI_PACKAGE_VERSION_SUFFIX: ci.${{ github.run_number }}.${{ github.run_attempt }}
-  # Integration-test projects that need real devices/sims/emulators are run
-  # exclusively from devflow-integration.yml, not from this workflow.
-  INTEGRATION_TEST_EXCLUDES: Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android,Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS,Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst,Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows
+  # Integration-test projects need real devices/sims/emulators and run only
+  # from devflow-integration.yml. They share a stable name prefix, so a
+  # single glob pattern keeps them out of the affected build without a
+  # hand-maintained block list.
+  INTEGRATION_TEST_EXCLUDES: 'Microsoft.Maui.DevFlow.Agent.IntegrationTests.*'
 
 jobs:
   affected:
