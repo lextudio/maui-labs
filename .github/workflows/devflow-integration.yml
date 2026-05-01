@@ -46,6 +46,10 @@ concurrency:
   group: devflow-integration-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  packages: read
+
 env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   DOTNET_NOLOGO: 1
@@ -112,8 +116,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - uses: ./.github/actions/auth-gh-packages
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.1
+        with:
+          setup-node: 'false'
 
       - name: Install Android MAUI workload
         run: dotnet workload install maui-android
@@ -203,8 +213,14 @@ jobs:
           xcrun --sdk macosx --show-sdk-path
           xcrun --sdk macosx --find actool
 
+      - uses: ./.github/actions/auth-gh-packages
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.1
+        with:
+          setup-node: 'false'
 
       - name: Install Apple MAUI workloads
         run: dotnet workload install maui ios macos
@@ -213,7 +229,10 @@ jobs:
         run: xcrun simctl list devices available
 
       - name: Run DevFlow integration tests (ios)
-        run: nxdn nx -- run Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS:test
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.1
+        with:
+          project: Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS
+          target: test
 
       - name: Upload test results
         if: always()
@@ -262,14 +281,23 @@ jobs:
           xcrun --sdk macosx --show-sdk-path
           xcrun --sdk macosx --find actool
 
+      - uses: ./.github/actions/auth-gh-packages
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.1
+        with:
+          setup-node: 'false'
 
       - name: Install Apple MAUI workloads
         run: dotnet workload install maui maccatalyst macos
 
       - name: Run DevFlow integration tests (maccatalyst)
-        run: nxdn nx -- run Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst:test
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.1
+        with:
+          project: Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst
+          target: test
 
       - name: Upload test results
         if: always()
@@ -289,16 +317,24 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: ./.github/actions/auth-gh-packages
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@ab2fef3e080396a22b6fc3b6d1a9a9eb3c67b701
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.1
+        with:
+          setup-node: 'false'
 
       - name: Install MAUI workloads
         shell: bash
         run: dotnet workload install maui
 
       - name: Run DevFlow integration tests (windows)
-        shell: bash
-        run: nxdn nx -- run Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows:test
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.1
+        with:
+          project: Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows
+          target: test
 
       - name: Upload test results
         if: always()
