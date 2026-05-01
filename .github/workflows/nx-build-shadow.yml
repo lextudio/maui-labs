@@ -27,13 +27,14 @@ env:
 
 jobs:
   affected:
-    name: Compute affected
+    name: Compute affected matrix
     runs-on: ubuntu-latest
     continue-on-error: true
     outputs:
-      base: ${{ steps.affected.outputs.base }}
-      head: ${{ steps.affected.outputs.head }}
-      count: ${{ steps.affected.outputs.count }}
+      base: ${{ steps.matrix.outputs.base }}
+      head: ${{ steps.matrix.outputs.head }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has-work: ${{ steps.matrix.outputs.has-work }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -44,85 +45,75 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
         with:
           setup-node: 'false'
 
-      - name: Compute affected
-        id: affected
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-info@v0.2
+      - name: Compute affected matrix
+        id: matrix
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-matrix@v0.3
 
   build:
     name: Build affected (${{ matrix.os }})
     needs: affected
-    if: needs.affected.outputs.count != '0'
+    if: needs.affected.outputs.has-work == 'true'
     continue-on-error: true
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            os-tag: linux
-            install_workloads: false
-            native_deps: |
-              sudo apt-get update
-              sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
-          - os: macos-latest
-            os-tag: macos
-            install_workloads: true
-            native_deps: ''
-          - os: windows-latest
-            os-tag: windows
-            install_workloads: true
-            native_deps: ''
-    runs-on: ${{ matrix.os }}
+      matrix: ${{ fromJSON(needs.affected.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - name: Install native dependencies
-        if: matrix.native_deps != ''
+      - name: Install native dependencies (linux)
+        if: matrix.osTag == 'linux'
         shell: bash
-        run: ${{ matrix.native_deps }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
 
       - uses: ./.github/actions/auth-gh-packages
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
         with:
           setup-node: 'false'
 
+      - name: Setup DotnetNx cache
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-cache@v0.3
+
       - name: Install MAUI workloads
-        if: matrix.install_workloads
+        if: matrix.osTag != 'linux'
         shell: bash
         run: dotnet workload install maui macos maui-tizen
 
       - name: Restore (Nx cached)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
         with:
           target: restore
           base: ${{ needs.affected.outputs.base }}
           head: ${{ needs.affected.outputs.head }}
-          os-tag: ${{ matrix.os-tag }}
+          os-tag: ${{ matrix.osTag }}
 
       - name: Build (Nx cached)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
         with:
           target: build
           base: ${{ needs.affected.outputs.base }}
           head: ${{ needs.affected.outputs.head }}
-          os-tag: ${{ matrix.os-tag }}
+          os-tag: ${{ matrix.osTag }}
 
       - name: Test (Nx cached)
         # Platform integration tests need devices/sims/emulators handled by
         # devflow-integration.yml, so skip them in the shadow build.
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
         with:
           target: test
           base: ${{ needs.affected.outputs.base }}
           head: ${{ needs.affected.outputs.head }}
-          os-tag: ${{ matrix.os-tag }}
+          os-tag: ${{ matrix.osTag }}
           exclude: Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android,Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS,Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst,Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows

@@ -121,7 +121,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
         with:
           setup-node: 'false'
 
@@ -218,7 +218,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
         with:
           setup-node: 'false'
 
@@ -229,7 +229,7 @@ jobs:
         run: xcrun simctl list devices available
 
       - name: Run DevFlow integration tests (ios)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.3
         with:
           project: Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS
           target: test
@@ -286,7 +286,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
         with:
           setup-node: 'false'
 
@@ -294,7 +294,7 @@ jobs:
         run: dotnet workload install maui maccatalyst macos
 
       - name: Run DevFlow integration tests (maccatalyst)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.3
         with:
           project: Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst
           target: test
@@ -322,7 +322,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
         with:
           setup-node: 'false'
 
@@ -331,7 +331,7 @@ jobs:
         run: dotnet workload install maui
 
       - name: Run DevFlow integration tests (windows)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-target@v0.3
         with:
           project: Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows
           target: test

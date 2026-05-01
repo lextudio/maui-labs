@@ -31,13 +31,16 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
         with:
           setup-node: 'false'
 
+      - name: Run DotnetNx doctor
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/doctor@v0.3
+
       - name: Compute affected projects
         id: affected
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-info@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-info@v0.3
 
       - name: Capture affected project graph
         shell: bash
@@ -73,30 +76,33 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup nxdn (DotnetNx)
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
         with:
           setup-node: 'false'
 
+      - name: Setup DotnetNx cache
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-cache@v0.3
+
       - name: Compute affected range
         id: affected
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-info@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-info@v0.3
 
       - name: Restore affected
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
         with:
           target: restore
           base: ${{ steps.affected.outputs.base }}
           head: ${{ steps.affected.outputs.head }}
 
       - name: Build affected
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
         with:
           target: build
           base: ${{ steps.affected.outputs.base }}
           head: ${{ steps.affected.outputs.head }}
 
       - name: Test affected
-        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.2
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
         with:
           target: test
           base: ${{ steps.affected.outputs.base }}
