@@ -1,0 +1,263 @@
+name: CI
+
+# Single Nx-driven CI workflow for the whole repo.
+#
+# Per-OS routing is driven by project tags emitted by the @redth/dotnet-nx Nx
+# plugin (DotnetNx), backed by <NxBuildableOn> evaluated through MSBuild. Each
+# runner picks up only the affected projects whose tag set includes its os-tag,
+# so we don't carry centralised path filters or product-specific workflows.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: read
+
+env:
+  NX_DAEMON: false
+  NX_CLOUD: false
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  DOTNET_NOLOGO: 1
+  # NuGet credentials for the RedthDotnetNx GitHub Packages feed.
+  # Source name has no hyphens so the env-var lookup works directly.
+  NuGetPackageSourceCredentials_RedthDotnetNx: Username=USERNAME;Password=${{ secrets.GITHUB_TOKEN }}
+  CI_PACKAGE_VERSION_SUFFIX: ci.${{ github.run_number }}.${{ github.run_attempt }}
+  # Integration-test projects that need real devices/sims/emulators are run
+  # exclusively from devflow-integration.yml, not from this workflow.
+  INTEGRATION_TEST_EXCLUDES: Microsoft.Maui.DevFlow.Agent.IntegrationTests.Android,Microsoft.Maui.DevFlow.Agent.IntegrationTests.iOS,Microsoft.Maui.DevFlow.Agent.IntegrationTests.MacCatalyst,Microsoft.Maui.DevFlow.Agent.IntegrationTests.Windows
+
+jobs:
+  affected:
+    name: Compute affected matrix
+    runs-on: ubuntu-latest
+    outputs:
+      base: ${{ steps.matrix.outputs.base }}
+      head: ${{ steps.matrix.outputs.head }}
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has-work: ${{ steps.matrix.outputs.has-work }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js (with GH Packages auth)
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          registry-url: https://npm.pkg.github.com
+          scope: '@redth'
+
+      - name: Install npm dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup nxdn (DotnetNx)
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
+        with:
+          setup-node: 'false'
+
+      - name: Run DotnetNx doctor
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/doctor@v0.3
+
+      - name: Compute affected matrix
+        id: matrix
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/affected-matrix@v0.3
+
+      - name: Capture affected project graph
+        if: steps.matrix.outputs.has-work == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/nx
+          nxdn nx -- graph \
+            --affected \
+            --base="${{ steps.matrix.outputs.base }}" \
+            --head="${{ steps.matrix.outputs.head }}" \
+            --file=artifacts/nx/affected-project-graph.json \
+            --open=false || true
+          # Surface the per-OS project lists so the report is useful even when
+          # downstream legs skip.
+          for f in "${{ steps.matrix.outputs.linux-projects-json }}" \
+                   "${{ steps.matrix.outputs.macos-projects-json }}" \
+                   "${{ steps.matrix.outputs.windows-projects-json }}"; do
+            [ -n "$f" ] && [ -f "$f" ] && cp "$f" artifacts/nx/ || true
+          done
+
+      - name: Upload affected project report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nx-affected-report
+          path: artifacts/nx/
+          if-no-files-found: ignore
+
+  build:
+    name: Build affected (${{ matrix.os }})
+    needs: affected
+    if: needs.affected.outputs.has-work == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.affected.outputs.matrix) }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install native dependencies (linux)
+        if: matrix.osTag == 'linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            gobject-introspection \
+            libgirepository1.0-dev \
+            gir1.2-gtk-4.0 \
+            gir1.2-webkit-6.0 \
+            pkg-config
+
+      - name: Setup Node.js (with GH Packages auth)
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          registry-url: https://npm.pkg.github.com
+          scope: '@redth'
+
+      - name: Install npm dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup nxdn (DotnetNx)
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-nxdn@v0.3
+        with:
+          setup-node: 'false'
+
+      - name: Setup DotnetNx cache
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/setup-cache@v0.3
+
+      - name: Install MAUI workloads
+        if: matrix.osTag != 'linux'
+        shell: bash
+        run: dotnet workload install maui macos maui-tizen
+
+      - name: Install Android SDK dependencies (Windows)
+        if: matrix.osTag == 'windows'
+        shell: cmd
+        run: dotnet build -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="%ANDROID_HOME%" -p:AcceptAndroidSDKLicenses=true src\DevFlow\Microsoft.Maui.DevFlow.Agent\Microsoft.Maui.DevFlow.Agent.csproj
+
+      - name: Install Android SDK dependencies (macOS)
+        if: matrix.osTag == 'macos'
+        shell: bash
+        run: dotnet build -t:InstallAndroidDependencies -f net10.0-android -p:AndroidSdkDirectory="$ANDROID_HOME" -p:AcceptAndroidSDKLicenses=true src/DevFlow/Microsoft.Maui.DevFlow.Agent/Microsoft.Maui.DevFlow.Agent.csproj
+
+      - name: Restore (Nx cached)
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
+        with:
+          target: restore
+          base: ${{ needs.affected.outputs.base }}
+          head: ${{ needs.affected.outputs.head }}
+          os-tag: ${{ matrix.osTag }}
+
+      - name: Build (Nx cached)
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
+        with:
+          target: build
+          base: ${{ needs.affected.outputs.base }}
+          head: ${{ needs.affected.outputs.head }}
+          os-tag: ${{ matrix.osTag }}
+
+      - name: Test (Nx cached)
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
+        with:
+          target: test
+          base: ${{ needs.affected.outputs.base }}
+          head: ${{ needs.affected.outputs.head }}
+          os-tag: ${{ matrix.osTag }}
+          exclude: ${{ env.INTEGRATION_TEST_EXCLUDES }}
+
+      - name: Pack (Nx cached)
+        uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.3
+        with:
+          target: pack
+          base: ${{ needs.affected.outputs.base }}
+          head: ${{ needs.affected.outputs.head }}
+          os-tag: ${{ matrix.osTag }}
+          env: |
+            VersionSuffix=${{ env.CI_PACKAGE_VERSION_SUFFIX }}
+
+      - name: NativeAOT publish smoke test (CLI on macOS)
+        if: matrix.osTag == 'macos' && hashFiles('artifacts/bin/Microsoft.Maui.Cli/**') != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          arch="$(uname -m)"
+          case "$arch" in
+            arm64) rid="osx-arm64" ;;
+            x86_64) rid="osx-x64" ;;
+            *)
+              echo "Unsupported macOS architecture: $arch"
+              exit 1
+              ;;
+          esac
+
+          dotnet publish src/Cli/Microsoft.Maui.Cli/Microsoft.Maui.Cli.csproj \
+            -c Release \
+            -f net10.0 \
+            -r "$rid" \
+            -p:PublishAot=true \
+            -p:PublishTrimmed=true \
+            -p:InvariantGlobalization=true \
+            -p:TreatWarningsAsErrors=true \
+            --self-contained true
+
+          publish_dir="artifacts/bin/Microsoft.Maui.Cli/Release/net10.0/$rid/publish"
+          cli_path="$publish_dir/maui"
+          commands_json="$(mktemp)"
+          agents_json="$(mktemp)"
+
+          "$cli_path" devflow version
+          "$cli_path" devflow commands --json > "$commands_json"
+          "$cli_path" devflow broker stop >/dev/null 2>&1 || true
+          "$cli_path" devflow list --json > "$agents_json"
+          "$cli_path" devflow broker stop >/dev/null 2>&1 || true
+
+          python - "$commands_json" "$agents_json" <<'PY'
+          import json
+          import sys
+
+          with open(sys.argv[1], "r", encoding="utf-8") as fp:
+              commands = json.load(fp)
+          with open(sys.argv[2], "r", encoding="utf-8") as fp:
+              agents = json.load(fp)
+
+          assert isinstance(commands, list), "Expected commands output to be a JSON array"
+          assert commands, "Expected at least one command description"
+          assert all("command" in item and "description" in item for item in commands), "Command entries must include command and description"
+          assert isinstance(agents, list), "Expected list --json output to be a JSON array"
+          PY
+
+          rm -f "$commands_json" "$agents_json"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-${{ matrix.osTag }}
+          path: artifacts/TestResults/**/*.xml
+          if-no-files-found: ignore
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: packages-${{ matrix.osTag }}
+          path: artifacts/packages/**/*.nupkg
+          if-no-files-found: ignore
