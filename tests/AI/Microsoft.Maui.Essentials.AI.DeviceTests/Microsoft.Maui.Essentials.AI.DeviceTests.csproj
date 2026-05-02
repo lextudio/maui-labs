@@ -49,6 +49,10 @@
   </ItemGroup>
 
   <!-- XHarness support for CI/headless runs -->
+  <PropertyGroup Condition="'$(TestingMode)' == 'XHarness'">
+    <DefineConstants>$(DefineConstants);MODE_XHARNESS</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup Condition="'$(TestingMode)' == 'XHarness'">
     <PackageReference Include="DeviceRunners.XHarness.Xunit" />
     <PackageReference Include="DeviceRunners.XHarness.Maui" />
@@ -57,6 +61,8 @@
   <!-- Windows Phi Silica: requires experimental WindowsAppSDK for WinRT AI APIs -->
   <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
     <PackageReference Include="Microsoft.WindowsAppSDK" VersionOverride="2.0.0-experimental6" />
+    <!-- Enables dotnet run for packaged MSIX apps (registers loose layout, activates via AUMID) -->
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools.WinApp" PrivateAssets="all" />
   </ItemGroup>
 
   <!-- Windows Phi Silica: link to sample's helper so tests can use it -->
