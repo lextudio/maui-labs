@@ -195,7 +195,7 @@ Assert.Equal("default", ValueConverters.Coalesce(value, fallback));
 }
 }
 
-public class TabViewTests
+public class TabViewTests : TestBase
 {
 [Fact]
 public void TabView_Creation()

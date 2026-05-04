@@ -26,11 +26,13 @@ env:
   # Source name has no hyphens so the env-var lookup works directly.
   NuGetPackageSourceCredentials_RedthDotnetNx: Username=USERNAME;Password=${{ secrets.GITHUB_TOKEN }}
   CI_PACKAGE_VERSION_SUFFIX: ci.${{ github.run_number }}.${{ github.run_attempt }}
-  # Integration-test projects need real devices/sims/emulators and run only
-  # from devflow-integration.yml. They self-tag via <NxTags>type:integration-test</NxTags>
-  # in IntegrationTests.Common.props, so this exclude is metadata-driven and
-  # doesn't depend on project naming.
-  INTEGRATION_TEST_EXCLUDES: 'tag:type:integration-test'
+  # Excluded from the consolidated build:
+  # - tag:type:integration-test  -> need real devices/sims/emulators (run via devflow-integration.yml)
+  # - tag:type:standalone-ci     -> products that own their own ci-{product}.yml workflow
+  #                                 (e.g. EssentialsAI's macOS->Windows xcframework handoff,
+  #                                 MacOS-AppKit's bespoke Xcode setup, WPF, AppProjectReference).
+  # Both are metadata-driven via <NxTags> in the product/project files; no project names hard-coded here.
+  AFFECTED_EXCLUDES: 'tag:type:integration-test,tag:type:standalone-ci'
 
 jobs:
   affected:
@@ -183,7 +185,7 @@ jobs:
           base: ${{ needs.affected.outputs.base }}
           head: ${{ needs.affected.outputs.head }}
           os-tag: ${{ matrix.osTag }}
-          exclude: ${{ env.INTEGRATION_TEST_EXCLUDES }}
+          exclude: ${{ env.AFFECTED_EXCLUDES }}
 
       - name: Pack (Nx cached)
         uses: Redth/Maui.BuildHelpers/DotnetNx/actions/run-affected@v0.4

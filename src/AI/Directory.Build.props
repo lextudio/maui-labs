@@ -1,0 +1,11 @@
+<Project>
+  <Import Project="../../Directory.Build.props" />
+
+  <PropertyGroup>
+    <!-- EssentialsAI uses a sequenced macOS->Windows build (Swift xcframeworks built on macOS,
+         consumed by `dotnet pack` on Windows via AppleBindings.targets). The consolidated
+         ci.yml runs OS legs in parallel and cannot do that handoff, so EssentialsAI owns
+         its own workflow (ci-essentialsai.yml) and is excluded from ci.yml via this tag. -->
+    <NxTags>type:standalone-ci</NxTags>
+  </PropertyGroup>
+</Project>

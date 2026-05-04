@@ -1,0 +1,8 @@
+<Project>
+  <Import Project="../../Directory.Build.props" />
+
+  <PropertyGroup>
+    <!-- AppProjectReference owns ci-appprojectreference.yml. Excluded from ci.yml via this tag. -->
+    <NxTags>type:standalone-ci</NxTags>
+  </PropertyGroup>
+</Project>

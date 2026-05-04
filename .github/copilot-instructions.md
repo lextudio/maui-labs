@@ -185,6 +185,11 @@ You can also pass a pre-built binary: `./eng/smoke-tests/apple-cli-smoke-test.sh
 
 When adding a new product to this repo you only need to wire it into the **Azure DevOps official pipeline** for signing and NuGet.org publishing. PR validation on GitHub Actions is handled by the consolidated `.github/workflows/ci.yml`, which discovers projects via Nx.
 
+You **must** also provide documentation:
+
+- **Product README** — create two READMEs: (1) a contributor README at the product root (`src/{Product}/README.md`) for GitHub browsing with features, build instructions, and architecture; (2) a NuGet README next to the shipping csproj (`src/{Product}/Microsoft.Maui.{Product}/README.md`) with install, quick start, and usage examples. Pack the NuGet README via `<None Include="README.md" Pack="true" PackagePath="/" />` and set `<PackRepoRootReadme>false</PackRepoRootReadme>`. Both should include: product name, features, platform support matrix, quick start, packages, requirements, and experimental status warning. Keep descriptions aligned to avoid drift.
+- **Root README entry** — add a section under `## Products` in the repo-root `README.md` with a brief description, feature highlights, and package table.
+
 ### Step 1: GitHub Actions PR / Push Workflow
 
 **Nothing to create.** `.github/workflows/ci.yml` runs Nx's `affected-matrix` action against every project in `MauiLabs.slnx`. New products are picked up automatically.
@@ -218,12 +223,25 @@ Set arbitrary `tag:value` metadata on a project to drive workflow selection with
 
 Workflows then select with `--projects=tag:<key>:<value>` and exclude with `--exclude=tag:<key>:<value>`. Examples in this repo:
 
-- `ci.yml` excludes integration tests via `INTEGRATION_TEST_EXCLUDES: 'tag:type:integration-test'`.
+- `ci.yml` excludes integration tests and standalone-CI products via `AFFECTED_EXCLUDES: 'tag:type:integration-test,tag:type:standalone-ci'`.
 - `devflow-integration.yml` runs each platform variant via `nxdn nx -- run-many --projects=tag:device:<platform> -t test`.
 
 Inferred tags (no MSBuild change required): `os:<host>`, `tfm:<tfm>`, `tfm-platform:<platform>`, `type:test`/`type:packable`/`type:tool`/`type:nuget`, `package-id:<id>`, `sdk:maui`. See the [Maui.BuildHelpers DotnetNx README](https://github.com/Redth/Maui.BuildHelpers/tree/main/DotnetNx#nx-tags-from-msbuild) for the full list.
 
 If a product needs special build prerequisites (native apt deps, additional workloads, extra SDKs) on a specific OS leg, edit `ci.yml` directly. The `build` job already conditionalizes Linux apt deps and Windows/macOS Android SDK installs on `osTag`.
+
+### Step 1b: Products with their own workflow (standalone-CI)
+
+Some products can't fit the consolidated `ci.yml` matrix — for example, EssentialsAI's macOS→Windows Swift xcframework artifact handoff, or MacOS-AppKit's pinned Xcode version. These keep their own `.github/workflows/ci-{product}.yml` calling the reusable `_build.yml`. Tag the product so `ci.yml` skips it:
+
+```xml
+<!-- in src/{Product}/Directory.Build.props -->
+<PropertyGroup>
+  <NxTags>type:standalone-ci</NxTags>
+</PropertyGroup>
+```
+
+Existing standalone-CI products: `src/AI` (EssentialsAI), `src/AppProjectReference`, `platforms/MacOS`, `platforms/Windows.WPF`.
 
 ### Step 2: Azure DevOps Official Pipeline
 

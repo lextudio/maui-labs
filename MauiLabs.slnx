@@ -11,8 +11,12 @@
     <Project Path="samples/DevFlow.Sample.Linux/DevFlow.Sample.Linux.csproj" />
     <Project Path="samples/DevFlow.Sample.MacOS/DevFlow.Sample.MacOS.csproj" />
     <Project Path="samples/DevFlow.Sample/DevFlow.Sample.csproj" />
+    <Project Path="samples/EssentialsAISample/EssentialsAISample.csproj" />
   </Folder>
   <Folder Name="/src/" />
+  <Folder Name="/src/AI/">
+    <Project Path="src/AI/Microsoft.Maui.Essentials.AI/Microsoft.Maui.Essentials.AI.csproj" />
+  </Folder>
   <Folder Name="/src/Comet/">
     <Project Path="src/Comet/src/Comet.SourceGenerator/Comet.SourceGenerator.csproj" />
     <Project Path="src/Comet/src/Comet/Comet.csproj" />
@@ -43,6 +47,24 @@
     <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Logging/Microsoft.Maui.DevFlow.Logging.csproj" />
     <Project Path="src/DevFlow/Microsoft.Maui.DevFlow.Tests/Microsoft.Maui.DevFlow.Tests.csproj" />
   </Folder>
+  <Folder Name="/src/AppProjectReference/">
+    <Project Path="src/AppProjectReference/Microsoft.Maui.Build.AppProjectReference/Microsoft.Maui.Build.AppProjectReference.csproj" />
+    <Project Path="src/AppProjectReference/Microsoft.Maui.Build.AppProjectReference.Tests/Microsoft.Maui.Build.AppProjectReference.Tests.csproj" />
+  </Folder>
   <Folder Name="/tests/" />
+  <Folder Name="/tests/AI/">
+    <Project Path="tests/AI/Microsoft.Maui.Essentials.AI.Benchmarks/Microsoft.Maui.Essentials.AI.Benchmarks.csproj" />
+    <Project Path="tests/AI/Microsoft.Maui.Essentials.AI.DeviceTests/Microsoft.Maui.Essentials.AI.DeviceTests.csproj" />
+    <Project Path="tests/AI/Microsoft.Maui.Essentials.AI.UnitTests/Microsoft.Maui.Essentials.AI.UnitTests.csproj" />
+  </Folder>
   <Folder Name="/tests/DevFlow/" />
+  <Folder Name="/platforms/MacOS/">
+    <Project Path="platforms/MacOS/src/MacOS/MacOS.csproj" />
+    <Project Path="platforms/MacOS/src/MacOS.Essentials/MacOS.Essentials.csproj" />
+    <Project Path="platforms/MacOS/src/MacOS.BlazorWebView/MacOS.BlazorWebView.csproj" />
+  </Folder>
+  <Folder Name="/platforms/Windows.WPF/">
+    <Project Path="platforms/Windows.WPF/src/Windows.WPF/Windows.WPF.csproj" />
+    <Project Path="platforms/Windows.WPF/src/Windows.WPF.Essentials/Windows.WPF.Essentials.csproj" />
+  </Folder>
 </Solution>

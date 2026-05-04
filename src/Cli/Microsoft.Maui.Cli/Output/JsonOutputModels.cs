@@ -95,3 +95,32 @@ internal sealed record CliCommandResult
 	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
 	public List<int>? Versions { get; init; }
 }
+
+internal sealed record SimulatorCreateResult
+{
+	[JsonPropertyName("udid")]
+	public required string Udid { get; init; }
+
+	[JsonPropertyName("name")]
+	public required string Name { get; init; }
+
+	[JsonPropertyName("device_type")]
+	public required string DeviceType { get; init; }
+
+	[JsonPropertyName("runtime")]
+	[JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+	public string? Runtime { get; init; }
+}
+
+/// <summary>
+/// Result of a successful simulator erase. The <see cref="Erased"/> field is always <c>true</c>;
+/// failure is reported via a MauiToolException before this model is emitted.
+/// </summary>
+internal sealed record SimulatorEraseResult
+{
+	[JsonPropertyName("target")]
+	public required string Target { get; init; }
+
+	[JsonPropertyName("erased")]
+	public bool Erased { get; init; }
+}
