@@ -142,7 +142,6 @@ Built artifacts are exposed as `@(MauiAppArtifact)` items with `ArtifactType`, `
 |---------|-------------|
 | `Microsoft.Maui.Build.AppProjectReference` | Build-time app project reference with artifact discovery |
 
-
 ## Agent Skills
 
 This repository is also a marketplace for distributable agent skills for .NET MAUI development. Skills are organized as plugins compatible with Copilot CLI, Claude Code, and VS Code.

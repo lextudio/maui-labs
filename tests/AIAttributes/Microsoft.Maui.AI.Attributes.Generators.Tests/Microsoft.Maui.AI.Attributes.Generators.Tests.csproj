@@ -26,10 +26,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Reference the runtime lib so compiled inputs can resolve AIToolContext, attributes, etc. -->
-    <ProjectReference Include="..\Microsoft.Maui.AI.Attributes\Microsoft.Maui.AI.Attributes.csproj" />
+    <ProjectReference Include="..\..\..\src\AIAttributes\Microsoft.Maui.AI.Attributes\Microsoft.Maui.AI.Attributes.csproj" />
     <!-- Reference the generator as a plain library (not Analyzer) so tests can instantiate it directly. -->
-    <ProjectReference Include="..\Microsoft.Maui.AI.Attributes.Generators\Microsoft.Maui.AI.Attributes.Generators.csproj" />
+    <ProjectReference Include="..\..\..\src\AIAttributes\Microsoft.Maui.AI.Attributes.Generators\Microsoft.Maui.AI.Attributes.Generators.csproj" />
   </ItemGroup>
 
   <ItemGroup>

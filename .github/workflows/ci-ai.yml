@@ -4,7 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/AI/**'
+      - 'src/AIAttributes/**'
+      - 'tests/AIAttributes/**'
       - 'eng/**'
       - 'Directory.Build.props'
       - 'Directory.Build.targets'
@@ -14,7 +15,8 @@ on:
   pull_request:
     branches: [main]
     paths:
-      - 'src/AI/**'
+      - 'src/AIAttributes/**'
+      - 'tests/AIAttributes/**'
       - 'eng/**'
       - 'Directory.Build.props'
       - 'Directory.Build.targets'
@@ -26,7 +28,7 @@ jobs:
   build:
     uses: ./.github/workflows/_build.yml
     with:
-      project-path: src/AI/AI.slnf
+      project-path: src/AIAttributes/AIAttributes.slnf
       project-name: ai-attributes
       run-tests: true
       pack: true
