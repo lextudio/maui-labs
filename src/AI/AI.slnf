@@ -1,0 +1,11 @@
+{
+  "solution": {
+    "path": "../../MauiLabs.slnx",
+    "projects": [
+      "src\\AI\\Microsoft.Maui.AI.Attributes\\Microsoft.Maui.AI.Attributes.csproj",
+      "src\\AI\\Microsoft.Maui.AI.Attributes.Generators\\Microsoft.Maui.AI.Attributes.Generators.csproj",
+      "src\\AI\\Microsoft.Maui.AI.Attributes.Tests\\Microsoft.Maui.AI.Attributes.Tests.csproj",
+      "src\\AI\\Microsoft.Maui.AI.Attributes.Generators.Tests\\Microsoft.Maui.AI.Attributes.Generators.Tests.csproj"
+    ]
+  }
+}

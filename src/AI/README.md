@@ -1,47 +1,61 @@
-# Microsoft.Maui.Essentials.AI
+# .NET MAUI AI
 
-On-device AI capabilities for .NET MAUI via [`Microsoft.Extensions.AI`](https://www.nuget.org/packages/Microsoft.Extensions.AI.Abstractions) abstractions.
+AI capabilities for .NET MAUI, built on [`Microsoft.Extensions.AI`](https://learn.microsoft.com/dotnet/ai/ai-extensions) abstractions.
 
-> **Note:** This is the contributor/repo-browsing README. The NuGet consumer README with install instructions and full usage examples is at [`Microsoft.Maui.Essentials.AI/README.md`](Microsoft.Maui.Essentials.AI/README.md).
+This directory contains two packages:
 
-## Features
+## AI Attributes
+
+Source-generated AI tool discovery for .NET. Decorate methods or property accessors with `[ExportAIFunction]` to create AI-callable tools — no runtime reflection, AOT-friendly.
+
+```csharp
+[ExportAIFunction("search_plants")]
+public List<PlantInfo> SearchPlants([Description("Filter text")] string? query = null)
+{
+    // ...
+}
+```
+
+| Package | Description |
+|---------|-------------|
+| [`Microsoft.Maui.AI.Attributes`](Microsoft.Maui.AI.Attributes/) | Source-generated AI tool contexts for `Microsoft.Extensions.AI` |
+
+- [NuGet README](Microsoft.Maui.AI.Attributes/README.md) — full API documentation, samples, and equivalence rules
+- CI: `ci-ai.yml` / Solution filter: `AI.slnf`
+
+## Essentials.AI
+
+On-device AI for .NET MAUI apps using platform-native models — no cloud required. On Apple platforms, wraps Apple Intelligence (Foundation Models) for chat completion and NaturalLanguage APIs for embeddings.
+
+```csharp
+builder.Services.AddSingleton<IChatClient>(new AppleIntelligenceChatClient());
+```
+
+### Platform Support
+
+| Platform | Chat (IChatClient) | Embeddings (IEmbeddingGenerator) |
+|----------|-------------------|----------------------------------|
+| iOS 26+ | ✅ Apple Intelligence (Foundation Models) | ✅ NL Embeddings |
+| Mac Catalyst 26+ | ✅ Apple Intelligence | ✅ NL Embeddings |
+| macOS 26+ | ✅ Apple Intelligence | ✅ NL Embeddings |
+| Android | 🔜 Coming soon | 🔜 Coming soon |
+| Windows | 🔜 Coming soon | 🔜 Coming soon |
+
+### Features
 
 - **`IChatClient`** — backed by Apple Intelligence (Foundation Models) on iOS, macOS, and Mac Catalyst
 - **Streaming** — progressive JSON deserialization of LLM responses via `JsonStreamChunker` and `PlainTextStreamChunker`
 - **Tool calling** — function-calling support for on-device models
 - **NL embeddings** — on-device semantic search via Apple's NaturalLanguage framework (`NLEmbeddingGenerator`)
 
-### Platform Support
+### Architecture
 
-| Platform | Chat (IChatClient) | Embeddings (IEmbeddingGenerator) |
-|----------|-------------------|----------------------------------|
-| iOS 26+ | ✅ Apple Intelligence | ✅ NL Embeddings |
-| Mac Catalyst 26+ | ✅ Apple Intelligence | ✅ NL Embeddings |
-| macOS 26+ | ✅ Apple Intelligence | ✅ NL Embeddings |
-| Android | 🔜 Coming soon | 🔜 Coming soon |
-| Windows | 🔜 Coming soon | 🔜 Coming soon |
+- **Native Swift bindings** (`AppleNative/EssentialsAI/`) — compiled via Xcode, producing `.xcframework` bundles
+- **`AppleBindings.targets`** — MSBuild targets for cross-platform native artifact flow (macOS builds Swift, Windows downloads pre-built artifacts)
+- **Streaming infrastructure** — `JsonStreamChunker`, `PlainTextStreamChunker`, `StreamingResponseHandler` for progressive deserialization
+- **Android native** (`AndroidNative/`) — placeholder for future Android on-device AI
 
-## Quick Start
-
-```csharp
-using Microsoft.Extensions.AI;
-using Microsoft.Maui.Essentials.AI;
-
-// Register in MauiProgram.cs
-builder.Services.AddSingleton<IChatClient>(new AppleIntelligenceChatClient());
-
-// Use via DI
-var client = serviceProvider.GetRequiredService<IChatClient>();
-var response = await client.GetResponseAsync("Plan a weekend trip to Portland");
-```
-
-## Packages
-
-| Package | Description |
-|---------|-------------|
-| `Microsoft.Maui.Essentials.AI` | On-device AI APIs for MAUI |
-
-## Building
+### Building
 
 ```bash
 # macOS (builds Swift bindings + .NET library)
@@ -52,17 +66,22 @@ dotnet build src/AI/EssentialsAI.slnf
 # or TF_BUILD=true for the pre-built artifact path to activate.)
 ```
 
-The CI pipeline handles the macOS → Windows artifact flow automatically. See `.github/workflows/ci-essentialsai.yml` for details.
+| Package | Description |
+|---------|-------------|
+| [`Microsoft.Maui.Essentials.AI`](Microsoft.Maui.Essentials.AI/) | On-device AI APIs for MAUI |
 
-## Architecture
+- [NuGet README](Microsoft.Maui.Essentials.AI/README.md) — install instructions, streaming, embeddings
+- [Design doc](../../docs/ai/json-stream-chunker-design.md) — JSON stream chunker architecture
+- CI: `ci-essentialsai.yml` / Solution filter: `EssentialsAI.slnf`
 
-- **Native Swift bindings** (`AppleNative/EssentialsAI/`) compiled via Xcode, producing `.xcframework` bundles
-- **`AppleBindings.targets`** — MSBuild targets for cross-platform native artifact flow
-- **Streaming infrastructure** — `JsonStreamChunker`, `PlainTextStreamChunker`, `StreamingResponseHandler` for progressive deserialization
+## Samples
 
-## Documentation
-
-- [JSON Stream Chunker Design](../../docs/ai/json-stream-chunker-design.md)
+| Sample | Demonstrates |
+|--------|-------------|
+| [`AIAttributes.Sample.Hello`](../../samples/AIAttributes.Sample.Hello/) | Minimal end-to-end AI Attributes usage |
+| [`AIAttributes.Sample.DIParameters`](../../samples/AIAttributes.Sample.DIParameters/) | DI parameter binding with `[FromServices]` |
+| [`AIAttributes.Sample.Garden`](../../samples/AIAttributes.Sample.Garden/) | Full MAUI chat app with navigation, cart, approval flow |
+| [`EssentialsAISample`](../../samples/EssentialsAISample/) | On-device trip planner with streaming and embeddings |
 
 ## Requirements
 
@@ -70,4 +89,4 @@ The CI pipeline handles the macOS → Windows artifact flow automatically. See `
 - MAUI workload (`dotnet workload install maui`)
 - Apple Intelligence features require iOS 26+, Mac Catalyst 26+, or macOS 26+
 
-> ⚠️ **This package is experimental** (always ships as `-preview`). APIs may change between releases.
+> ⚠️ **These packages are experimental.** APIs may change between releases.
