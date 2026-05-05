@@ -593,17 +593,12 @@ extends:
     - ${{ if eq(parameters.publishWpfNuget, true) }}:
       - stage: publish_wpf_nuget
         displayName: 'Publish WPF to NuGet.org'
-    # Publish EssentialsAI packages to NuGet.org
-    - ${{ if eq(parameters.publishEssentialsAINuget, true) }}:
-      - stage: publish_essentialsai_nuget
-        displayName: 'Publish EssentialsAI to NuGet.org'
         dependsOn:
         - Validate
         - publish_using_darc
         jobs:
         - job: PrepareArtifacts
           displayName: 'Prepare WPF Artifacts'
-          displayName: 'Prepare EssentialsAI Artifacts'
           timeoutInMinutes: 15
           pool:
             name: NetCore1ESPool-Internal
@@ -615,9 +610,6 @@ extends:
               displayName: Publish WPF Packages
               targetPath: '$(Pipeline.Workspace)/WpfPackages'
               artifactName: WpfPackagesForNuGet
-              displayName: Publish EssentialsAI Packages
-              targetPath: '$(Pipeline.Workspace)/EssentialsAIPackages'
-              artifactName: EssentialsAIPackagesForNuGet
           steps:
           - download: current
             artifact: PackageArtifacts
@@ -629,12 +621,6 @@ extends:
 
         - job: PublishNuGet
           displayName: 'Push WPF to NuGet.org'
-              New-Item -ItemType Directory -Force -Path '$(Pipeline.Workspace)/EssentialsAIPackages'
-              Copy-Item '$(Pipeline.Workspace)/PackageArtifacts/Microsoft.Maui.Essentials.AI.*.nupkg' '$(Pipeline.Workspace)/EssentialsAIPackages/' -Verbose
-            displayName: Filter EssentialsAI packages
-
-        - job: PublishNuGet
-          displayName: 'Push EssentialsAI to NuGet.org'
           dependsOn: PrepareArtifacts
           timeoutInMinutes: 30
           pool:
@@ -655,6 +641,52 @@ extends:
               useDotNetTask: false
               packagesToPush: '$(Pipeline.Workspace)/WpfPackages/*.nupkg'
               packageParentPath: '$(Pipeline.Workspace)/WpfPackages'
+              nuGetFeedType: external
+              publishFeedCredentials: 'nuget.org (dotnetframework)'
+
+    # Publish EssentialsAI packages to NuGet.org
+    - ${{ if eq(parameters.publishEssentialsAINuget, true) }}:
+      - stage: publish_essentialsai_nuget
+        displayName: 'Publish EssentialsAI to NuGet.org'
+        dependsOn:
+        - Validate
+        - publish_using_darc
+        jobs:
+        - job: PrepareArtifacts
+          displayName: 'Prepare EssentialsAI Artifacts'
+          timeoutInMinutes: 15
+          pool:
+            name: NetCore1ESPool-Internal
+            image: windows.vs2026preview.scout.amd64
+            os: windows
+          templateContext:
+            outputs:
+            - output: pipelineArtifact
+              displayName: Publish EssentialsAI Packages
+              targetPath: '$(Pipeline.Workspace)/EssentialsAIPackages'
+              artifactName: EssentialsAIPackagesForNuGet
+          steps:
+          - download: current
+            artifact: PackageArtifacts
+            displayName: Download PackageArtifacts
+          - powershell: |
+              New-Item -ItemType Directory -Force -Path '$(Pipeline.Workspace)/EssentialsAIPackages'
+              Copy-Item '$(Pipeline.Workspace)/PackageArtifacts/Microsoft.Maui.Essentials.AI.*.nupkg' '$(Pipeline.Workspace)/EssentialsAIPackages/' -Verbose -ErrorAction Stop
+            displayName: Filter EssentialsAI packages
+
+        - job: PublishNuGet
+          displayName: 'Push EssentialsAI to NuGet.org'
+          dependsOn: PrepareArtifacts
+          timeoutInMinutes: 30
+          pool:
+            name: NetCore1ESPool-Internal
+            image: windows.vs2026preview.scout.amd64
+            os: windows
+          templateContext:
+            type: releaseJob
+            isProduction: true
+            inputs:
+            - input: pipelineArtifact
               artifactName: EssentialsAIPackagesForNuGet
               targetPath: '$(Pipeline.Workspace)/EssentialsAIPackages'
           steps:
