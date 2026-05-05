@@ -88,7 +88,7 @@ jobs:
 
       - name: Install workloads
         if: inputs.install-workloads
-        run: dotnet workload install ${{ inputs.workloads }}
+        run: dotnet workload install ${{ inputs.workloads }} --version 10.0.203
 
       - name: Install Android SDK dependencies (Windows)
         if: inputs.install-workloads && matrix.os == 'windows-latest'
