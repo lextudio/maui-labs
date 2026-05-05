@@ -26,4 +26,8 @@ namespace Microsoft.Maui.Cli.DevFlow;
 [JsonSerializable(typeof(AndroidDevFlowForwardingReport))]
 [JsonSerializable(typeof(AndroidDevFlowDevice[]))]
 [JsonSerializable(typeof(AndroidDevFlowPortForward[]))]
+[JsonSerializable(typeof(ExtensionDescriptor))]
+[JsonSerializable(typeof(ExtensionToolInfo))]
+[JsonSerializable(typeof(ExtensionToolAnnotationsInfo))]
+[JsonSerializable(typeof(Dictionary<string, ExtensionDescriptor>))]
 internal sealed partial class DevFlowCliJsonContext : JsonSerializerContext;

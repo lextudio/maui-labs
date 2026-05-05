@@ -8,6 +8,7 @@ using Microsoft.Maui.Cli.DevFlow.Android;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Maui.Cli.DevFlow.Skills;
 using Microsoft.Maui.Cli.Utils;
+using Microsoft.Maui.DevFlow.Driver;
 
 namespace Microsoft.Maui.Cli.DevFlow;
 
@@ -1434,6 +1435,52 @@ public class DevFlowCommands
 
         devflowCommand.Add(agentCommand);
 
+        // ===== extensions command (agent extension discovery + invocation) =====
+        var extensionsCommand = new Command("extensions", "Discover and call DevFlow agent extensions");
+
+        var extListCmd = new Command("list", "List all registered extensions on the connected agent");
+        extListCmd.SetAction(async (ctx, ct) =>
+        {
+            var host = ctx.GetValue(agentHostOption)!;
+            var port = ctx.GetValue(agentPortOption);
+            var json = ctx.GetValue(jsonOption);
+            var noJson = ctx.GetValue(noJsonOption);
+            await ExtensionsListAsync(host, port, output.ResolveJsonMode(json, noJson));
+        });
+        extensionsCommand.Add(extListCmd);
+
+        var extDescribeNamespaceArg = new Argument<string>("namespace") { Description = "Extension namespace in reverse-domain notation" };
+        var extDescribeCmd = new Command("describe", "Describe extension tools") { extDescribeNamespaceArg };
+        extDescribeCmd.SetAction(async (ctx, ct) =>
+        {
+            var host = ctx.GetValue(agentHostOption)!;
+            var port = ctx.GetValue(agentPortOption);
+            var ns = ctx.GetValue(extDescribeNamespaceArg)!;
+            var json = ctx.GetValue(jsonOption);
+            var noJson = ctx.GetValue(noJsonOption);
+            await ExtensionsDescribeAsync(host, port, ns, output.ResolveJsonMode(json, noJson));
+        });
+        extensionsCommand.Add(extDescribeCmd);
+
+        var extCallNamespaceArg = new Argument<string>("namespace") { Description = "Extension namespace in reverse-domain notation" };
+        var extToolArg = new Argument<string>("tool") { Description = "Tool name within the extension" };
+        var extParametersArg = new Argument<string?>("parameters") { Description = "Optional JSON parameters", DefaultValueFactory = _ => null };
+        var extCallCmd = new Command("call", "Call an extension tool") { extCallNamespaceArg, extToolArg, extParametersArg };
+        extCallCmd.SetAction(async (ctx, ct) =>
+        {
+            var host = ctx.GetValue(agentHostOption)!;
+            var port = ctx.GetValue(agentPortOption);
+            var ns = ctx.GetValue(extCallNamespaceArg)!;
+            var tool = ctx.GetValue(extToolArg)!;
+            var parameters = ctx.GetValue(extParametersArg);
+            var json = ctx.GetValue(jsonOption);
+            var noJson = ctx.GetValue(noJsonOption);
+            await ExtensionsCallAsync(host, port, ns, tool, parameters, output.ResolveJsonMode(json, noJson));
+        });
+        extensionsCommand.Add(extCallCmd);
+
+        devflowCommand.Add(extensionsCommand);
+
         // ===== batch command (interactive stdin/stdout) =====
         var batchDelayOption = new Option<int>("--delay") { Description = "Delay in ms between commands", DefaultValueFactory = _ => 250 };
         var batchContinueOption = new Option<bool>("--continue-on-error") { Description = "Continue executing after a command fails", DefaultValueFactory = _ => false };
@@ -1490,6 +1537,98 @@ public class DevFlowCommands
         _devflowCommand = devflowCommand;
 
         return devflowCommand;
+    }
+
+    private static async Task ExtensionsListAsync(string host, int port, bool json)
+    {
+        using var client = new AgentClient(host, port);
+        var extensions = await client.GetExtensionsAsync();
+        if (json)
+        {
+            var result = new JsonObject
+            {
+                ["extensions"] = JsonSerializer.SerializeToNode(
+                    extensions,
+                    typeof(Dictionary<string, ExtensionDescriptor>),
+                    DevFlowCliJsonContext.Default)
+            };
+            Output.WriteResult(result, json);
+            return;
+        }
+
+        if (extensions.Count == 0)
+        {
+            Console.WriteLine("No extensions registered on the connected agent.");
+            return;
+        }
+
+        Console.WriteLine($"{"Namespace",-35} {"Version",-10} {"Tools",-5} Description");
+        Console.WriteLine(new string('-', 90));
+        foreach (var (ns, extension) in extensions.OrderBy(e => e.Key, StringComparer.Ordinal))
+            Console.WriteLine($"{ns,-35} {extension.Version,-10} {extension.Tools.Count,-5} {extension.Description}");
+    }
+
+    private static async Task ExtensionsDescribeAsync(string host, int port, string ns, bool json)
+    {
+        using var client = new AgentClient(host, port);
+        var extensions = await client.GetExtensionsAsync();
+        if (!extensions.TryGetValue(ns, out var extension))
+            throw new InvalidOperationException($"Extension '{ns}' was not found.");
+
+        if (json)
+        {
+            Output.WriteResult(extension, json);
+            return;
+        }
+
+        Console.WriteLine($"{ns} {extension.Version}");
+        Console.WriteLine(extension.Description);
+        Console.WriteLine();
+        Console.WriteLine($"{"Tool",-24} {"Method",-7} Path");
+        Console.WriteLine(new string('-', 80));
+        foreach (var tool in extension.Tools.OrderBy(t => t.Name, StringComparer.Ordinal))
+            Console.WriteLine($"{tool.Name,-24} {tool.Method,-7} {tool.Path}");
+    }
+
+    private static async Task ExtensionsCallAsync(string host, int port, string ns, string toolName, string? parameters, bool json)
+    {
+        using var client = new AgentClient(host, port);
+        var extensions = await client.GetExtensionsAsync();
+        if (!extensions.TryGetValue(ns, out var extension))
+            throw new InvalidOperationException($"Extension '{ns}' was not found.");
+
+        var tool = extension.Tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.Ordinal));
+        if (tool == null)
+            throw new InvalidOperationException($"Tool '{toolName}' was not found in extension '{ns}'.");
+
+        JsonElement? parameterJson = null;
+        if (!string.IsNullOrWhiteSpace(parameters))
+            parameterJson = JsonSerializer.Deserialize<JsonElement>(parameters);
+
+        var result = await client.CallExtensionToolAsync(tool.Method, tool.Path, parameterJson);
+        if (json)
+        {
+            Console.WriteLine(result);
+            return;
+        }
+
+        Console.WriteLine(TryFormatJson(result));
+    }
+
+    private static string TryFormatJson(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return "{}";
+
+        try
+        {
+            using var doc = JsonDocument.Parse(value);
+            return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch (JsonException)
+        {
+            return value;
+        }
     }
     
     // ===== CDP Helper: Send command via AgentClient =====
