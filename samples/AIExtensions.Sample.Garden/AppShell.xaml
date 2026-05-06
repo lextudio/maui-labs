@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:pages="clr-namespace:AIExtensions.Sample.Garden.Pages"
+       x:Class="AIExtensions.Sample.Garden.AppShell"
+       Title="Garden Shop"
+       Shell.BackgroundColor="#5B8C5A"
+       Shell.ForegroundColor="White"
+       Shell.TitleColor="White"
+       Shell.NavBarIsVisible="False">
+
+    <TabBar Route="main" Shell.TabBarIsVisible="False">
+        <ShellContent Route="chat"
+                      Title="Chat"
+                      Icon="&#xE76C;"
+                      ContentTemplate="{DataTemplate pages:MainPage}" />
+
+        <ShellContent Route="products"
+                      Title="Products"
+                      Icon="&#xF788;"
+                      ContentTemplate="{DataTemplate pages:CatalogPage}" />
+
+        <ShellContent Route="orders"
+                      Title="Orders"
+                      Icon="&#xEA07;"
+                      ContentTemplate="{DataTemplate pages:OrdersPage}" />
+    </TabBar>
+
+</Shell>

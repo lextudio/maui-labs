@@ -182,7 +182,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions and development se
 
 For the formal DevFlow HTTP and WebSocket contract, see [`docs/DevFlow/spec`](docs/DevFlow/spec/README.md).
 
-For AI.Attributes usage and samples, see [`src/AIAttributes/README.md`](src/AIAttributes/README.md) and [`samples/AIAttributes.Sample.Garden`](samples/AIAttributes.Sample.Garden/README.md).
+For AI.Attributes usage and samples, see [`src/AIExtensions/README.md`](src/AIExtensions/README.md) and [`samples/AIExtensions.Sample.Garden`](samples/AIExtensions.Sample.Garden/README.md).
 
 ## Support
 
