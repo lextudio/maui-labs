@@ -19,8 +19,16 @@ public class DevFlowCommands
     private static Command? _devflowCommand;
     private static bool _errorOccurred;
     private static IDevFlowOutputWriter? s_output;
+    internal static Func<Task<int?>> ResolveRunningBrokerPortAsync { get; set; } = Broker.BrokerClient.GetRunningBrokerPortAsync;
+    internal static Func<int, Task<Broker.AgentRegistration[]?>> ListBrokerAgentsAsync { get; set; } = Broker.BrokerClient.ListAgentsAsync;
 
     private static IDevFlowOutputWriter Output => s_output ?? throw new InvalidOperationException("DevFlowCommands not initialized. Call CreateDevFlowCommand first.");
+
+    internal static void ResetBrokerClientForTests()
+    {
+        ResolveRunningBrokerPortAsync = Broker.BrokerClient.GetRunningBrokerPortAsync;
+        ListBrokerAgentsAsync = Broker.BrokerClient.ListAgentsAsync;
+    }
 
     /// <summary>
     /// Creates the "devflow" command with all subcommands for integration into the MAUI CLI.
@@ -4011,32 +4019,43 @@ public class DevFlowCommands
     {
         await WriteSkillFreshnessHintAsync(json, cancellationToken);
 
-        var diagnostics = new Dictionary<string, object>();
-        
+        var agentsJson = new JsonArray();
+        var projectsJson = new JsonArray();
+
         // Get CLI version
         var version = typeof(DevFlowCommands).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
-        diagnostics["cli_version"] = version;
         
         // Check broker status
-        var brokerPort = await Broker.BrokerClient.EnsureBrokerRunningAsync();
+        var brokerPort = await ResolveRunningBrokerPortAsync();
         var brokerRunning = brokerPort != null;
-        diagnostics["broker_running"] = brokerRunning;
-        if (brokerRunning)
-            diagnostics["broker_port"] = brokerPort!.Value;
         
         // List connected agents
-        var agents = brokerRunning ? await Broker.BrokerClient.ListAgentsAsync(brokerPort!.Value) : null;
+        var agents = brokerRunning ? await ListBrokerAgentsAsync(brokerPort!.Value) : null;
         var agentCount = agents?.Length ?? 0;
-        diagnostics["agent_count"] = agentCount;
-        diagnostics["agents"] = agents ?? Array.Empty<object>();
+        if (agents is not null)
+        {
+            foreach (var agent in agents)
+                agentsJson.Add(CliJson.ParseNode(CliJson.SerializeUntyped(agent, indented: false)));
+        }
         
         // Scan for devflow-enabled projects
         var projects = ScanForDevFlowProjects();
-        diagnostics["projects"] = projects;
+        foreach (var project in projects)
+            projectsJson.Add(project);
         
         if (json)
         {
+            var diagnostics = new JsonObject
+            {
+                ["cli_version"] = version,
+                ["broker_running"] = brokerRunning,
+                ["agent_count"] = agentCount,
+                ["agents"] = agentsJson,
+                ["projects"] = projectsJson
+            };
+            if (brokerPort is not null)
+                diagnostics["broker_port"] = brokerPort;
             Output.WriteResult(diagnostics, json);
             return;
         }
