@@ -93,6 +93,7 @@ namespace Sample
                 properties["data"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
                 if (properties["data"] is global::System.Text.Json.Nodes.JsonObject dataObj)
                     dataObj["description"] = "data";
+                required.Add("data");
                 var schema = new global::System.Text.Json.Nodes.JsonObject
                 {
                     ["type"] = "object",

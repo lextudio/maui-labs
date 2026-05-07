@@ -670,7 +670,7 @@ public sealed class AIToolContextGenerator : IIncrementalGenerator
                 unannotatedTypeName,
                 kind,
                 keyedServiceKey,
-                p.Type.NullableAnnotation == NullableAnnotation.Annotated || p.Type.IsReferenceType,
+                p.Type.NullableAnnotation == NullableAnnotation.Annotated,
                 hasDefault,
                 defaultLiteral,
                 GetParameterDescription(p)));

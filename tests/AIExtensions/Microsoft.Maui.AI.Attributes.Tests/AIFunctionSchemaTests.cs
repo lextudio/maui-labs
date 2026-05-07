@@ -62,4 +62,29 @@ public class AIFunctionSchemaTests
         Assert.Contains("stable identifier returned to the AI", returnSchema!);
         Assert.Contains("nickname echoed back to the AI", returnSchema!);
     }
+
+    [Fact]
+    public void Schema_marks_non_nullable_reference_params_as_required()
+    {
+        // TestToolService.DoSomething(string input) — "input" is non-nullable string, should be required
+        var tool = Assert.IsAssignableFrom<AIFunctionDeclaration>(
+            TestToolContext.Default.Tools.First(t => t.Name == "test_tool"));
+
+        var schema = tool.JsonSchema.ToString();
+        Assert.Contains("\"required\"", schema);
+        Assert.Contains("\"input\"", schema);
+    }
+
+    [Fact]
+    public void Schema_marks_value_type_params_as_required()
+    {
+        // StaticMathService has Add(int a, int b) — both value types, both required
+        var tool = Assert.IsAssignableFrom<AIFunctionDeclaration>(
+            StaticMathToolContext.Default.Tools.First(t => t.Name == "add_numbers"));
+
+        var schema = tool.JsonSchema.ToString();
+        Assert.Contains("\"required\"", schema);
+        Assert.Contains("\"a\"", schema);
+        Assert.Contains("\"b\"", schema);
+    }
 }

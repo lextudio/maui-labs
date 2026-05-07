@@ -45,6 +45,7 @@ public partial class Outer
                 var properties = new global::System.Text.Json.Nodes.JsonObject();
                 var required = new global::System.Text.Json.Nodes.JsonArray();
                 properties["x"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
+                required.Add("x");
                 var schema = new global::System.Text.Json.Nodes.JsonObject
                 {
                     ["type"] = "object",

@@ -47,6 +47,7 @@ namespace Sample
                 properties["item"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
                 if (properties["item"] is global::System.Text.Json.Nodes.JsonObject itemObj)
                     itemObj["description"] = "item name";
+                required.Add("item");
                 properties["qty"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(int), serializerOptions: s_jsonOptions).GetRawText());
                 if (properties["qty"] is global::System.Text.Json.Nodes.JsonObject qtyObj)
                     qtyObj["description"] = "quantity";

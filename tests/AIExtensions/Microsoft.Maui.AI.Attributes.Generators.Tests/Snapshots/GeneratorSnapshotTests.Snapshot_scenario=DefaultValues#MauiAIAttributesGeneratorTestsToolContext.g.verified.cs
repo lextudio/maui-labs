@@ -45,6 +45,7 @@ namespace Sample
                 var properties = new global::System.Text.Json.Nodes.JsonObject();
                 var required = new global::System.Text.Json.Nodes.JsonArray();
                 properties["name"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
+                required.Add("name");
                 properties["count"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(int), serializerOptions: s_jsonOptions).GetRawText());
                 properties["verbose"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(bool), serializerOptions: s_jsonOptions).GetRawText());
                 properties["prefix"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
