@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 
 namespace Microsoft.Maui.AI.Attributes.Generators;
 
@@ -78,7 +76,7 @@ internal sealed record ContextModel(
             if (!existing.Any(e => e.FullyQualifiedName == nt.FullyQualifiedName))
                 existing.Add(nt);
         }
-        return this with { SourceTypes = existing.ToImmutableArray() };
+        return this with { SourceTypes = [.. existing] };
     }
 }
 

@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -123,11 +121,9 @@ public sealed class AIToolContextGenerator : IIncrementalGenerator
                 className,
                 $"global::{rootNamespace}.{className}",
                 "internal",
-                ImmutableArray<ContainingTypeInfo>.Empty,
-                sourceTypes.Values
-                    .Select(st => new SourceTypeModel(st.fqn, st.simpleName, st.methods.ToImmutableArray()))
-                    .ToImmutableArray(),
-                ImmutableArray<DiagnosticInfo>.Empty,
+                [],
+                [.. sourceTypes.Values.Select(st => new SourceTypeModel(st.fqn, st.simpleName, [.. st.methods]))],
+                [],
                 EmitBaseClass: true);
 
             var source = CodeEmitter.GenerateContextSource(model);

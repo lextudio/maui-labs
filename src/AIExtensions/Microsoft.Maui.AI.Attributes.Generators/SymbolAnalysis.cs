@@ -1,7 +1,4 @@
-using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Linq;
-using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -156,7 +153,7 @@ internal static class SymbolAnalysis
                             attr.ApplicationSyntaxReference?.GetSyntax(ct).GetLocation()));
                     }
                 }
-                methods = methods.Where(m => includeSet.Contains(m.MethodName)).ToList();
+                methods = [.. methods.Where(m => includeSet.Contains(m.MethodName))];
             }
             // IncludeTools=[] or null → keep all (no filtering)
 
@@ -164,7 +161,7 @@ internal static class SymbolAnalysis
             if (excludeTools is { Length: > 0 } exclude)
             {
                 var excludeSet = new HashSet<string>(exclude, System.StringComparer.Ordinal);
-                methods = methods.Where(m => !excludeSet.Contains(m.MethodName)).ToList();
+                methods = [.. methods.Where(m => !excludeSet.Contains(m.MethodName))];
             }
             // ExcludeTools=[] or null → exclude nothing
 
@@ -183,7 +180,7 @@ internal static class SymbolAnalysis
             sourceTypes.Add(new SourceTypeModel(
                 sourceTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 CodeEmitter.SanitizeIdentifier(sourceTypeSymbol.Name),
-                methods.ToImmutableArray()));
+                [.. methods]));
         }
 
         if (sourceTypes.Count == 0 && diagnostics.Count == 0)
@@ -226,9 +223,9 @@ internal static class SymbolAnalysis
             contextSymbol.Name,
             contextSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
             accessibility,
-            containingTypes.ToImmutableArray(),
-            sourceTypes.ToImmutableArray(),
-            diagnostics.ToImmutableArray());
+            [.. containingTypes],
+            [.. sourceTypes],
+            [.. diagnostics]);
     }
 
     internal static List<MethodModel> GetExportedMethods(
@@ -331,17 +328,17 @@ internal static class SymbolAnalysis
                 nameCollisions[baseClassName] = 0;
             }
 
-        methods.Add(new MethodModel(
-            method.Name,
-            toolName,
-            description,
-            approvalRequired,
-            method.IsStatic,
-            IsProperty: false,
-            IsPropertySetter: false,
-            parameters,
-            returnInfo,
-            baseClassName));
+            methods.Add(new MethodModel(
+                method.Name,
+                toolName,
+                description,
+                approvalRequired,
+                method.IsStatic,
+                IsProperty: false,
+                IsPropertySetter: false,
+                parameters,
+                returnInfo,
+                baseClassName));
         }
 
         // Also scan properties with [ExportAIFunction] — check the property itself
@@ -474,7 +471,7 @@ internal static class SymbolAnalysis
         }
 
         var parameters = isReadTool || prop.SetMethod is null
-            ? ImmutableArray<ParameterModel>.Empty
+            ? []
             : ImmutableArray.Create(new ParameterModel(
                 "value",
                 prop.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
@@ -543,7 +540,7 @@ internal static class SymbolAnalysis
                 defaultLiteral,
                 GetParameterDescription(p)));
         }
-        return list.ToImmutableArray();
+        return [.. list];
     }
 
     private static string? GetParameterDescription(IParameterSymbol p)

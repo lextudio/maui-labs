@@ -145,7 +145,8 @@ internal sealed class EquivalenceToolService
         string? nullableString,
         int? nullableInt,
         string? nullableStringWithDefault = null,
-        int? nullableIntWithDefault = null) { }
+        int? nullableIntWithDefault = null)
+    { }
 
     // --- AIContent return types (NotSerializedByDefault) ---
     [ExportAIFunction("returns_text_content")]

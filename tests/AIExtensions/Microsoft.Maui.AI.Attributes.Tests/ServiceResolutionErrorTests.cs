@@ -67,7 +67,8 @@ public class ServiceResolutionErrorTests
         var tool = (AIFunction)StaticMathToolContext.Default.Tools.First(t => t.Name == "add_numbers");
         var args = new AIFunctionArguments(new Dictionary<string, object?>
         {
-            ["a"] = 1, ["b"] = 2,
+            ["a"] = 1,
+            ["b"] = 2,
         });
 
         var result = await tool.InvokeAsync(args);
