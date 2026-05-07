@@ -823,7 +823,6 @@ public sealed class AIToolContextGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine("using global::System;");
         sb.AppendLine("using global::System.Collections.Generic;");
-        sb.AppendLine("using global::System.Reflection;");
         sb.AppendLine("using global::System.Text.Json;");
         sb.AppendLine("using global::System.Threading;");
         sb.AppendLine("using global::System.Threading.Tasks;");
@@ -853,6 +852,12 @@ public sealed class AIToolContextGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent}{{");
         sb.AppendLine($"{indent}    /// <summary>Gets the default singleton instance of this tool context.</summary>");
         sb.AppendLine($"{indent}    public static {model.ClassName} Default {{ get; }} = new {model.ClassName}();");
+        sb.AppendLine();
+
+        // Static JsonSerializerOptions — use the M.E.AI default options which include a
+        // pre-configured type info resolver. Schema creation and argument deserialization
+        // both go through these options so behavior is consistent with ReflectionAIFunction.
+        sb.AppendLine($"{indent}    private static readonly global::System.Text.Json.JsonSerializerOptions s_jsonOptions = global::Microsoft.Extensions.AI.AIJsonUtilities.DefaultOptions;");
         sb.AppendLine();
 
         // Tools property — cached in a static field so repeated access returns the same instance.
@@ -931,65 +936,36 @@ public sealed class AIToolContextGenerator : IIncrementalGenerator
         sb.AppendLine($"{indent}    public override global::System.Text.Json.JsonElement? ReturnJsonSchema => s_returnSchema.Value;");
         sb.AppendLine();
 
-        // MethodInfo lookup (used for schema generation only, one-shot at warmup).
-        var bindingFlags = m.IsStatic
-            ? "global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static"
-            : "global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Instance";
-        if (m.IsProperty)
-        {
-            sb.AppendLine($"{indent}    private static global::System.Reflection.MethodInfo GetTargetMethod()");
-            sb.AppendLine($"{indent}    {{");
-            sb.AppendLine($"{indent}        var serviceType = typeof({st.FullyQualifiedName});");
-            sb.AppendLine($"{indent}        var prop = serviceType.GetProperty({Escape(m.MethodName)}, {bindingFlags})");
-            sb.AppendLine($"{indent}            ?? throw new global::System.InvalidOperationException({Escape($"Could not locate target property {st.FullyQualifiedName}.{m.MethodName}.")});");
-            if (m.IsPropertySetter)
-            {
-                sb.AppendLine($"{indent}        return prop.SetMethod");
-                sb.AppendLine($"{indent}            ?? throw new global::System.InvalidOperationException({Escape($"Property {st.FullyQualifiedName}.{m.MethodName} has no setter.")});");
-            }
-            else
-            {
-                sb.AppendLine($"{indent}        return prop.GetMethod");
-                sb.AppendLine($"{indent}            ?? throw new global::System.InvalidOperationException({Escape($"Property {st.FullyQualifiedName}.{m.MethodName} has no getter.")});");
-            }
-            sb.AppendLine($"{indent}    }}");
-        }
-        else
-        {
-            sb.AppendLine($"{indent}    private static global::System.Reflection.MethodInfo GetTargetMethod()");
-            sb.AppendLine($"{indent}    {{");
-            sb.AppendLine($"{indent}        var serviceType = typeof({st.FullyQualifiedName});");
-            sb.Append($"{indent}        var paramTypes = new global::System.Type[] {{ ");
-            foreach (var p in m.Parameters)
-            {
-                sb.Append($"typeof({p.UnannotatedTypeName}), ");
-            }
-            sb.AppendLine("};");
-            sb.AppendLine($"{indent}        return serviceType.GetMethod({Escape(m.MethodName)}, {bindingFlags}, null, paramTypes, null)");
-            sb.AppendLine($"{indent}            ?? throw new global::System.InvalidOperationException({Escape($"Could not locate target method {st.FullyQualifiedName}.{m.MethodName}.")});");
-            sb.AppendLine($"{indent}    }}");
-        }
-        sb.AppendLine();
-
-        // Schema builder (uses IncludeParameter to exclude DI-bound parameters).
-        sb.AppendLine($"{indent}    private static readonly global::System.Collections.Generic.HashSet<string> s_schemaExcludedParameters = new()");
-        sb.AppendLine($"{indent}    {{");
-        foreach (var p in m.Parameters)
-        {
-            if (!IncludeInSchema(p.Kind))
-                sb.AppendLine($"{indent}        {Escape(p.Name)},");
-        }
-        sb.AppendLine($"{indent}    }};");
-        sb.AppendLine();
+        // Schema builder — uses the source-generated JsonSerializerOptions for AOT-safe schema creation.
+        // Parameters excluded from the schema (DI-injected, CancellationToken, etc.) are listed here.
+        var jsonParams = m.Parameters.Where(p => IncludeInSchema(p.Kind)).ToArray();
 
         sb.AppendLine($"{indent}    private static global::System.Text.Json.JsonElement BuildSchema()");
         sb.AppendLine($"{indent}    {{");
-        sb.AppendLine($"{indent}        var inferenceOptions = new global::Microsoft.Extensions.AI.AIJsonSchemaCreateOptions");
+        sb.AppendLine($"{indent}        var properties = new global::System.Text.Json.Nodes.JsonObject();");
+        sb.AppendLine($"{indent}        var required = new global::System.Text.Json.Nodes.JsonArray();");
+        foreach (var p in jsonParams)
+        {
+            sb.AppendLine($"{indent}        properties[{Escape(p.Name)}] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof({p.UnannotatedTypeName}), serializerOptions: s_jsonOptions).GetRawText());");
+            if (p.Description is not null)
+            {
+                sb.AppendLine($"{indent}        if (properties[{Escape(p.Name)}] is global::System.Text.Json.Nodes.JsonObject {SanitizeIdentifier(p.Name)}Obj)");
+                sb.AppendLine($"{indent}            {SanitizeIdentifier(p.Name)}Obj[\"description\"] = {Escape(p.Description)};");
+            }
+            if (!p.HasDefault && !p.IsNullable)
+            {
+                sb.AppendLine($"{indent}        required.Add({Escape(p.Name)});");
+            }
+        }
+        sb.AppendLine($"{indent}        var schema = new global::System.Text.Json.Nodes.JsonObject");
         sb.AppendLine($"{indent}        {{");
-        sb.AppendLine($"{indent}            IncludeParameter = static p => !s_schemaExcludedParameters.Contains(p.Name!),");
+        sb.AppendLine($"{indent}            [\"type\"] = \"object\",");
+        sb.AppendLine($"{indent}            [\"properties\"] = properties,");
         sb.AppendLine($"{indent}        }};");
-        sb.AppendLine($"{indent}        return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateFunctionJsonSchema(");
-        sb.AppendLine($"{indent}            GetTargetMethod(), title: string.Empty, description: string.Empty, inferenceOptions: inferenceOptions);");
+        sb.AppendLine($"{indent}        if (required.Count > 0)");
+        sb.AppendLine($"{indent}            schema[\"required\"] = required;");
+        sb.AppendLine($"{indent}        schema[\"additionalProperties\"] = false;");
+        sb.AppendLine($"{indent}        return global::System.Text.Json.JsonSerializer.SerializeToElement(schema);");
         sb.AppendLine($"{indent}    }}");
         sb.AppendLine();
 
@@ -1001,7 +977,7 @@ public sealed class AIToolContextGenerator : IIncrementalGenerator
         }
         else
         {
-            sb.AppendLine($"{indent}        return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof({m.ReturnInfo.TypeName!}));");
+            sb.AppendLine($"{indent}        return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof({m.ReturnInfo.TypeName!}), serializerOptions: s_jsonOptions);");
         }
         sb.AppendLine($"{indent}    }}");
         sb.AppendLine();
@@ -1100,18 +1076,20 @@ public sealed class AIToolContextGenerator : IIncrementalGenerator
                 sb.AppendLine($"{indent}        \"Register the keyed service in your DI container, or ensure the IServiceProvider supports keyed services (IKeyedServiceProvider).\");");
                 break;
             case ParameterKind.JsonArgument:
+                var typeInfoExpr = $"(global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{p.TypeName}>)s_jsonOptions.GetTypeInfo(typeof({p.UnannotatedTypeName}))";
                 if (p.HasDefault)
                 {
-                    sb.AppendLine($"{indent}var {local} = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetOptionalArg<{p.TypeName}>(arguments, {Escape(p.Name)}, {p.DefaultLiteral});");
+                    sb.AppendLine($"{indent}var {local} = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetOptionalArg<{p.TypeName}>(arguments, {Escape(p.Name)}, {p.DefaultLiteral}, {typeInfoExpr});");
                 }
                 else
                 {
-                    sb.AppendLine($"{indent}var {local} = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<{p.TypeName}>(arguments, {Escape(p.Name)});");
+                    sb.AppendLine($"{indent}var {local} = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<{p.TypeName}>(arguments, {Escape(p.Name)}, {typeInfoExpr});");
                 }
                 break;
             default:
                 sb.AppendLine($"{indent}// Unclassified parameter {p.Name}: falling back to JSON binding.");
-                sb.AppendLine($"{indent}var {local} = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<{p.TypeName}>(arguments, {Escape(p.Name)});");
+                var fallbackTypeInfo = $"(global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<{p.TypeName}>)s_jsonOptions.GetTypeInfo(typeof({p.UnannotatedTypeName}))";
+                sb.AppendLine($"{indent}var {local} = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<{p.TypeName}>(arguments, {Escape(p.Name)}, {fallbackTypeInfo});");
                 break;
         }
     }

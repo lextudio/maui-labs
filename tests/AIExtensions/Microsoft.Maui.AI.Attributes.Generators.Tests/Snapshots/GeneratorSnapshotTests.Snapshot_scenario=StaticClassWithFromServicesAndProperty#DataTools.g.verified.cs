@@ -7,7 +7,6 @@
 
 using global::System;
 using global::System.Collections.Generic;
-using global::System.Reflection;
 using global::System.Text.Json;
 using global::System.Threading;
 using global::System.Threading.Tasks;
@@ -20,6 +19,8 @@ namespace Sample
     {
         /// <summary>Gets the default singleton instance of this tool context.</summary>
         public static DataTools Default { get; } = new DataTools();
+
+        private static readonly global::System.Text.Json.JsonSerializerOptions s_jsonOptions = global::Microsoft.Extensions.AI.AIJsonUtilities.DefaultOptions;
 
         private static readonly global::Microsoft.Extensions.AI.AITool[] s_tools = new global::Microsoft.Extensions.AI.AITool[]
         {
@@ -40,32 +41,25 @@ namespace Sample
             public override global::System.Text.Json.JsonElement JsonSchema => s_schema.Value;
             public override global::System.Text.Json.JsonElement? ReturnJsonSchema => s_returnSchema.Value;
 
-            private static global::System.Reflection.MethodInfo GetTargetMethod()
-            {
-                var serviceType = typeof(global::Sample.DataAccess);
-                var paramTypes = new global::System.Type[] { typeof(string), typeof(global::Sample.IDb), };
-                return serviceType.GetMethod("Query", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static, null, paramTypes, null)
-                    ?? throw new global::System.InvalidOperationException("Could not locate target method global::Sample.DataAccess.Query.");
-            }
-
-            private static readonly global::System.Collections.Generic.HashSet<string> s_schemaExcludedParameters = new()
-            {
-                "db",
-            };
-
             private static global::System.Text.Json.JsonElement BuildSchema()
             {
-                var inferenceOptions = new global::Microsoft.Extensions.AI.AIJsonSchemaCreateOptions
+                var properties = new global::System.Text.Json.Nodes.JsonObject();
+                var required = new global::System.Text.Json.Nodes.JsonArray();
+                properties["filter"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
+                var schema = new global::System.Text.Json.Nodes.JsonObject
                 {
-                    IncludeParameter = static p => !s_schemaExcludedParameters.Contains(p.Name!),
+                    ["type"] = "object",
+                    ["properties"] = properties,
                 };
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateFunctionJsonSchema(
-                    GetTargetMethod(), title: string.Empty, description: string.Empty, inferenceOptions: inferenceOptions);
+                if (required.Count > 0)
+                    schema["required"] = required;
+                schema["additionalProperties"] = false;
+                return global::System.Text.Json.JsonSerializer.SerializeToElement(schema);
             }
 
             private static global::System.Text.Json.JsonElement? BuildReturnSchema()
             {
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string));
+                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions);
             }
 
             protected override async global::System.Threading.Tasks.ValueTask<object?> InvokeCoreAsync(
@@ -75,7 +69,7 @@ namespace Sample
                 var __provider = arguments.Services ?? throw new global::System.InvalidOperationException(
                     "Tool 'query_records' requires services (source type: global::Sample.DataAccess) but no IServiceProvider was supplied. " +
                     "Set AIFunctionArguments.Services before invoking the tool (ChatClientBuilder.UseFunctionInvocation().Build(sp) does this automatically).");
-                var __arg_filter = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<string>(arguments, "filter");
+                var __arg_filter = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<string>(arguments, "filter", (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>)s_jsonOptions.GetTypeInfo(typeof(string)));
                 var __arg_db = __provider.GetService<global::Sample.IDb>() ?? throw new global::System.InvalidOperationException(
                     "Tool parameter 'db' of type 'global::Sample.IDb' could not be resolved from IServiceProvider. " +
                     "Register the service in your DI container.");
@@ -94,32 +88,24 @@ namespace Sample
             public override global::System.Text.Json.JsonElement JsonSchema => s_schema.Value;
             public override global::System.Text.Json.JsonElement? ReturnJsonSchema => s_returnSchema.Value;
 
-            private static global::System.Reflection.MethodInfo GetTargetMethod()
-            {
-                var serviceType = typeof(global::Sample.DataAccess);
-                var prop = serviceType.GetProperty("Records", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static)
-                    ?? throw new global::System.InvalidOperationException("Could not locate target property global::Sample.DataAccess.Records.");
-                return prop.GetMethod
-                    ?? throw new global::System.InvalidOperationException("Property global::Sample.DataAccess.Records has no getter.");
-            }
-
-            private static readonly global::System.Collections.Generic.HashSet<string> s_schemaExcludedParameters = new()
-            {
-            };
-
             private static global::System.Text.Json.JsonElement BuildSchema()
             {
-                var inferenceOptions = new global::Microsoft.Extensions.AI.AIJsonSchemaCreateOptions
+                var properties = new global::System.Text.Json.Nodes.JsonObject();
+                var required = new global::System.Text.Json.Nodes.JsonArray();
+                var schema = new global::System.Text.Json.Nodes.JsonObject
                 {
-                    IncludeParameter = static p => !s_schemaExcludedParameters.Contains(p.Name!),
+                    ["type"] = "object",
+                    ["properties"] = properties,
                 };
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateFunctionJsonSchema(
-                    GetTargetMethod(), title: string.Empty, description: string.Empty, inferenceOptions: inferenceOptions);
+                if (required.Count > 0)
+                    schema["required"] = required;
+                schema["additionalProperties"] = false;
+                return global::System.Text.Json.JsonSerializer.SerializeToElement(schema);
             }
 
             private static global::System.Text.Json.JsonElement? BuildReturnSchema()
             {
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(global::System.Collections.Generic.IReadOnlyList<string>));
+                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(global::System.Collections.Generic.IReadOnlyList<string>), serializerOptions: s_jsonOptions);
             }
 
             protected override async global::System.Threading.Tasks.ValueTask<object?> InvokeCoreAsync(

@@ -7,6 +7,8 @@
     <Description>Attributes and source generator for exporting .NET methods as Microsoft.Extensions.AI tools, with first-class dependency injection support.</Description>
     <IsPackable>true</IsPackable>
     <IsShipping>true</IsShipping>
+    <IsTrimmable>true</IsTrimmable>
+    <IsAotCompatible>true</IsAotCompatible>
     <PackageTags>$(PackageTags) ai tools source-generator</PackageTags>
     <PackRepoRootReadme>false</PackRepoRootReadme>
   </PropertyGroup>

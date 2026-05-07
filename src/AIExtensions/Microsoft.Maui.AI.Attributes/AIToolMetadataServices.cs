@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 using Microsoft.Extensions.AI;
 
 namespace Microsoft.Maui.AI.Attributes;
@@ -18,31 +19,31 @@ public static class AIToolMetadataServices
 
     /// <summary>
     /// Reads a required argument from <see cref="AIFunctionArguments"/>, converting it to
-    /// <typeparamref name="T"/> via a direct cast, JSON element conversion, or JSON round-trip.
+    /// <typeparamref name="T"/> using the supplied <see cref="JsonTypeInfo{T}"/>.
     /// </summary>
-    public static T GetRequiredArg<T>(AIFunctionArguments args, string name, JsonSerializerOptions? options = null)
+    public static T GetRequiredArg<T>(AIFunctionArguments args, string name, JsonTypeInfo<T> typeInfo)
     {
         if (!args.TryGetValue(name, out var value))
         {
             throw new ArgumentException($"Missing required argument '{name}'.", nameof(args));
         }
-        return ConvertArg<T>(value, name, options);
+        return ConvertArg<T>(value, name, typeInfo);
     }
 
     /// <summary>
-    /// Reads an optional argument. If the value is missing or <see langword="null"/>, returns
-    /// <paramref name="defaultValue"/>.
+    /// Reads an optional argument using the supplied <see cref="JsonTypeInfo{T}"/>.
+    /// If the value is missing or <see langword="null"/>, returns <paramref name="defaultValue"/>.
     /// </summary>
-    public static T? GetOptionalArg<T>(AIFunctionArguments args, string name, T? defaultValue, JsonSerializerOptions? options = null)
+    public static T? GetOptionalArg<T>(AIFunctionArguments args, string name, T? defaultValue, JsonTypeInfo<T> typeInfo)
     {
         if (!args.TryGetValue(name, out var value) || value is null)
         {
             return defaultValue;
         }
-        return ConvertArg<T>(value, name, options);
+        return ConvertArg<T>(value, name, typeInfo);
     }
 
-    private static T ConvertArg<T>(object? value, string name, JsonSerializerOptions? options)
+    private static T ConvertArg<T>(object? value, string name, JsonTypeInfo<T> typeInfo)
     {
         if (value is null)
         {
@@ -58,16 +59,14 @@ public static class AIToolMetadataServices
             return typed;
         }
 
-        var opts = options ?? AIJsonUtilities.DefaultOptions;
-
         if (value is JsonElement je)
         {
-            return je.Deserialize<T>(opts)!;
+            return je.Deserialize<T>(typeInfo)!;
         }
 
         if (value is JsonNode jn)
         {
-            return jn.Deserialize<T>(opts)!;
+            return jn.Deserialize<T>(typeInfo)!;
         }
 
         // If the LLM supplied a raw JSON string for a non-string target, try to parse it.
@@ -75,7 +74,7 @@ public static class AIToolMetadataServices
         {
             try
             {
-                return JsonSerializer.Deserialize<T>(s, opts)!;
+                return JsonSerializer.Deserialize<T>(s, typeInfo)!;
             }
             catch
             {
@@ -83,9 +82,8 @@ public static class AIToolMetadataServices
             }
         }
 
-        // Fallback: JSON round-trip. This matches ReflectionAIFunction's behavior for
-        // general object-to-T coercion.
-        var json = JsonSerializer.Serialize(value, value.GetType(), opts);
-        return JsonSerializer.Deserialize<T>(json, opts)!;
+        // Fallback: JSON round-trip via the type's own JsonTypeInfo.
+        var json = JsonSerializer.SerializeToElement(value, typeInfo.Options.GetTypeInfo(value.GetType()));
+        return json.Deserialize<T>(typeInfo)!;
     }
 }

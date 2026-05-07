@@ -7,7 +7,6 @@
 
 using global::System;
 using global::System.Collections.Generic;
-using global::System.Reflection;
 using global::System.Text.Json;
 using global::System.Threading;
 using global::System.Threading.Tasks;
@@ -20,6 +19,8 @@ namespace Sample
     {
         /// <summary>Gets the default singleton instance of this tool context.</summary>
         public static ToolsCtx Default { get; } = new ToolsCtx();
+
+        private static readonly global::System.Text.Json.JsonSerializerOptions s_jsonOptions = global::Microsoft.Extensions.AI.AIJsonUtilities.DefaultOptions;
 
         private static readonly global::Microsoft.Extensions.AI.AITool[] s_tools = new global::Microsoft.Extensions.AI.AITool[]
         {

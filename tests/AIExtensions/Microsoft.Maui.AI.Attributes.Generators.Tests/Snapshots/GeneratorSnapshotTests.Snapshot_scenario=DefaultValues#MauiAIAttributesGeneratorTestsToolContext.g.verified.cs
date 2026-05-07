@@ -7,7 +7,6 @@
 
 using global::System;
 using global::System.Collections.Generic;
-using global::System.Reflection;
 using global::System.Text.Json;
 using global::System.Threading;
 using global::System.Threading.Tasks;
@@ -20,6 +19,8 @@ namespace Sample
     {
         /// <summary>Gets the default singleton instance of this tool context.</summary>
         public static MauiAIAttributesGeneratorTestsToolContext Default { get; } = new MauiAIAttributesGeneratorTestsToolContext();
+
+        private static readonly global::System.Text.Json.JsonSerializerOptions s_jsonOptions = global::Microsoft.Extensions.AI.AIJsonUtilities.DefaultOptions;
 
         private static readonly global::Microsoft.Extensions.AI.AITool[] s_tools = new global::Microsoft.Extensions.AI.AITool[]
         {
@@ -39,31 +40,28 @@ namespace Sample
             public override global::System.Text.Json.JsonElement JsonSchema => s_schema.Value;
             public override global::System.Text.Json.JsonElement? ReturnJsonSchema => s_returnSchema.Value;
 
-            private static global::System.Reflection.MethodInfo GetTargetMethod()
-            {
-                var serviceType = typeof(global::Sample.Svc);
-                var paramTypes = new global::System.Type[] { typeof(string), typeof(int), typeof(bool), typeof(string), };
-                return serviceType.GetMethod("Do", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Instance, null, paramTypes, null)
-                    ?? throw new global::System.InvalidOperationException("Could not locate target method global::Sample.Svc.Do.");
-            }
-
-            private static readonly global::System.Collections.Generic.HashSet<string> s_schemaExcludedParameters = new()
-            {
-            };
-
             private static global::System.Text.Json.JsonElement BuildSchema()
             {
-                var inferenceOptions = new global::Microsoft.Extensions.AI.AIJsonSchemaCreateOptions
+                var properties = new global::System.Text.Json.Nodes.JsonObject();
+                var required = new global::System.Text.Json.Nodes.JsonArray();
+                properties["name"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
+                properties["count"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(int), serializerOptions: s_jsonOptions).GetRawText());
+                properties["verbose"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(bool), serializerOptions: s_jsonOptions).GetRawText());
+                properties["prefix"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
+                var schema = new global::System.Text.Json.Nodes.JsonObject
                 {
-                    IncludeParameter = static p => !s_schemaExcludedParameters.Contains(p.Name!),
+                    ["type"] = "object",
+                    ["properties"] = properties,
                 };
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateFunctionJsonSchema(
-                    GetTargetMethod(), title: string.Empty, description: string.Empty, inferenceOptions: inferenceOptions);
+                if (required.Count > 0)
+                    schema["required"] = required;
+                schema["additionalProperties"] = false;
+                return global::System.Text.Json.JsonSerializer.SerializeToElement(schema);
             }
 
             private static global::System.Text.Json.JsonElement? BuildReturnSchema()
             {
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string));
+                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions);
             }
 
             protected override async global::System.Threading.Tasks.ValueTask<object?> InvokeCoreAsync(
@@ -76,10 +74,10 @@ namespace Sample
                 var __service = __provider.GetService<global::Sample.Svc>() ?? throw new global::System.InvalidOperationException(
                     "Tool 'Do' could not resolve its source type 'global::Sample.Svc' from IServiceProvider. " +
                     "Register the service in your DI container, or use ChatClientBuilder.UseFunctionInvocation().Build(sp) to supply a configured IServiceProvider.");
-                var __arg_name = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<string>(arguments, "name");
-                var __arg_count = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetOptionalArg<int>(arguments, "count", 3);
-                var __arg_verbose = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetOptionalArg<bool>(arguments, "verbose", false);
-                var __arg_prefix = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetOptionalArg<string>(arguments, "prefix", "hi");
+                var __arg_name = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<string>(arguments, "name", (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>)s_jsonOptions.GetTypeInfo(typeof(string)));
+                var __arg_count = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetOptionalArg<int>(arguments, "count", 3, (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<int>)s_jsonOptions.GetTypeInfo(typeof(int)));
+                var __arg_verbose = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetOptionalArg<bool>(arguments, "verbose", false, (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<bool>)s_jsonOptions.GetTypeInfo(typeof(bool)));
+                var __arg_prefix = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetOptionalArg<string>(arguments, "prefix", "hi", (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>)s_jsonOptions.GetTypeInfo(typeof(string)));
                 var __result = __service.Do(__arg_name, __arg_count, __arg_verbose, __arg_prefix);
                 return __result;
             }

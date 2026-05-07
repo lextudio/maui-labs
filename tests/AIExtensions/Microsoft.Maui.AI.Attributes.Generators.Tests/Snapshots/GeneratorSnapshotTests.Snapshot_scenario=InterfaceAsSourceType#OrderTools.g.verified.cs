@@ -7,7 +7,6 @@
 
 using global::System;
 using global::System.Collections.Generic;
-using global::System.Reflection;
 using global::System.Text.Json;
 using global::System.Threading;
 using global::System.Threading.Tasks;
@@ -20,6 +19,8 @@ namespace Sample
     {
         /// <summary>Gets the default singleton instance of this tool context.</summary>
         public static OrderTools Default { get; } = new OrderTools();
+
+        private static readonly global::System.Text.Json.JsonSerializerOptions s_jsonOptions = global::Microsoft.Extensions.AI.AIJsonUtilities.DefaultOptions;
 
         private static readonly global::Microsoft.Extensions.AI.AITool[] s_tools = new global::Microsoft.Extensions.AI.AITool[]
         {
@@ -39,31 +40,31 @@ namespace Sample
             public override global::System.Text.Json.JsonElement JsonSchema => s_schema.Value;
             public override global::System.Text.Json.JsonElement? ReturnJsonSchema => s_returnSchema.Value;
 
-            private static global::System.Reflection.MethodInfo GetTargetMethod()
-            {
-                var serviceType = typeof(global::Sample.IOrderService);
-                var paramTypes = new global::System.Type[] { typeof(string), typeof(int), };
-                return serviceType.GetMethod("PlaceOrder", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Instance, null, paramTypes, null)
-                    ?? throw new global::System.InvalidOperationException("Could not locate target method global::Sample.IOrderService.PlaceOrder.");
-            }
-
-            private static readonly global::System.Collections.Generic.HashSet<string> s_schemaExcludedParameters = new()
-            {
-            };
-
             private static global::System.Text.Json.JsonElement BuildSchema()
             {
-                var inferenceOptions = new global::Microsoft.Extensions.AI.AIJsonSchemaCreateOptions
+                var properties = new global::System.Text.Json.Nodes.JsonObject();
+                var required = new global::System.Text.Json.Nodes.JsonArray();
+                properties["item"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
+                if (properties["item"] is global::System.Text.Json.Nodes.JsonObject itemObj)
+                    itemObj["description"] = "item name";
+                properties["qty"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(int), serializerOptions: s_jsonOptions).GetRawText());
+                if (properties["qty"] is global::System.Text.Json.Nodes.JsonObject qtyObj)
+                    qtyObj["description"] = "quantity";
+                required.Add("qty");
+                var schema = new global::System.Text.Json.Nodes.JsonObject
                 {
-                    IncludeParameter = static p => !s_schemaExcludedParameters.Contains(p.Name!),
+                    ["type"] = "object",
+                    ["properties"] = properties,
                 };
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateFunctionJsonSchema(
-                    GetTargetMethod(), title: string.Empty, description: string.Empty, inferenceOptions: inferenceOptions);
+                if (required.Count > 0)
+                    schema["required"] = required;
+                schema["additionalProperties"] = false;
+                return global::System.Text.Json.JsonSerializer.SerializeToElement(schema);
             }
 
             private static global::System.Text.Json.JsonElement? BuildReturnSchema()
             {
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string));
+                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions);
             }
 
             protected override async global::System.Threading.Tasks.ValueTask<object?> InvokeCoreAsync(
@@ -76,8 +77,8 @@ namespace Sample
                 var __service = __provider.GetService<global::Sample.IOrderService>() ?? throw new global::System.InvalidOperationException(
                     "Tool 'place_order' could not resolve its source type 'global::Sample.IOrderService' from IServiceProvider. " +
                     "Register the service in your DI container, or use ChatClientBuilder.UseFunctionInvocation().Build(sp) to supply a configured IServiceProvider.");
-                var __arg_item = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<string>(arguments, "item");
-                var __arg_qty = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<int>(arguments, "qty");
+                var __arg_item = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<string>(arguments, "item", (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>)s_jsonOptions.GetTypeInfo(typeof(string)));
+                var __arg_qty = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<int>(arguments, "qty", (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<int>)s_jsonOptions.GetTypeInfo(typeof(int)));
                 var __result = __service.PlaceOrder(__arg_item, __arg_qty);
                 return __result;
             }

@@ -7,7 +7,6 @@
 
 using global::System;
 using global::System.Collections.Generic;
-using global::System.Reflection;
 using global::System.Text.Json;
 using global::System.Threading;
 using global::System.Threading.Tasks;
@@ -20,6 +19,8 @@ namespace Sample
     {
         /// <summary>Gets the default singleton instance of this tool context.</summary>
         public static ToolsCtx Default { get; } = new ToolsCtx();
+
+        private static readonly global::System.Text.Json.JsonSerializerOptions s_jsonOptions = global::Microsoft.Extensions.AI.AIJsonUtilities.DefaultOptions;
 
         private static readonly global::Microsoft.Extensions.AI.AITool[] s_tools = new global::Microsoft.Extensions.AI.AITool[]
         {
@@ -40,32 +41,24 @@ namespace Sample
             public override global::System.Text.Json.JsonElement JsonSchema => s_schema.Value;
             public override global::System.Text.Json.JsonElement? ReturnJsonSchema => s_returnSchema.Value;
 
-            private static global::System.Reflection.MethodInfo GetTargetMethod()
-            {
-                var serviceType = typeof(global::Sample.DisplaySettings);
-                var prop = serviceType.GetProperty("Mode", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Instance)
-                    ?? throw new global::System.InvalidOperationException("Could not locate target property global::Sample.DisplaySettings.Mode.");
-                return prop.GetMethod
-                    ?? throw new global::System.InvalidOperationException("Property global::Sample.DisplaySettings.Mode has no getter.");
-            }
-
-            private static readonly global::System.Collections.Generic.HashSet<string> s_schemaExcludedParameters = new()
-            {
-            };
-
             private static global::System.Text.Json.JsonElement BuildSchema()
             {
-                var inferenceOptions = new global::Microsoft.Extensions.AI.AIJsonSchemaCreateOptions
+                var properties = new global::System.Text.Json.Nodes.JsonObject();
+                var required = new global::System.Text.Json.Nodes.JsonArray();
+                var schema = new global::System.Text.Json.Nodes.JsonObject
                 {
-                    IncludeParameter = static p => !s_schemaExcludedParameters.Contains(p.Name!),
+                    ["type"] = "object",
+                    ["properties"] = properties,
                 };
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateFunctionJsonSchema(
-                    GetTargetMethod(), title: string.Empty, description: string.Empty, inferenceOptions: inferenceOptions);
+                if (required.Count > 0)
+                    schema["required"] = required;
+                schema["additionalProperties"] = false;
+                return global::System.Text.Json.JsonSerializer.SerializeToElement(schema);
             }
 
             private static global::System.Text.Json.JsonElement? BuildReturnSchema()
             {
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string));
+                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions);
             }
 
             protected override async global::System.Threading.Tasks.ValueTask<object?> InvokeCoreAsync(
@@ -93,32 +86,27 @@ namespace Sample
             public override global::System.Text.Json.JsonElement JsonSchema => s_schema.Value;
             public override global::System.Text.Json.JsonElement? ReturnJsonSchema => s_returnSchema.Value;
 
-            private static global::System.Reflection.MethodInfo GetTargetMethod()
-            {
-                var serviceType = typeof(global::Sample.DisplaySettings);
-                var prop = serviceType.GetProperty("Mode", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Instance)
-                    ?? throw new global::System.InvalidOperationException("Could not locate target property global::Sample.DisplaySettings.Mode.");
-                return prop.SetMethod
-                    ?? throw new global::System.InvalidOperationException("Property global::Sample.DisplaySettings.Mode has no setter.");
-            }
-
-            private static readonly global::System.Collections.Generic.HashSet<string> s_schemaExcludedParameters = new()
-            {
-            };
-
             private static global::System.Text.Json.JsonElement BuildSchema()
             {
-                var inferenceOptions = new global::Microsoft.Extensions.AI.AIJsonSchemaCreateOptions
+                var properties = new global::System.Text.Json.Nodes.JsonObject();
+                var required = new global::System.Text.Json.Nodes.JsonArray();
+                properties["value"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
+                if (properties["value"] is global::System.Text.Json.Nodes.JsonObject valueObj)
+                    valueObj["description"] = "The new value to assign.";
+                var schema = new global::System.Text.Json.Nodes.JsonObject
                 {
-                    IncludeParameter = static p => !s_schemaExcludedParameters.Contains(p.Name!),
+                    ["type"] = "object",
+                    ["properties"] = properties,
                 };
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateFunctionJsonSchema(
-                    GetTargetMethod(), title: string.Empty, description: string.Empty, inferenceOptions: inferenceOptions);
+                if (required.Count > 0)
+                    schema["required"] = required;
+                schema["additionalProperties"] = false;
+                return global::System.Text.Json.JsonSerializer.SerializeToElement(schema);
             }
 
             private static global::System.Text.Json.JsonElement? BuildReturnSchema()
             {
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string));
+                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions);
             }
 
             protected override async global::System.Threading.Tasks.ValueTask<object?> InvokeCoreAsync(
@@ -131,7 +119,7 @@ namespace Sample
                 var __service = __provider.GetService<global::Sample.DisplaySettings>() ?? throw new global::System.InvalidOperationException(
                     "Tool 'set_display_mode' could not resolve its source type 'global::Sample.DisplaySettings' from IServiceProvider. " +
                     "Register the service in your DI container, or use ChatClientBuilder.UseFunctionInvocation().Build(sp) to supply a configured IServiceProvider.");
-                var __arg_value = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<string>(arguments, "value");
+                var __arg_value = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<string>(arguments, "value", (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>)s_jsonOptions.GetTypeInfo(typeof(string)));
                 var __result = (__service.Mode = __arg_value);
                 return __result;
             }

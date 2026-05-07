@@ -142,7 +142,8 @@ public class GeneratorCompilationTests
     {
         var (_, _, output) = RunAndCompile(Inputs.InterfaceWithFromServices);
         var generated = GetGeneratedSource(output, "ToolsCtx");
-        Assert.Contains("\"cart\"", generated); // excluded from schema
+        // The DI-injected "cart" parameter should not appear in the schema properties
+        Assert.DoesNotContain("properties[\"cart\"]", generated);
     }
 
     [Fact]
@@ -150,11 +151,12 @@ public class GeneratorCompilationTests
         => AssertCleanCompilation(Inputs.InterfaceWithProperty);
 
     [Fact]
-    public void InterfaceWithProperty_UsesGetProperty()
+    public void InterfaceWithProperty_EmitsPropertyAccess()
     {
         var (_, _, output) = RunAndCompile(Inputs.InterfaceWithProperty);
         var generated = GetGeneratedSource(output, "ToolsCtx");
-        Assert.Contains("GetProperty(\"Items\"", generated);
+        // Property getter tools access the property directly on the service instance
+        Assert.Contains("__service.Items", generated);
     }
 
     [Fact]

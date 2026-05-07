@@ -7,7 +7,6 @@
 
 using global::System;
 using global::System.Collections.Generic;
-using global::System.Reflection;
 using global::System.Text.Json;
 using global::System.Threading;
 using global::System.Threading.Tasks;
@@ -20,6 +19,8 @@ namespace Sample
     {
         /// <summary>Gets the default singleton instance of this tool context.</summary>
         public static MauiAIAttributesGeneratorTestsToolContext Default { get; } = new MauiAIAttributesGeneratorTestsToolContext();
+
+        private static readonly global::System.Text.Json.JsonSerializerOptions s_jsonOptions = global::Microsoft.Extensions.AI.AIJsonUtilities.DefaultOptions;
 
         private static readonly global::Microsoft.Extensions.AI.AITool[] s_tools = new global::Microsoft.Extensions.AI.AITool[]
         {
@@ -39,32 +40,25 @@ namespace Sample
             public override global::System.Text.Json.JsonElement JsonSchema => s_schema.Value;
             public override global::System.Text.Json.JsonElement? ReturnJsonSchema => s_returnSchema.Value;
 
-            private static global::System.Reflection.MethodInfo GetTargetMethod()
-            {
-                var serviceType = typeof(global::Sample.Worker);
-                var paramTypes = new global::System.Type[] { typeof(string), typeof(global::Sample.ILogger), };
-                return serviceType.GetMethod("DoWork", global::System.Reflection.BindingFlags.Public | global::System.Reflection.BindingFlags.NonPublic | global::System.Reflection.BindingFlags.Static, null, paramTypes, null)
-                    ?? throw new global::System.InvalidOperationException("Could not locate target method global::Sample.Worker.DoWork.");
-            }
-
-            private static readonly global::System.Collections.Generic.HashSet<string> s_schemaExcludedParameters = new()
-            {
-                "logger",
-            };
-
             private static global::System.Text.Json.JsonElement BuildSchema()
             {
-                var inferenceOptions = new global::Microsoft.Extensions.AI.AIJsonSchemaCreateOptions
+                var properties = new global::System.Text.Json.Nodes.JsonObject();
+                var required = new global::System.Text.Json.Nodes.JsonArray();
+                properties["input"] = global::System.Text.Json.Nodes.JsonNode.Parse(global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions).GetRawText());
+                var schema = new global::System.Text.Json.Nodes.JsonObject
                 {
-                    IncludeParameter = static p => !s_schemaExcludedParameters.Contains(p.Name!),
+                    ["type"] = "object",
+                    ["properties"] = properties,
                 };
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateFunctionJsonSchema(
-                    GetTargetMethod(), title: string.Empty, description: string.Empty, inferenceOptions: inferenceOptions);
+                if (required.Count > 0)
+                    schema["required"] = required;
+                schema["additionalProperties"] = false;
+                return global::System.Text.Json.JsonSerializer.SerializeToElement(schema);
             }
 
             private static global::System.Text.Json.JsonElement? BuildReturnSchema()
             {
-                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string));
+                return global::Microsoft.Extensions.AI.AIJsonUtilities.CreateJsonSchema(typeof(string), serializerOptions: s_jsonOptions);
             }
 
             protected override async global::System.Threading.Tasks.ValueTask<object?> InvokeCoreAsync(
@@ -74,7 +68,7 @@ namespace Sample
                 var __provider = arguments.Services ?? throw new global::System.InvalidOperationException(
                     "Tool 'do_work' requires services (source type: global::Sample.Worker) but no IServiceProvider was supplied. " +
                     "Set AIFunctionArguments.Services before invoking the tool (ChatClientBuilder.UseFunctionInvocation().Build(sp) does this automatically).");
-                var __arg_input = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<string>(arguments, "input");
+                var __arg_input = global::Microsoft.Maui.AI.Attributes.AIToolMetadataServices.GetRequiredArg<string>(arguments, "input", (global::System.Text.Json.Serialization.Metadata.JsonTypeInfo<string>)s_jsonOptions.GetTypeInfo(typeof(string)));
                 var __arg_logger = __provider.GetService<global::Sample.ILogger>() ?? throw new global::System.InvalidOperationException(
                     "Tool parameter 'logger' of type 'global::Sample.ILogger' could not be resolved from IServiceProvider. " +
                     "Register the service in your DI container.");
