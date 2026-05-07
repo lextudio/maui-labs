@@ -62,6 +62,16 @@ internal partial class CatalogToolContext : AIToolContext { }
 [AIToolSource(typeof(IDangerService))]
 internal partial class DangerToolContext : AIToolContext { }
 
+// --- Enum parameter tool context ---
+
+[AIToolSource(typeof(EnumParamService))]
+internal partial class EnumParamToolContext : AIToolContext { }
+
+// --- Collection parameter tool context ---
+
+[AIToolSource(typeof(CollectionParamService))]
+internal partial class CollectionParamToolContext : AIToolContext { }
+
 // --- Nested class tool context ---
 
 internal partial class OuterClass

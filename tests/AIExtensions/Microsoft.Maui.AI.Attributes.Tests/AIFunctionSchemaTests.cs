@@ -87,4 +87,98 @@ public class AIFunctionSchemaTests
         Assert.Contains("\"a\"", schema);
         Assert.Contains("\"b\"", schema);
     }
+
+    [Fact]
+    public void Schema_enum_param_has_type_info()
+    {
+        var tool = Assert.IsAssignableFrom<AIFunctionDeclaration>(
+            EnumParamToolContext.Default.Tools.First(t => t.Name == "set_priority"));
+        var schema = tool.JsonSchema.ToString();
+        Assert.Contains("\"level\"", schema);
+        Assert.Contains("priority level", schema);
+        Assert.Contains("\"required\"", schema);
+    }
+
+    [Fact]
+    public void Schema_enum_return_type_has_return_schema()
+    {
+        var tool = Assert.IsAssignableFrom<AIFunction>(
+            EnumParamToolContext.Default.Tools.First(t => t.Name == "get_priority"));
+        Assert.NotNull(tool.ReturnJsonSchema);
+    }
+
+    [Fact]
+    public void Schema_collection_param_has_type()
+    {
+        var tool = Assert.IsAssignableFrom<AIFunctionDeclaration>(
+            CollectionParamToolContext.Default.Tools.First(t => t.Name == "process_tags"));
+        var schema = tool.JsonSchema.ToString();
+        Assert.Contains("\"tags\"", schema);
+        Assert.Contains("\"required\"", schema);
+    }
+
+    [Fact]
+    public void Schema_optional_param_not_in_required()
+    {
+        var tool = Assert.IsAssignableFrom<AIFunctionDeclaration>(
+            CollectionParamToolContext.Default.Tools.First(t => t.Name == "find_items"));
+        var schema = tool.JsonSchema.ToString();
+        Assert.Contains("\"query\"", schema);
+        // query has a default, should NOT be in required
+        Assert.DoesNotContain("\"required\"", schema);
+    }
+
+    [Fact]
+    public void Schema_no_params_produces_empty_properties()
+    {
+        var tool = Assert.IsAssignableFrom<AIFunctionDeclaration>(
+            TestToolContext.Default.Tools.First(t => t.Name == "GetCount"));
+        var schema = tool.JsonSchema.ToString();
+        Assert.Contains("\"properties\"", schema);
+        // No required array since there are no params
+        Assert.DoesNotContain("\"required\"", schema);
+    }
+
+    [Fact]
+    public void Schema_void_return_has_null_return_schema()
+    {
+        var tool = Assert.IsAssignableFrom<AIFunction>(
+            StaticMathToolContext.Default.Tools.First(t => t.Name == "negate_number"));
+        // negate returns int, should have return schema
+        Assert.NotNull(tool.ReturnJsonSchema);
+    }
+
+    [Fact]
+    public void Schema_multi_param_marks_all_non_nullable_as_required()
+    {
+        var tool = Assert.IsAssignableFrom<AIFunctionDeclaration>(
+            MultiParamToolContext.Default.Tools.First(t => t.Name == "multi_param"));
+        var schema = tool.JsonSchema.ToString();
+        Assert.Contains("\"required\"", schema);
+        Assert.Contains("\"firstName\"", schema);
+        Assert.Contains("\"lastName\"", schema);
+        Assert.Contains("\"age\"", schema);
+    }
+
+    [Fact]
+    public void Schema_di_params_excluded_from_properties()
+    {
+        var tool = Assert.IsAssignableFrom<AIFunctionDeclaration>(
+            BarToolContext.Default.Tools.First(t => t.Name == "bar_action"));
+        var schema = tool.JsonSchema.ToString();
+        // "input" should be in schema
+        Assert.Contains("\"input\"", schema);
+        // "foo" is [FromServices], should NOT be in schema properties
+        Assert.DoesNotContain("\"foo\"", schema);
+    }
+
+    [Fact]
+    public void Schema_cancellation_token_excluded_from_properties()
+    {
+        var tool = Assert.IsAssignableFrom<AIFunctionDeclaration>(
+            CancellableToolContext.Default.Tools.First(t => t.Name == "cancellable_tool"));
+        var schema = tool.JsonSchema.ToString();
+        Assert.Contains("\"input\"", schema);
+        Assert.DoesNotContain("cancellationToken", schema);
+    }
 }

@@ -770,6 +770,49 @@ internal static class Inputs
         public partial class ToolsCtx : AIToolContext { }
         """;
 
+    public const string EnumParameter = """
+        using System.ComponentModel;
+        using Microsoft.Maui.AI.Attributes;
+
+        namespace Sample;
+
+        public enum Severity { Low, Medium, High }
+
+        public class AlertService
+        {
+            [ExportAIFunction("set_alert")]
+            public string SetAlert([Description("severity level")] Severity level) => level.ToString();
+        }
+
+        [AIToolSource(typeof(AlertService))]
+        public partial class ToolsCtx : AIToolContext { }
+        """;
+
+    public const string CollectionParameter = """
+        using System.Collections.Generic;
+        using System.ComponentModel;
+        using Microsoft.Maui.AI.Attributes;
+
+        namespace Sample;
+
+        public class TagService
+        {
+            [ExportAIFunction("process_tags")]
+            public int ProcessTags([Description("tags")] List<string> tags) => tags.Count;
+
+            [ExportAIFunction("merge")]
+            public Dictionary<string, int> Merge(Dictionary<string, int> a, Dictionary<string, int> b)
+            {
+                var r = new Dictionary<string, int>(a);
+                foreach (var kv in b) r[kv.Key] = kv.Value;
+                return r;
+            }
+        }
+
+        [AIToolSource(typeof(TagService))]
+        public partial class ToolsCtx : AIToolContext { }
+        """;
+
     public static string Get(string name) => name switch
     {
         nameof(SimpleInstanceMethod) => SimpleInstanceMethod,
@@ -828,6 +871,8 @@ internal static class Inputs
         nameof(ExcludeToolsSingleMethod) => ExcludeToolsSingleMethod,
         nameof(IncludeToolsWithProperty) => IncludeToolsWithProperty,
         nameof(TwoContextsDifferentFilters) => TwoContextsDifferentFilters,
+        nameof(EnumParameter) => EnumParameter,
+        nameof(CollectionParameter) => CollectionParameter,
         _ => throw new KeyNotFoundException(name),
     };
 

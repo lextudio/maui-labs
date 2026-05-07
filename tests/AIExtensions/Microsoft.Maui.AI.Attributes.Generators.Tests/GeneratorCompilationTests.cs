@@ -317,6 +317,8 @@ public class GeneratorCompilationTests
     [InlineData(nameof(Inputs.StaticProperty))]
     [InlineData(nameof(Inputs.InstanceProperty))]
     [InlineData(nameof(Inputs.AccessorLevelExportAIFunction))]
+    [InlineData(nameof(Inputs.EnumParameter))]
+    [InlineData(nameof(Inputs.CollectionParameter))]
     public void AllValidInputs_CompileCleanly(string scenario)
         => AssertCleanCompilation(Inputs.Get(scenario));
 
@@ -459,5 +461,33 @@ public class GeneratorCompilationTests
         Assert.DoesNotContain("tool_a", generatedBC);
         Assert.Contains("tool_b", generatedBC);
         Assert.Contains("tool_c", generatedBC);
+    }
+
+    // ── Enum and collection parameter scenarios ─────────────────────────
+
+    [Fact]
+    public void EnumParameter_CompilesCleanly()
+        => AssertCleanCompilation(Inputs.EnumParameter);
+
+    [Fact]
+    public void EnumParameter_EmitsSchemaForEnumType()
+    {
+        var (_, _, output) = RunAndCompile(Inputs.EnumParameter);
+        var generated = GetGeneratedSource(output, "ToolsCtx");
+        Assert.Contains("\"level\"", generated);
+        Assert.Contains("typeof(global::Sample.Severity)", generated);
+    }
+
+    [Fact]
+    public void CollectionParameter_CompilesCleanly()
+        => AssertCleanCompilation(Inputs.CollectionParameter);
+
+    [Fact]
+    public void CollectionParameter_EmitsSchemaForCollectionTypes()
+    {
+        var (_, _, output) = RunAndCompile(Inputs.CollectionParameter);
+        var generated = GetGeneratedSource(output, "ToolsCtx");
+        Assert.Contains("typeof(global::System.Collections.Generic.List<string>)", generated);
+        Assert.Contains("typeof(global::System.Collections.Generic.Dictionary<string, int>)", generated);
     }
 }

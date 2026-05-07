@@ -261,3 +261,38 @@ internal sealed class DangerServiceImpl : IDangerService
     public string SafeOp() => "safe";
     public string DangerOp() => "danger";
 }
+
+// --- Enum parameter service ---
+internal enum Priority { Low, Medium, High }
+
+internal sealed class EnumParamService
+{
+    [ExportAIFunction("set_priority")]
+    [Description("Sets the priority level.")]
+    public string SetPriority([Description("priority level")] Priority level) => $"set to {level}";
+
+    [ExportAIFunction("get_priority")]
+    public Priority GetPriority() => Priority.Medium;
+}
+
+// --- Collection parameter service ---
+internal sealed class CollectionParamService
+{
+    [ExportAIFunction("process_tags")]
+    [Description("Processes a list of tags.")]
+    public int ProcessTags([Description("tags to process")] List<string> tags) => tags.Count;
+
+    [ExportAIFunction("merge_maps")]
+    public Dictionary<string, int> MergeMaps(
+        [Description("first map")] Dictionary<string, int> a,
+        [Description("second map")] Dictionary<string, int> b)
+    {
+        var result = new Dictionary<string, int>(a);
+        foreach (var kv in b) result[kv.Key] = kv.Value;
+        return result;
+    }
+
+    [ExportAIFunction("find_items")]
+    public List<string> FindItems(string? query = null)
+        => query is null ? new() { "all" } : new() { query };
+}
