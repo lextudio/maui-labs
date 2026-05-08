@@ -128,6 +128,14 @@ Built artifacts are exposed as `@(MauiAppArtifact)` items with `ArtifactType`, `
 |---------|-------------|
 | `Microsoft.Maui.Build.AppProjectReference` | Build-time app project reference with artifact discovery |
 
+### HotReload
+
+A `MetadataUpdateHandler` for .NET MAUI that delivers per-instance hot reload callbacks via the `IHotReloadable` interface, backed by a Roslyn source generator.
+
+| Package | Description |
+|---------|-------------|
+| `Microsoft.Maui.HotReload` | MetadataUpdateHandler for .NET MAUI hot reload with `IHotReloadable` callbacks |
+
 ## Agent Skills
 
 This repository is also a marketplace for distributable agent skills for .NET MAUI development. Skills are organized as plugins compatible with Copilot CLI, Claude Code, and VS Code.

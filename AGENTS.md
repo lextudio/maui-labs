@@ -13,6 +13,7 @@ This repository hosts experimental .NET MAUI packages. It is a **multi-product m
 | **Cli** | `Microsoft.Maui.Cli` (global tool: `maui`) | Unified MAUI command-line tool: environment diagnostics (`maui doctor`), Android SDK/JDK/emulator management, Apple platform management, device listing, `maui go` for rapid prototyping, `maui profile startup` for performance tracing, and the `maui devflow` automation surface. |
 | **DevFlow** | `Microsoft.Maui.DevFlow.*` packages plus the unified `maui devflow` CLI surface | Runtime MAUI automation toolkit. In-app agent with HTTP API, visual tree inspection, CDP bridge for Blazor WebViews, MCP server for AI agents, cross-platform driver library. |
 | **Comet** | `Comet`, `Comet.SourceGenerator`, `Comet.Layout.Yoga` | Experimental MVU UI framework for .NET MAUI — C# fluent UI, signals/reactive state, Yoga layout. |
+| **HotReload** | `Microsoft.Maui.HotReload` | MetadataUpdateHandler for .NET MAUI hot reload — `IHotReloadable` interface with per-instance `OnHotReload()` callbacks, backed by a Roslyn source generator. |
 | **Go** | `Microsoft.Maui.Go.Server` + Comet Go companion app | Single-file Comet apps server and companion app for rapid prototyping (alpha; sister to Comet). |
 
 ### Technology Stack
@@ -109,6 +110,11 @@ maui-labs/
 │       ├── Server/Microsoft.Maui.Go.Server/  # Comet Go server
 │       ├── CompanionApp/                 # Comet Go companion MAUI app
 │       └── Shared/                       # Shared Comet Go code
+├── src/
+│   └── HotReload/                        # HotReload product
+│       ├── Microsoft.Maui.HotReload/     # Shipping package (IHotReloadable, registry, handler)
+│       ├── Microsoft.Maui.HotReload.SourceGen/ # Roslyn source generator (bundled as analyzer)
+│       └── HotReload.slnf               # Solution filter
 ├── samples/                              # Sample MAUI apps (not shipped)
 ├── playground/                           # Manual test/scratch apps
 ├── eng/                                  # Shared build infrastructure
