@@ -75,7 +75,7 @@ public static class MauiProgram
         var secretsResource = resourceNames.FirstOrDefault(n => n.EndsWith("secrets.json"));
         if (secretsResource is not null)
         {
-            var stream = assembly.GetManifestResourceStream(secretsResource);
+            using var stream = assembly.GetManifestResourceStream(secretsResource);
             if (stream is not null)
                 manager.AddJsonStream(stream);
         }

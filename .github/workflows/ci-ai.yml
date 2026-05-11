@@ -13,6 +13,7 @@ on:
       - 'global.json'
       - 'NuGet.config'
   pull_request:
+    types: [opened, synchronize, reopened, edited]
     branches: [main]
     paths:
       - 'src/AIExtensions/**'

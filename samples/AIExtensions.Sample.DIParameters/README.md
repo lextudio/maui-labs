@@ -42,8 +42,8 @@ Try: `Translate 'hello world' to pig latin with verbose output.`
 
 This csproj sets `EmitCompilerGeneratedFiles=true` so you can see exactly
 what `Microsoft.Maui.AI.Attributes.Generators` emits for each tool context.
-It is **not required** for the sample; delete the property if you don't
-care about generator output.
+This is **not required** to run the sample. If you do not need to inspect
+the generated source, you can remove the property from the csproj.
 
 After a build, look under:
 

@@ -39,7 +39,8 @@
   </Target>
 
   <ItemGroup>
-    <!-- Override repo-root README from eng/Common.props with product-specific one -->
+    <!-- Arcade's eng/Common.props auto-includes the repo-root README for packing.
+         Remove it so only the product-specific README.md is packed into the NuGet. -->
     <None Remove="$(MSBuildThisFileDirectory)../../../README.md" />
     <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>

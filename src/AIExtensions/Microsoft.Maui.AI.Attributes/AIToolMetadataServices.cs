@@ -51,7 +51,7 @@ public static class AIToolMetadataServices
             {
                 return default!;
             }
-            throw new ArgumentException($"Argument '{name}' is null but target type '{typeof(T)}' is non-nullable.", nameof(name));
+            throw new ArgumentException($"Argument '{name}' is null but target type '{typeof(T)}' is non-nullable.", name);
         }
 
         if (value is T typed)
