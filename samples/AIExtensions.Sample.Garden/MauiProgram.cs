@@ -31,6 +31,11 @@ public static class MauiProgram
         {
             handler.PlatformView.BorderStyle = UIKit.UITextBorderStyle.None;
         });
+#elif ANDROID
+        Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("NoBorder", (handler, _) =>
+        {
+            handler.PlatformView.BackgroundTintList = Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
+        });
 #endif
 
         builder.Configuration.AddUserSecrets();
