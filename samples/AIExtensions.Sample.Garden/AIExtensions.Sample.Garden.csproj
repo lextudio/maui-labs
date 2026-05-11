@@ -50,6 +50,10 @@
 		<ProjectReference Include="..\..\src\DevFlow\Microsoft.Maui.DevFlow.Agent\Microsoft.Maui.DevFlow.Agent.csproj" />
 	</ItemGroup>
 
+	<!-- WARNING: This embeds your local secrets.json into the app binary.
+	     This is a terrible practice that will expose secrets if the app is ever
+	     distributed. It is acceptable here ONLY because this is a local-only
+	     developer sample that will never be published or shared. -->
 	<Target Name="AddUserSecrets" BeforeTargets="PrepareForBuild" Condition=" '$(UserSecretsId)' != '' ">
 		<PropertyGroup>
 			<UserSecretsFilePath Condition=" '$(OS)' == 'Windows_NT' ">$([System.Environment]::GetFolderPath(SpecialFolder.UserProfile))\AppData\Roaming\Microsoft\UserSecrets\$(UserSecretsId)\secrets.json</UserSecretsFilePath>
