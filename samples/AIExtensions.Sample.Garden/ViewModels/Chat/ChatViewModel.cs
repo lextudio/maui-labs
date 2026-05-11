@@ -17,6 +17,14 @@ public sealed partial class ChatViewModel : ObservableObject, IRecipient<StartNe
 {
     /// <summary>
     /// Source-generated tool context that merges all tool sources into one.
+    /// Demonstrates several distinct attribute patterns:
+    /// <list type="bullet">
+    ///   <item><b>Static class</b> — ProductCatalog: tools on a plain static class.</item>
+    ///   <item><b>Instance class</b> — CurrentCart: tools on a DI-registered instance.</item>
+    ///   <item><b>Interface</b> — IOrderArchive: tools declared on the interface.</item>
+    ///   <item><b>ViewModel</b> — MainViewModel: navigation tools on a singleton VM.</item>
+    ///   <item><b>Transient view-model</b> — CatalogViewModel: stateless action tools that write through to singleton services.</item>
+    /// </list>
     /// </summary>
     [AIToolSource(typeof(ProductCatalog))]
     [AIToolSource(typeof(CurrentCart))]
@@ -53,13 +61,12 @@ public sealed partial class ChatViewModel : ObservableObject, IRecipient<StartNe
     public IReadOnlyList<string> SuggestionPrompts { get; } =
     [
         "Add 5 packs of tomato seeds and a trowel",
-        "I want 10 seeds",
+        "Show me the basil seeds",
         "Build me a starter bundle",
         "Switch cart display mode",
         "Checkout my shopping list",
         "Go to my past orders",
         "Rate the tomato seeds 5 stars",
-        "Re-order my last order",
     ];
 
     [ObservableProperty]
