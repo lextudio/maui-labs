@@ -2,7 +2,7 @@ name: CI - AI Extensions
 
 on:
   push:
-    branches: [main]
+    branches: [main, mattleibow/ai-annotations]
     paths:
       - 'src/AIExtensions/**'
       - 'tests/AIExtensions/**'
@@ -14,7 +14,7 @@ on:
       - 'NuGet.config'
   pull_request:
     types: [opened, synchronize, reopened, edited]
-    branches: [main]
+    branches: [main, mattleibow/ai-annotations]
     paths:
       - 'src/AIExtensions/**'
       - 'tests/AIExtensions/**'
