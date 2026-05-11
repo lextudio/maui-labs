@@ -8,7 +8,7 @@ AI integration packages for .NET MAUI, built on [`Microsoft.Extensions.AI`](http
 |---------|-------------|
 | [`Microsoft.Maui.AI.Attributes`](Microsoft.Maui.AI.Attributes/) | Source-generated AI tool contexts — `[ExportAIFunction]`, DI binding, AOT-safe |
 
-- [AI Attributes README](Microsoft.Maui.AI.Attributes/README.md) — full API documentation, samples, and equivalence rules
+- [Full documentation](Microsoft.Maui.AI.Attributes/README.md) — API reference, samples, and equivalence rules
 
 ## Samples
 
