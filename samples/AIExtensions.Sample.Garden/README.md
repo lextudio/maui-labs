@@ -1,6 +1,6 @@
 # Garden Shop AI Chat
 
-A polished .NET MAUI sample that demonstrates **`Microsoft.Maui.AI.Attributes`**
+A polished .NET MAUI sample that demonstrates **AI Extensions**
 in a real app surface. The assistant, **Sage**, can browse the catalog, manage
 the cart, open modal pages, recommend starter bundles, and review or reorder
 past purchases using source-generated tools.
@@ -84,7 +84,7 @@ or reject it.
 dotnet build samples/AIExtensions.Sample.Garden -f net10.0-maccatalyst
 ```
 
-Configure user secrets (shared across AI.Attributes samples):
+Configure user secrets (shared across AI Extensions samples):
 
 ```bash
 dotnet user-secrets --id ai-attributes-secrets set "AI:Endpoint" "<your-endpoint>"

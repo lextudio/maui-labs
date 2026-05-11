@@ -1,7 +1,7 @@
 # DIParameters — parameter binding shapes
 
 A console app that shows the parameter shapes
-`Microsoft.Maui.AI.Attributes` supports beyond "plain value in, value out".
+AI Extensions supports beyond "plain value in, value out".
 
 ## What this demonstrates
 

@@ -1,6 +1,6 @@
 # Hello — minimal console sample
 
-The smallest possible `Microsoft.Maui.AI.Attributes` app: one DI-bound
+The smallest possible AI Extensions app: one DI-bound
 service, one static service, one console REPL.
 
 ## What this demonstrates

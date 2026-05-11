@@ -37,7 +37,7 @@ parameters:
   type: boolean
   default: false
 - name: publishAINuget
-  displayName: 'Publish AI Attributes packages to NuGet.org'
+  displayName: 'Publish AI Extensions packages to NuGet.org'
   type: boolean
   default: false
 - name: publishEssentialsAINuget
@@ -146,7 +146,7 @@ extends:
               displayName: Build and Test Cli
 
           - job: AI
-            displayName: AI Attributes - Windows
+            displayName: AI Extensions - Windows
             pool:
               name: NetCore1ESPool-Internal
               demands: ImageOverride -equals windows.vs2026preview.scout.amd64
@@ -167,7 +167,7 @@ extends:
                 -prepareMachine
                 -projects $(Build.SourcesDirectory)\src\AIExtensions\AIExtensions.slnf
                 $(_OfficialBuildArgs)
-              displayName: Build and Test AI Attributes
+              displayName: Build and Test AI Extensions
 
           - job: AppProjectReference
             displayName: AppProjectReference - Windows
@@ -615,10 +615,10 @@ extends:
               nuGetFeedType: external
               publishFeedCredentials: 'nuget.org (dotnetframework)'
 
-    # Publish AI Attributes packages to NuGet.org
+    # Publish AI Extensions packages to NuGet.org
     - ${{ if eq(parameters.publishAINuget, true) }}:
       - stage: publish_ai_nuget
-        displayName: 'Publish AI Attributes to NuGet.org'
+        displayName: 'Publish AI Extensions to NuGet.org'
         dependsOn:
         - Validate
         - publish_using_darc

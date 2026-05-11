@@ -1,4 +1,4 @@
-name: CI - AI Attributes
+name: CI - AI Extensions
 
 on:
   push:
@@ -30,7 +30,7 @@ jobs:
     uses: ./.github/workflows/_build.yml
     with:
       project-path: src/AIExtensions/AIExtensions.slnf
-      project-name: ai-attributes
+      project-name: ai-extensions
       run-tests: true
       pack: true
       install-workloads: false
