@@ -10,19 +10,16 @@
        Shell.NavBarIsVisible="False">
 
     <TabBar Route="main" Shell.TabBarIsVisible="False">
+        <!-- Chat home — the default landing surface -->
         <ShellContent Route="chat"
-                      Title="Chat"
-                      Icon="&#xE76C;"
                       ContentTemplate="{DataTemplate pages:MainPage}" />
 
+        <!-- Products / Catalog — normal navigation, not modal -->
         <ShellContent Route="products"
-                      Title="Products"
-                      Icon="&#xF788;"
                       ContentTemplate="{DataTemplate pages:CatalogPage}" />
 
+        <!-- Orders — normal navigation, not modal -->
         <ShellContent Route="orders"
-                      Title="Orders"
-                      Icon="&#xEA07;"
                       ContentTemplate="{DataTemplate pages:OrdersPage}" />
     </TabBar>
 
