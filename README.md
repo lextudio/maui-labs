@@ -73,18 +73,16 @@ A comprehensive MAUI testing, automation, and debugging toolkit. The DevFlow CLI
 
 ### AI Extensions
 
-Source-generated AI tool discovery for `Microsoft.Extensions.AI` and .NET MAUI apps.
+AI integration packages for `Microsoft.Extensions.AI` and .NET MAUI apps.
 
-- **Attribute-based tools** — annotate methods or property accessors with `[ExportAIFunction]`
-- **Composed or auto-generated tool contexts** — merge static classes, DI services, interfaces, and view-models with `[AIToolSource]`, or use the assembly-wide auto context
-- **DI-aware parameter binding** — supports plain JSON arguments plus `[FromServices]` and `[FromKeyedServices]`
-- **Approval gates** — mark destructive or sensitive operations with `ApprovalRequired = true`
-- **AOT-friendly** — compile-time-generated tool wrappers with no reflection on the hot invocation path
-- **Sample apps** — includes the Garden Shop demo with modal page navigation, cart display tools, and a transient bundle recommender
+#### AI Attributes
+
+Source-generated AI tool discovery — annotate methods or property accessors with `[ExportAIFunction]` to create AI-callable tools. Composed or auto-generated tool contexts, DI-aware parameter binding, approval gates, AOT-friendly.
 
 | Package | Description |
 |---------|-------------|
 | `Microsoft.Maui.AI.Attributes` | Source-generated AI tool contexts for `Microsoft.Extensions.AI` |
+
 ### macOS AppKit Backend
 
 A native macOS AppKit backend for .NET MAUI — run MAUI apps as true AppKit apps with NSWindow, NSButton, NSScrollView, native menu bar, sidebar flyout, and more. An alternative to Mac Catalyst.
