@@ -36,7 +36,7 @@ parameters:
   displayName: 'Publish macOS AppKit packages to NuGet.org'
   type: boolean
   default: false
-- name: publishAINuget
+- name: publishAIExtensionsNuget
   displayName: 'Publish AI Extensions packages to NuGet.org'
   type: boolean
   default: false
@@ -616,8 +616,8 @@ extends:
               publishFeedCredentials: 'nuget.org (dotnetframework)'
 
     # Publish AI Extensions packages to NuGet.org
-    - ${{ if eq(parameters.publishAINuget, true) }}:
-      - stage: publish_ai_nuget
+    - ${{ if eq(parameters.publishAIExtensionsNuget, true) }}:
+      - stage: publish_ai_extensions_nuget
         displayName: 'Publish AI Extensions to NuGet.org'
         dependsOn:
         - Validate
