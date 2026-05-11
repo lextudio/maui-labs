@@ -23,20 +23,22 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
                 fonts.AddFont("FluentSystemIcons-Filled.ttf", "FluentFilled");
-            });
-
-        // Remove native Entry border so our custom Border wrapper is the only visible frame.
+            })
+            .ConfigureMauiHandlers(handlers =>
+            {
+                // Remove native Entry border so our custom Border wrapper is the only visible frame.
 #if IOS || MACCATALYST
-        Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("NoBorder", (handler, _) =>
-        {
-            handler.PlatformView.BorderStyle = UIKit.UITextBorderStyle.None;
-        });
+                Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("NoBorder", (handler, _) =>
+                {
+                    handler.PlatformView.BorderStyle = UIKit.UITextBorderStyle.None;
+                });
 #elif ANDROID
-        Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("NoBorder", (handler, _) =>
-        {
-            handler.PlatformView.BackgroundTintList = Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
-        });
+                Microsoft.Maui.Handlers.EntryHandler.Mapper.AppendToMapping("NoBorder", (handler, _) =>
+                {
+                    handler.PlatformView.BackgroundTintList = Android.Content.Res.ColorStateList.ValueOf(Android.Graphics.Color.Transparent);
+                });
 #endif
+            });
 
         builder.Configuration.AddUserSecrets();
 
