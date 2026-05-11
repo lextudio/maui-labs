@@ -39,7 +39,7 @@ public sealed partial class ChatMessageViewModel(ChatMessageKind kind, string te
     [NotifyPropertyChangedFor(nameof(ExpandIcon))]
     public partial bool IsExpanded { get; set; }
 
-    public string ExpandIcon => IsExpanded ? "▼" : "▶";
+    public string ExpandIcon => IsExpanded ? FluentIcons.ChevronDown : FluentIcons.ChevronRight;
 
     [RelayCommand]
     private void ToggleExpand()

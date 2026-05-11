@@ -53,7 +53,8 @@
                                    FontSize="{StaticResource FontSizeSubtitle}" FontAttributes="Bold"
                                    HorizontalTextAlignment="End"
                                    TextColor="{AppThemeBinding Light={StaticResource TextAccentLight}, Dark={StaticResource TextAccentDark}}" />
-                            <Label Text="›"
+                            <Label Text="&#xE76C;"
+                                   FontFamily="FluentFilled"
                                    FontSize="{StaticResource FontSizeTitle}"
                                    HorizontalTextAlignment="End"
                                    TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}" />

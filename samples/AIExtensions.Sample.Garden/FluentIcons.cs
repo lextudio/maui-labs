@@ -37,4 +37,8 @@ static class FluentIcons
     public const string Temperature = "\uF7A8";
     public const string PaintBrush = "\uF59D";
     public const string LockClosed = "\uE79E";
+
+    // Chevrons (for expand/collapse and list navigation)
+    public const string ChevronRight = "\uE76C";
+    public const string ChevronDown = "\uE70D";
 }
