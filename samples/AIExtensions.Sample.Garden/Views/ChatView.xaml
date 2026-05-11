@@ -75,6 +75,7 @@
                                             <TapGestureRecognizer Command="{Binding ToggleExpandCommand}" />
                                         </HorizontalStackLayout.GestureRecognizers>
                                         <Label Text="{Binding ExpandIcon}"
+                                               FontFamily="FluentFilled"
                                                FontSize="{StaticResource FontSizeCaption}"
                                                TextColor="{AppThemeBinding Light={StaticResource TextTertiaryLight}, Dark={StaticResource TextTertiaryDark}}"
                                                VerticalOptions="Center"
