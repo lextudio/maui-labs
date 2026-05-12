@@ -43,7 +43,9 @@ namespace Microsoft.Maui.Labs.HotReload.SourceGen
 		}
 
 		static bool IsPartialClassDeclaration(SyntaxNode node, System.Threading.CancellationToken _) =>
-			node is ClassDeclarationSyntax c && c.Modifiers.Any(SyntaxKind.PartialKeyword);
+			node is ClassDeclarationSyntax c &&
+			c.Modifiers.Any(SyntaxKind.PartialKeyword) &&
+			c.BaseList is not null;
 
 		static HotReloadableClassInfo? GetHotReloadableClassInfo(GeneratorSyntaxContext ctx, System.Threading.CancellationToken ct)
 		{
@@ -57,17 +59,40 @@ namespace Microsoft.Maui.Labs.HotReload.SourceGen
 			if (classSymbol.IsGenericType || classSymbol.ContainingType != null)
 				return null;
 
-			var iface = ctx.SemanticModel.Compilation.GetTypeByMetadataName(IHotReloadableFullName);
-			if (iface is null)
-				return null;
-
+			// Check interfaces: prefer semantic model, but fall back to syntax name matching
+			// so the generator works even when the referenced assembly isn't fully loaded
+			// in the compilation (e.g. net10.0 lib consumed by a net11.0-* project).
 			bool implementsIHotReloadable = false;
-			foreach (var i in classSymbol.AllInterfaces)
+
+			var iface = ctx.SemanticModel.Compilation.GetTypeByMetadataName(IHotReloadableFullName);
+			if (iface is not null)
 			{
-				if (SymbolEqualityComparer.Default.Equals(i, iface))
+				// Semantic path: exact type identity check
+				foreach (var i in classSymbol.AllInterfaces)
 				{
-					implementsIHotReloadable = true;
-					break;
+					if (SymbolEqualityComparer.Default.Equals(i, iface))
+					{
+						implementsIHotReloadable = true;
+						break;
+					}
+				}
+			}
+			else
+			{
+				// Syntax fallback: match by short or fully-qualified name in the base list
+				foreach (var baseType in classDecl.BaseList?.Types ?? default)
+				{
+					var typeName = baseType.Type switch
+					{
+						IdentifierNameSyntax id => id.Identifier.Text,
+						QualifiedNameSyntax q => q.Right.Identifier.Text,
+						_ => null
+					};
+					if (typeName == "IHotReloadable")
+					{
+						implementsIHotReloadable = true;
+						break;
+					}
 				}
 			}
 

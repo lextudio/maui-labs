@@ -36,15 +36,17 @@
   </ItemGroup>
 
   <!-- Pack the source generator DLL into the correct NuGet analyzers path.
-       Uses MSBuild's GetTargetPath to locate the DLL regardless of artifacts layout. -->
+       Uses Build target (not GetTargetPath) to ensure the generator is up-to-date before packing.
+       Path must be roslyn4.0/cs/ (not the generic dotnet/cs/) because SDKs with
+       SupportsRoslynComponentVersioning=true only load from versioned paths. -->
   <Target Name="IncludeSourceGenInPackage" BeforeTargets="_GetPackageFiles">
     <MSBuild Projects="..\Microsoft.Maui.HotReload.SourceGen\Microsoft.Maui.HotReload.SourceGen.csproj"
-             Targets="GetTargetPath"
+             Targets="Build"
              Properties="Configuration=$(Configuration)">
       <Output TaskParameter="TargetOutputs" ItemName="_SourceGenDll" />
     </MSBuild>
     <ItemGroup>
-      <None Include="@(_SourceGenDll)" Pack="true" PackagePath="analyzers/dotnet/cs/" Visible="false" />
+      <None Include="@(_SourceGenDll)" Pack="true" PackagePath="analyzers/dotnet/roslyn4.0/cs/" Visible="false" />
     </ItemGroup>
   </Target>
 
