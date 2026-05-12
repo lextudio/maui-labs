@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace Microsoft.Maui.HotReload
+namespace Microsoft.Maui.Labs.HotReload
 {
 	/// <summary>
 	/// Registry that tracks live <see cref="IHotReloadable"/> instances so they can be notified

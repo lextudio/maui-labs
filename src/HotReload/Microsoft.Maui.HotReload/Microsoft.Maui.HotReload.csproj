@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net10.0</TargetFrameworks>
-    <AssemblyName>Microsoft.Maui.HotReload</AssemblyName>
-    <RootNamespace>Microsoft.Maui.HotReload</RootNamespace>
+    <AssemblyName>Microsoft.Maui.Labs.HotReload</AssemblyName>
+    <RootNamespace>Microsoft.Maui.Labs.HotReload</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
@@ -17,7 +17,7 @@
     <!-- NuGet package information -->
     <IsShipping>true</IsShipping>
     <IsPackable>true</IsPackable>
-    <PackageId>Microsoft.Maui.HotReload</PackageId>
+    <PackageId>Microsoft.Maui.Labs.HotReload</PackageId>
     <Description>Provides a MetadataUpdateHandler for .NET MAUI hot reload. Register any IHotReloadable instance to receive OnHotReload() callbacks when their type is hot-reloaded.</Description>
     <PackageTags>$(DefaultPackageTags);hotreload;developer-tools</PackageTags>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>

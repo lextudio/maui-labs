@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <AssemblyName>Microsoft.Maui.HotReload.SourceGen</AssemblyName>
-    <RootNamespace>Microsoft.Maui.HotReload.SourceGen</RootNamespace>
+    <AssemblyName>Microsoft.Maui.Labs.HotReload.SourceGen</AssemblyName>
+    <RootNamespace>Microsoft.Maui.Labs.HotReload.SourceGen</RootNamespace>
     <IsRoslynComponent>true</IsRoslynComponent>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <IsPackable>false</IsPackable>

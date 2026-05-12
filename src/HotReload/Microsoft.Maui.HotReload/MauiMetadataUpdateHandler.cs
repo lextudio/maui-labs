@@ -1,7 +1,7 @@
 #nullable enable
 using System;
 
-namespace Microsoft.Maui.HotReload
+namespace Microsoft.Maui.Labs.HotReload
 {
 	/// <summary>
 	/// Handles .NET Hot Reload metadata update notifications, forwarding them to registered

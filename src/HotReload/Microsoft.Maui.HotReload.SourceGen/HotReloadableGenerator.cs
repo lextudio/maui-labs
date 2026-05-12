@@ -7,17 +7,17 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
 
-namespace Microsoft.Maui.HotReload.SourceGen
+namespace Microsoft.Maui.Labs.HotReload.SourceGen
 {
 	/// <summary>
 	/// Generates a <c>HotReloadInitialize()</c> method for every <c>partial</c> class that
-	/// implements <c>Microsoft.Maui.HotReload.IHotReloadable</c>. Also emits an informational
+	/// implements <c>Microsoft.Maui.Labs.HotReload.IHotReloadable</c>. Also emits an informational
 	/// diagnostic if no constructor appears to call it.
 	/// </summary>
 	[Generator]
 	public sealed class HotReloadableGenerator : IIncrementalGenerator
 	{
-		const string IHotReloadableFullName = "Microsoft.Maui.HotReload.IHotReloadable";
+		const string IHotReloadableFullName = "Microsoft.Maui.Labs.HotReload.IHotReloadable";
 
 		static readonly DiagnosticDescriptor MissingInitCallDescriptor = new(
 			id: "MUH0001",
@@ -130,7 +130,7 @@ namespace Microsoft.Maui.HotReload.SourceGen
 			sb.AppendLine($"{indent}{{");
 			sb.AppendLine($"{indent}    /// <summary>Auto-generated. Call from your constructor to register this instance for hot reload notifications.</summary>");
 			sb.AppendLine($"{indent}    private void HotReloadInitialize()");
-			sb.AppendLine($"{indent}        => global::Microsoft.Maui.HotReload.HotReloadRegistry.Register(this);");
+			sb.AppendLine($"{indent}        => global::Microsoft.Maui.Labs.HotReload.HotReloadRegistry.Register(this);");
 			sb.AppendLine($"{indent}}}");
 
 			if (info.Namespace is not null)
