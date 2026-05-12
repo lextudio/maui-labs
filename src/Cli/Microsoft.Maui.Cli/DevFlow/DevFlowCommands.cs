@@ -3894,12 +3894,19 @@ public class DevFlowCommands
         bool emitWarnings,
         CancellationToken cancellationToken)
     {
+        // Short-circuit on machines without an Android SDK so we don't pay the
+        // cost of instantiating AndroidProvider / building env vars on every
+        // devflow list/wait/diagnose invocation on desktop-only dev boxes.
+        if (!AndroidDevFlowPortForwarder.IsAdbLikelyAvailable())
+            return null;
+
         try
         {
             var report = await CreateAndroidPortForwarder().EnsureAsync(new AndroidDevFlowForwardingRequest
             {
                 AgentPorts = agentPorts,
                 EnsureBrokerReverse = ensureBrokerReverse,
+                BrokerPort = Broker.BrokerClient.ReadBrokerPortPublic() ?? Broker.BrokerServer.DefaultPort,
                 Repair = repair,
                 DeviceSerial = androidDevice
             }, cancellationToken);

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.Maui.Cli.DevFlow.Broker;
 using Microsoft.Maui.Cli.Models;
 using Microsoft.Maui.Cli.Providers.Android;
 using Microsoft.Maui.Cli.Utils;
@@ -7,7 +8,7 @@ namespace Microsoft.Maui.Cli.DevFlow.Android;
 
 internal sealed class AndroidDevFlowPortForwarder
 {
-    public const int DefaultBrokerPort = 19223;
+    public const int DefaultBrokerPort = BrokerServer.DefaultPort;
 
     readonly IAndroidProvider _androidProvider;
     readonly string? _adbPath;
@@ -40,16 +41,38 @@ internal sealed class AndroidDevFlowPortForwarder
                 cancellationToken: cancellationToken));
     }
 
+    /// <summary>
+    /// Cheap, side-effect-free probe: returns true only when the Android SDK paths
+    /// resolve to an existing <c>adb</c> binary. Used to short-circuit forwarding work
+    /// on machines that do not have the Android SDK installed.
+    /// </summary>
+    public static bool IsAdbLikelyAvailable()
+    {
+        try
+        {
+            var provider = Program.AndroidProvider;
+            var environment = AndroidEnvironment.BuildEnvironmentVariables(provider.SdkPath, provider.JdkPath);
+            var adb = new Adb(() => provider.SdkPath, environment);
+            return !string.IsNullOrWhiteSpace(adb.AdbPath) && File.Exists(adb.AdbPath);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public async Task<AndroidDevFlowForwardingReport> EnsureAsync(
         AndroidDevFlowForwardingRequest request,
         CancellationToken cancellationToken = default)
     {
+        var brokerPort = request.BrokerPort > 0 ? request.BrokerPort : DefaultBrokerPort;
+
         var report = new AndroidDevFlowForwardingReport
         {
             AdbAvailable = !string.IsNullOrWhiteSpace(_adbPath),
             AdbPath = _adbPath,
             RequestedSerial = request.DeviceSerial ?? Environment.GetEnvironmentVariable("ANDROID_SERIAL"),
-            BrokerPort = DefaultBrokerPort,
+            BrokerPort = brokerPort,
             AgentPorts = request.AgentPorts.Distinct().OrderBy(static port => port).ToArray(),
             RepairRequested = request.Repair
         };
@@ -114,16 +137,16 @@ internal sealed class AndroidDevFlowPortForwarder
 
         var errors = new List<string>();
         var brokerReverseBefore = request.EnsureBrokerReverse
-            && ContainsMapping(reverseBefore.Mappings, report.SelectedSerial, DefaultBrokerPort);
+            && ContainsMapping(reverseBefore.Mappings, report.SelectedSerial, brokerPort);
         var brokerReverseAdded = false;
 
         if (request.EnsureBrokerReverse && !brokerReverseBefore && request.Repair)
         {
-            var result = await RunAdbAsync(report.SelectedSerial, ["reverse", $"tcp:{DefaultBrokerPort}", $"tcp:{DefaultBrokerPort}"], cancellationToken);
+            var result = await RunAdbAsync(report.SelectedSerial, ["reverse", $"tcp:{brokerPort}", $"tcp:{brokerPort}"], cancellationToken);
             if (result.Success)
                 brokerReverseAdded = true;
             else
-                errors.Add($"adb reverse tcp:{DefaultBrokerPort} tcp:{DefaultBrokerPort} failed: {GetProcessError(result)}");
+                errors.Add($"adb reverse tcp:{brokerPort} tcp:{brokerPort} failed: {GetProcessError(result)}");
         }
 
         var agentForwards = new List<AndroidDevFlowPortForward>();
@@ -158,7 +181,7 @@ internal sealed class AndroidDevFlowPortForwarder
 
         var brokerReversePresent = request.EnsureBrokerReverse
             && reverseAfter.Success
-            && ContainsMapping(reverseAfter.Mappings, report.SelectedSerial, DefaultBrokerPort);
+            && ContainsMapping(reverseAfter.Mappings, report.SelectedSerial, brokerPort);
 
         agentForwards = agentForwards
             .Select(f => f with
@@ -181,14 +204,14 @@ internal sealed class AndroidDevFlowPortForwarder
                 BrokerReverseAdded = brokerReverseAdded,
                 AgentForwards = agentForwards.ToArray(),
                 Message = string.Join(Environment.NewLine, errors),
-                Suggestions = BuildMappingSuggestions(report.SelectedSerial, request.EnsureBrokerReverse && !brokerReversePresent, missingPorts)
+                Suggestions = BuildMappingSuggestions(report.SelectedSerial, request.EnsureBrokerReverse && !brokerReversePresent, brokerPort, missingPorts)
             };
         }
 
         var repaired = brokerReverseAdded || agentForwards.Any(static f => f.Added);
         var missing = (!request.EnsureBrokerReverse || brokerReversePresent) && missingPorts.Length == 0
             ? Array.Empty<string>()
-            : BuildMappingSuggestions(report.SelectedSerial, request.EnsureBrokerReverse && !brokerReversePresent, missingPorts);
+            : BuildMappingSuggestions(report.SelectedSerial, request.EnsureBrokerReverse && !brokerReversePresent, brokerPort, missingPorts);
 
         var status = missing.Length > 0
             ? AndroidDevFlowForwardingStatus.Missing
@@ -307,11 +330,11 @@ internal sealed class AndroidDevFlowPortForwarder
         return string.IsNullOrWhiteSpace(error) ? $"exit code {result.ExitCode}" : error;
     }
 
-    static string[] BuildMappingSuggestions(string serial, bool brokerReverseMissing, int[] missingAgentForwards)
+    static string[] BuildMappingSuggestions(string serial, bool brokerReverseMissing, int brokerPort, int[] missingAgentForwards)
     {
         var suggestions = new List<string>();
         if (brokerReverseMissing)
-            suggestions.Add($"adb -s {serial} reverse tcp:{DefaultBrokerPort} tcp:{DefaultBrokerPort}");
+            suggestions.Add($"adb -s {serial} reverse tcp:{brokerPort} tcp:{brokerPort}");
         foreach (var port in missingAgentForwards)
             suggestions.Add($"adb -s {serial} forward tcp:{port} tcp:{port}");
         return suggestions.ToArray();
@@ -338,6 +361,14 @@ internal sealed record AndroidDevFlowForwardingRequest
     public int[] AgentPorts { get; init; } = [];
 
     public bool EnsureBrokerReverse { get; init; }
+
+    /// <summary>
+    /// Broker port that the agent inside the emulator should reach via <c>adb reverse</c>.
+    /// Defaults to <see cref="BrokerServer.DefaultPort"/> when zero, so callers that know
+    /// the resolved broker port (for example via <c>BrokerClient.ReadBrokerPortPublic()</c>)
+    /// can override it for non-default broker deployments.
+    /// </summary>
+    public int BrokerPort { get; init; }
 
     public bool Repair { get; init; }
 

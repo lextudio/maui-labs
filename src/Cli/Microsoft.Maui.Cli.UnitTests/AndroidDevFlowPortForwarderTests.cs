@@ -131,6 +131,48 @@ public class AndroidDevFlowPortForwarderTests
 		Assert.Contains("adb -s emulator-5554 forward tcp:9223 tcp:9223", report.Suggestions);
 	}
 
+	[Fact]
+	public async Task EnsureAsync_WithCustomBrokerPort_UsesProvidedPortForReverse()
+	{
+		var provider = CreateProvider(Device("emulator-5554"));
+		var forwardRules = new HashSet<int>();
+		var reverseRules = new HashSet<int>();
+		var commands = new List<string>();
+		var forwarder = new AndroidDevFlowPortForwarder(provider, "/android-sdk/platform-tools/adb", CreateAdbRunner(forwardRules, reverseRules, commands));
+
+		var report = await forwarder.EnsureAsync(new AndroidDevFlowForwardingRequest
+		{
+			AgentPorts = [9223],
+			EnsureBrokerReverse = true,
+			BrokerPort = 19225,
+			Repair = true
+		});
+
+		Assert.Equal(AndroidDevFlowForwardingStatus.Repaired, report.Status);
+		Assert.Equal(19225, report.BrokerPort);
+		Assert.True(report.BrokerReversePresent);
+		Assert.Contains("-s emulator-5554 reverse tcp:19225 tcp:19225", commands);
+		Assert.DoesNotContain("-s emulator-5554 reverse tcp:19223 tcp:19223", commands);
+	}
+
+	[Fact]
+	public async Task EnsureAsync_WithCustomBrokerPortAndMissingReverse_SuggestsCustomPort()
+	{
+		var provider = CreateProvider(Device("emulator-5554"));
+		var forwarder = new AndroidDevFlowPortForwarder(provider, "/android-sdk/platform-tools/adb", CreateAdbRunner([], []));
+
+		var report = await forwarder.EnsureAsync(new AndroidDevFlowForwardingRequest
+		{
+			AgentPorts = [9223],
+			EnsureBrokerReverse = true,
+			BrokerPort = 19225,
+			Repair = false
+		});
+
+		Assert.Equal(AndroidDevFlowForwardingStatus.Missing, report.Status);
+		Assert.Contains("adb -s emulator-5554 reverse tcp:19225 tcp:19225", report.Suggestions);
+	}
+
 	static FakeAndroidProvider CreateProvider(params Device[] devices)
 		=> new()
 		{

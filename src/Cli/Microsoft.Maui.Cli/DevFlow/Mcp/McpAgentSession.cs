@@ -46,12 +46,16 @@ public class McpAgentSession
 
 	static async Task TryEnsureAndroidForwardingAsync(int[] agentPorts, bool ensureBrokerReverse)
 	{
+		if (!AndroidDevFlowPortForwarder.IsAdbLikelyAvailable())
+			return;
+
 		try
 		{
 			await AndroidDevFlowPortForwarder.CreateDefault().EnsureAsync(new AndroidDevFlowForwardingRequest
 			{
 				AgentPorts = agentPorts,
 				EnsureBrokerReverse = ensureBrokerReverse,
+				BrokerPort = BrokerClient.ReadBrokerPortPublic() ?? Broker.BrokerServer.DefaultPort,
 				Repair = true
 			});
 		}
