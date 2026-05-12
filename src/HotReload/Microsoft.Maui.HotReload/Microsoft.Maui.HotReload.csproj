@@ -35,4 +35,17 @@
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
 
+  <!-- Pack the source generator DLL into the correct NuGet analyzers path.
+       Uses MSBuild's GetTargetPath to locate the DLL regardless of artifacts layout. -->
+  <Target Name="IncludeSourceGenInPackage" BeforeTargets="_GetPackageFiles">
+    <MSBuild Projects="..\Microsoft.Maui.HotReload.SourceGen\Microsoft.Maui.HotReload.SourceGen.csproj"
+             Targets="GetTargetPath"
+             Properties="Configuration=$(Configuration)">
+      <Output TaskParameter="TargetOutputs" ItemName="_SourceGenDll" />
+    </MSBuild>
+    <ItemGroup>
+      <None Include="@(_SourceGenDll)" Pack="true" PackagePath="analyzers/dotnet/cs/" Visible="false" />
+    </ItemGroup>
+  </Target>
+
 </Project>
