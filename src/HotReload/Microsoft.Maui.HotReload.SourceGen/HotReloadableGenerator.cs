@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -24,7 +25,7 @@ namespace Microsoft.Maui.Labs.HotReload.SourceGen
 			title: "HotReloadInitialize not called",
 			messageFormat: "'{0}' implements IHotReloadable but no constructor calls HotReloadInitialize(). Add a call to HotReloadInitialize() in your constructor to enable hot reload notifications.",
 			category: "HotReload",
-			defaultSeverity: DiagnosticSeverity.Info,
+			defaultSeverity: DiagnosticSeverity.Warning,
 			isEnabledByDefault: true,
 			description: "Types implementing IHotReloadable must call the generated HotReloadInitialize() in their constructor for hot reload registration to take effect.");
 
@@ -100,18 +101,29 @@ namespace Microsoft.Maui.Labs.HotReload.SourceGen
 				return null;
 
 			// Check whether any constructor in this partial declaration calls HotReloadInitialize.
+			// Walk identifier tokens (skipping trivia/comments) so we don't get false positives
+			// from documentation or comments mentioning "HotReloadInitialize".
 			bool hasInitCall = false;
 			foreach (var member in classDecl.Members)
 			{
 				if (member is not ConstructorDeclarationSyntax ctor)
 					continue;
 
-				var bodyText = ctor.Body?.ToString() ?? ctor.ExpressionBody?.ToString() ?? string.Empty;
-				if (bodyText.IndexOf("HotReloadInitialize", StringComparison.Ordinal) >= 0)
+				SyntaxNode? body = (SyntaxNode?)ctor.Body ?? ctor.ExpressionBody;
+				if (body is null)
+					continue;
+
+				foreach (var id in body.DescendantNodes().OfType<IdentifierNameSyntax>())
 				{
-					hasInitCall = true;
-					break;
+					if (id.Identifier.ValueText == "HotReloadInitialize")
+					{
+						hasInitCall = true;
+						break;
+					}
 				}
+
+				if (hasInitCall)
+					break;
 			}
 
 			return new HotReloadableClassInfo(
