@@ -1849,7 +1849,9 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             var indexerProp = tabType.GetProperty("Item", BindingFlags.Public | BindingFlags.Instance);
             if (countProp == null || indexerProp == null) return (false, "noCountOrItem");
 
-            int count = (int)countProp.GetValue(tabView);
+            var countObj = countProp.GetValue(tabView);
+            if (countObj == null) return (false, "countNull");
+            int count = (int)countObj;
             int childIndex = -1;
             for (int idx = 0; idx < count; idx++)
             {

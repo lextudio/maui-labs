@@ -289,7 +289,7 @@ public class PlatformVisualTreeWalker : VisualTreeWalker
             {
                 if (uiView.Hidden) return false;
                 if (uiView.Alpha <= 0) return false;
-                if (uiView.Bounds.Width <= 0 && uiView.Bounds.Height <= 0) return false;
+                if (uiView.Bounds.Width <= 0 || uiView.Bounds.Height <= 0) return false;
                 return true;
             }
 #elif ANDROID
@@ -297,7 +297,7 @@ public class PlatformVisualTreeWalker : VisualTreeWalker
             {
                 if (androidView.Visibility != global::Android.Views.ViewStates.Visible) return false;
                 if (androidView.Alpha <= 0) return false;
-                if (androidView.Width <= 0 && androidView.Height <= 0) return false;
+                if (androidView.Width <= 0 || androidView.Height <= 0) return false;
                 return true;
             }
 #elif WINDOWS
