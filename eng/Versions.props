@@ -6,7 +6,7 @@
     <PatchVersion>0</PatchVersion>
     <VersionPrefix>$(MajorVersion).$(MinorVersion).$(PatchVersion)</VersionPrefix>
     <PreReleaseVersionLabel>preview</PreReleaseVersionLabel>
-    <PreReleaseVersionIteration>9</PreReleaseVersionIteration>
+    <PreReleaseVersionIteration>10</PreReleaseVersionIteration>
     <StabilizePackageVersion>false</StabilizePackageVersion>
     <!-- Arcade features -->
     <UsingToolXliff>false</UsingToolXliff>
