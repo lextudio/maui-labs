@@ -1,8 +1,12 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Maui.Cli.DevFlow;
+using Microsoft.Maui.Cli.DevFlow.Android;
 using Microsoft.Maui.Cli.DevFlow.Broker;
+using Microsoft.Maui.Cli.Models;
 using Microsoft.Maui.Cli.UnitTests.Fixtures;
+using Microsoft.Maui.Cli.UnitTests.Fakes;
+using Microsoft.Maui.Cli.Utils;
 using Xunit;
 
 namespace Microsoft.Maui.Cli.UnitTests;
@@ -178,6 +182,91 @@ public class DevFlowCliIntegrationTests
             Assert.Equal("SampleApp", agent.GetProperty("appName").GetString());
             Assert.Equal(JsonValueKind.Array, json.GetProperty("projects").ValueKind);
             Assert.Empty(json.GetProperty("projects").EnumerateArray());
+        }
+        finally
+        {
+            DevFlowCommands.ResetBrokerClientForTests();
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DiagnoseJson_WhenAndroidAgentIsRegistered_ReportsForwardingState()
+    {
+        var cli = new CliTestHarness(mockAgentPort: 9223);
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-diagnose-");
+        var originalCurrentDirectory = Directory.GetCurrentDirectory();
+        var commands = new List<string>();
+
+        DevFlowCommands.ResolveRunningBrokerPortAsync = () => Task.FromResult<int?>(19223);
+        DevFlowCommands.ListBrokerAgentsAsync = _ => Task.FromResult<AgentRegistration[]?>(
+        [
+            new AgentRegistration
+            {
+                Id = "android-agent",
+                Project = "/src/App.csproj",
+                Tfm = "net10.0-android",
+                Platform = "Android",
+                AppName = "SampleApp",
+                Port = 9223,
+                Version = "0.1.0-preview",
+                ConnectedAt = DateTime.UnixEpoch
+            }
+        ]);
+        DevFlowCommands.CreateAndroidPortForwarder = () =>
+        {
+            var provider = new FakeAndroidProvider
+            {
+                SdkPath = "/android-sdk",
+                IsSdkInstalled = true,
+                Devices =
+                [
+                    new Device
+                    {
+                        Id = "emulator-5554",
+                        Name = "Pixel",
+                        Platforms = ["android"],
+                        Type = DeviceType.Emulator,
+                        State = DeviceState.Connected,
+                        IsEmulator = true,
+                        IsRunning = true
+                    }
+                ]
+            };
+
+            return new AndroidDevFlowPortForwarder(
+                provider,
+                "/android-sdk/platform-tools/adb",
+                (_, args, _) =>
+                {
+                    commands.Add(string.Join(' ', args));
+                    var output = args[2] switch
+                    {
+                        "reverse" => "emulator-5554 tcp:19223 tcp:19223",
+                        "forward" => "emulator-5554 tcp:9223 tcp:9223",
+                        _ => ""
+                    };
+                    return Task.FromResult(new ProcessResult { ExitCode = 0, StandardOutput = output });
+                });
+        };
+
+        try
+        {
+            Directory.SetCurrentDirectory(tempDir.FullName);
+
+            var result = await cli.InvokeRawAsync("devflow", "diagnose", "--json", "--android-device", "emulator-5554");
+
+            Assert.Equal(0, result.ExitCode);
+            var json = result.ParseJsonOutput();
+            var android = json.GetProperty("android");
+            Assert.Equal("emulator-5554", android.GetProperty("selected_serial").GetString());
+            Assert.True(android.GetProperty("broker_reverse_present").GetBoolean());
+            var forward = Assert.Single(android.GetProperty("agent_forwards").EnumerateArray());
+            Assert.Equal(9223, forward.GetProperty("port").GetInt32());
+            Assert.True(forward.GetProperty("present_after").GetBoolean());
+            Assert.Contains("-s emulator-5554 reverse --list", commands);
+            Assert.Contains("-s emulator-5554 forward --list", commands);
         }
         finally
         {

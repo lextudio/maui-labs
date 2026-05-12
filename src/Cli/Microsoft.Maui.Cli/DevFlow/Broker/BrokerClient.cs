@@ -74,6 +74,13 @@ public static class BrokerClient
     /// Tries: broker lookup by project hash → single agent auto-select → null.
     /// </summary>
     public static async Task<int?> ResolveAgentPortAsync(int brokerPort, string? projectPath = null, string? tfm = null)
+        => (await ResolveAgentAsync(brokerPort, projectPath, tfm))?.Port;
+
+    /// <summary>
+    /// Resolves the agent registration for the current project context.
+    /// Tries: broker lookup by project hash → single agent auto-select → null.
+    /// </summary>
+    public static async Task<AgentRegistration?> ResolveAgentAsync(int brokerPort, string? projectPath = null, string? tfm = null)
     {
         var agents = await ListAgentsAsync(brokerPort);
         if (agents == null || agents.Length == 0) return null;
@@ -83,18 +90,18 @@ public static class BrokerClient
         {
             var id = AgentRegistration.ComputeId(projectPath, tfm);
             var match = agents.FirstOrDefault(a => a.Id == id);
-            if (match != null) return match.Port;
+            if (match != null) return match;
         }
 
         // If project provided (no TFM), match by project path
         if (projectPath != null)
         {
             var matches = agents.Where(a => a.Project == projectPath).ToArray();
-            if (matches.Length == 1) return matches[0].Port;
+            if (matches.Length == 1) return matches[0];
         }
 
         // If only one agent, auto-select
-        if (agents.Length == 1) return agents[0].Port;
+        if (agents.Length == 1) return agents[0];
 
         return null;
     }
@@ -171,13 +178,46 @@ public static class BrokerClient
         var csproj = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj").FirstOrDefault();
         if (csproj is not null)
         {
-            var port = await ResolveAgentPortAsync(brokerPort, Path.GetFullPath(csproj));
-            if (port.HasValue) return port.Value;
+            var agent = await ResolveAgentAsync(brokerPort, Path.GetFullPath(csproj));
+            if (agent is not null) return agent.Port;
         }
 
         // Try auto-select (single agent)
-        var autoPort = await ResolveAgentPortAsync(brokerPort);
-        if (autoPort.HasValue) return autoPort.Value;
+        var autoAgent = await ResolveAgentAsync(brokerPort);
+        if (autoAgent is not null) return autoAgent.Port;
+
+        // No single match — return null so callers can handle multi-agent case
+        return null;
+    }
+
+    /// <summary>
+    /// High-level agent resolution: ensure broker running → resolve by project → auto-select → null.
+    /// Returns the resolved broker registration when one can be selected unambiguously.
+    /// </summary>
+    public static async Task<AgentRegistration?> ResolveAgentForProjectAsync()
+    {
+        var brokerPort = ReadBrokerPort() ?? BrokerServer.DefaultPort;
+
+        if (!await IsBrokerAliveAsync(brokerPort))
+        {
+            var started = await EnsureBrokerRunningAsync();
+            if (started.HasValue)
+                brokerPort = started.Value;
+            else
+                return null;
+        }
+
+        // Try project-specific resolution
+        var csproj = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj").FirstOrDefault();
+        if (csproj is not null)
+        {
+            var agent = await ResolveAgentAsync(brokerPort, Path.GetFullPath(csproj));
+            if (agent is not null) return agent;
+        }
+
+        // Try auto-select (single agent)
+        var autoAgent = await ResolveAgentAsync(brokerPort);
+        if (autoAgent is not null) return autoAgent;
 
         // No single match — return null so callers can handle multi-agent case
         return null;

@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.Maui.Cli.DevFlow.Android;
 using Microsoft.Maui.Cli.DevFlow.Broker;
 using Microsoft.Maui.DevFlow.Driver;
 
@@ -22,4 +23,7 @@ namespace Microsoft.Maui.Cli.DevFlow;
 [JsonSerializable(typeof(AgentRegistration[]))]
 [JsonSerializable(typeof(BrokerState))]
 [JsonSerializable(typeof(RegistrationMessage))]
+[JsonSerializable(typeof(AndroidDevFlowForwardingReport))]
+[JsonSerializable(typeof(AndroidDevFlowDevice[]))]
+[JsonSerializable(typeof(AndroidDevFlowPortForward[]))]
 internal sealed partial class DevFlowCliJsonContext : JsonSerializerContext;
