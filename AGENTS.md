@@ -202,7 +202,7 @@ Each product requires source setup **and** CI/CD configuration across two system
 
 ## DevFlow MCP Tools
 
-DevFlow exposes 69 MCP tools for AI agent integration (in `src/Cli/Microsoft.Maui.Cli/DevFlow/Mcp/Tools/`):
+DevFlow exposes 63 MCP tools for AI agent integration (in `src/Cli/Microsoft.Maui.Cli/DevFlow/Mcp/Tools/`):
 
 | Tool | Purpose |
 |------|---------|
@@ -211,12 +211,6 @@ DevFlow exposes 69 MCP tools for AI agent integration (in `src/Cli/Microsoft.Mau
 | `maui_back` | Go back in the app navigation stack |
 | `maui_batch` | Execute multiple UI actions in a single request |
 | `maui_battery_info` | Battery level, state, power source |
-| `maui_ble_events` | Get recent BLE events (scan results, connections, etc.) |
-| `maui_ble_events_clear` | Clear all recorded BLE events |
-| `maui_ble_scan_start` | Start a BLE scan to discover nearby devices |
-| `maui_ble_scan_stop` | Stop an active BLE scan |
-| `maui_ble_status` | BLE monitor status, event count, subscriber count |
-| `maui_ble_stream_url` | WebSocket URL for streaming live BLE events |
 | `maui_capabilities` | Get capabilities supported by the connected agent |
 | `maui_cdp_evaluate` | Execute JavaScript in Blazor WebView via CDP |
 | `maui_cdp_screenshot` | WebView screenshot via CDP |
@@ -260,6 +254,7 @@ DevFlow exposes 69 MCP tools for AI agent integration (in `src/Cli/Microsoft.Mau
 | `maui_recording_stop` | Stop screen recording |
 | `maui_resize` | Resize the app window |
 | `maui_screenshot` | Capture screenshot (page, element, or fullscreen) |
+| `maui_scroll` | Scroll by delta, item index, or into view |
 | `maui_secure_storage_clear` | Clear all secure storage |
 | `maui_secure_storage_delete` | Delete secure storage entry |
 | `maui_secure_storage_get` | Read secure storage value |
