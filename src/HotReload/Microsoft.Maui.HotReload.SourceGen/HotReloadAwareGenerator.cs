@@ -12,22 +12,22 @@ namespace Microsoft.Maui.Labs.HotReload.SourceGen
 {
 	/// <summary>
 	/// Generates a <c>HotReloadInitialize()</c> method for every <c>partial</c> class that
-	/// implements <c>Microsoft.Maui.Labs.HotReload.IHotReloadable</c>. Also emits an informational
+	/// implements <c>Microsoft.Maui.Labs.HotReload.IHotReloadAware</c>. Also emits an informational
 	/// diagnostic if no constructor appears to call it.
 	/// </summary>
 	[Generator]
-	public sealed class HotReloadableGenerator : IIncrementalGenerator
+	public sealed class HotReloadAwareGenerator : IIncrementalGenerator
 	{
-		const string IHotReloadableFullName = "Microsoft.Maui.Labs.HotReload.IHotReloadable";
+		const string IHotReloadAwareFullName = "Microsoft.Maui.Labs.HotReload.IHotReloadAware";
 
 		static readonly DiagnosticDescriptor MissingInitCallDescriptor = new(
 			id: "MUH0001",
 			title: "HotReloadInitialize not called",
-			messageFormat: "'{0}' implements IHotReloadable but no constructor calls HotReloadInitialize(). Add a call to HotReloadInitialize() in your constructor to enable hot reload notifications.",
+			messageFormat: "'{0}' implements IHotReloadAware but no constructor calls HotReloadInitialize(). Add a call to HotReloadInitialize() in your constructor to enable hot reload notifications.",
 			category: "HotReload",
 			defaultSeverity: DiagnosticSeverity.Warning,
 			isEnabledByDefault: true,
-			description: "Types implementing IHotReloadable must call the generated HotReloadInitialize() in their constructor for hot reload registration to take effect.");
+			description: "Types implementing IHotReloadAware must call the generated HotReloadInitialize() in their constructor for hot reload registration to take effect.");
 
 		public void Initialize(IncrementalGeneratorInitializationContext context)
 		{
@@ -63,9 +63,9 @@ namespace Microsoft.Maui.Labs.HotReload.SourceGen
 			// Check interfaces: prefer semantic model, but fall back to syntax name matching
 			// so the generator works even when the referenced assembly isn't fully loaded
 			// in the compilation (e.g. net10.0 lib consumed by a net11.0-* project).
-			bool implementsIHotReloadable = false;
+			bool implementsIHotReloadAware = false;
 
-			var iface = ctx.SemanticModel.Compilation.GetTypeByMetadataName(IHotReloadableFullName);
+			var iface = ctx.SemanticModel.Compilation.GetTypeByMetadataName(IHotReloadAwareFullName);
 			if (iface is not null)
 			{
 				// Semantic path: exact type identity check
@@ -73,7 +73,7 @@ namespace Microsoft.Maui.Labs.HotReload.SourceGen
 				{
 					if (SymbolEqualityComparer.Default.Equals(i, iface))
 					{
-						implementsIHotReloadable = true;
+						implementsIHotReloadAware = true;
 						break;
 					}
 				}
@@ -89,15 +89,15 @@ namespace Microsoft.Maui.Labs.HotReload.SourceGen
 						QualifiedNameSyntax q => q.Right.Identifier.Text,
 						_ => null
 					};
-					if (typeName == "IHotReloadable")
+					if (typeName == "IHotReloadAware")
 					{
-						implementsIHotReloadable = true;
+						implementsIHotReloadAware = true;
 						break;
 					}
 				}
 			}
 
-			if (!implementsIHotReloadable)
+			if (!implementsIHotReloadAware)
 				return null;
 
 			// Check whether any constructor in this partial declaration calls HotReloadInitialize.

@@ -1,17 +1,20 @@
 #nullable enable
 using System;
+#if !NETSTANDARD
+using Microsoft.Maui.HotReload;
+#endif
 
 namespace Microsoft.Maui.Labs.HotReload
 {
 	/// <summary>
 	/// Handles .NET Hot Reload metadata update notifications, forwarding them to registered
-	/// <see cref="IHotReloadable"/> instances and the MAUI view-level hot reload infrastructure.
+	/// <see cref="IHotReloadAware"/> instances and the MAUI view-level hot reload infrastructure.
 	/// </summary>
 	public static class MauiMetadataUpdateHandler
 	{
 		/// <summary>
 		/// Called by the .NET Hot Reload host after metadata has been applied.
-		/// Notifies all registered <see cref="IHotReloadable"/> instances whose types were updated,
+		/// Notifies all registered <see cref="IHotReloadAware"/> instances whose types were updated,
 		/// then forwards to MAUI's <c>MauiHotReloadHelper</c> for view-level reload.
 		/// </summary>
 		/// <remarks>

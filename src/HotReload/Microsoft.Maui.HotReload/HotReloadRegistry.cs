@@ -5,7 +5,7 @@ using System.Collections.Generic;
 namespace Microsoft.Maui.Labs.HotReload
 {
 	/// <summary>
-	/// Registry that tracks live <see cref="IHotReloadable"/> instances so they can be notified
+	/// Registry that tracks live <see cref="IHotReloadAware"/> instances so they can be notified
 	/// when their type is updated via .NET Hot Reload.
 	/// </summary>
 	/// <remarks>
@@ -14,13 +14,13 @@ namespace Microsoft.Maui.Labs.HotReload
 	public static class HotReloadRegistry
 	{
 		static readonly object _lock = new();
-		static readonly Dictionary<Type, List<WeakReference<IHotReloadable>>> _registry = new();
+		static readonly Dictionary<Type, List<WeakReference<IHotReloadAware>>> _registry = new();
 
 		/// <summary>
-		/// Registers <paramref name="instance"/> so it receives <see cref="IHotReloadable.OnHotReload"/>
+		/// Registers <paramref name="instance"/> so it receives <see cref="IHotReloadAware.OnHotReload"/>
 		/// callbacks when its type (or any base type) is updated at runtime.
 		/// </summary>
-		public static void Register(IHotReloadable instance)
+		public static void Register(IHotReloadAware instance)
 		{
 			if (instance is null)
 				return;
@@ -29,11 +29,11 @@ namespace Microsoft.Maui.Labs.HotReload
 			lock (_lock)
 			{
 				if (!_registry.TryGetValue(type, out var list))
-					_registry[type] = list = new List<WeakReference<IHotReloadable>>();
+					_registry[type] = list = new List<WeakReference<IHotReloadAware>>();
 
 				// Compact dead references before adding to keep the list small.
 				list.RemoveAll(static w => !w.TryGetTarget(out _));
-				list.Add(new WeakReference<IHotReloadable>(instance));
+				list.Add(new WeakReference<IHotReloadAware>(instance));
 			}
 		}
 
@@ -41,7 +41,7 @@ namespace Microsoft.Maui.Labs.HotReload
 		/// Removes <paramref name="instance"/> from the registry.
 		/// Safe to call even if the instance was never registered.
 		/// </summary>
-		public static void Unregister(IHotReloadable instance)
+		public static void Unregister(IHotReloadAware instance)
 		{
 			if (instance is null)
 				return;
@@ -74,7 +74,7 @@ namespace Microsoft.Maui.Labs.HotReload
 		/// </summary>
 		internal static void NotifyInstances(Type[] updatedTypes)
 		{
-			List<IHotReloadable>? toNotify = null;
+			List<IHotReloadAware>? toNotify = null;
 
 			lock (_lock)
 			{
@@ -93,7 +93,7 @@ namespace Microsoft.Maui.Labs.HotReload
 
 							// Deduplicate by reference to avoid double-notifying when both a base
 							// type and derived type appear in updatedTypes simultaneously.
-							toNotify ??= new List<IHotReloadable>();
+							toNotify ??= new List<IHotReloadAware>();
 							bool alreadyQueued = false;
 							for (int i = 0; i < toNotify.Count; i++)
 							{
@@ -117,7 +117,7 @@ namespace Microsoft.Maui.Labs.HotReload
 			{
 				try
 				{
-					instance.OnHotReload();
+					instance.OnHotReload(updatedTypes);
 				}
 				catch (Exception ex)
 				{
