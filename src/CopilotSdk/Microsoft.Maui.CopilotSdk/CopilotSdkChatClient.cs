@@ -69,33 +69,20 @@ public sealed class CopilotSdkChatClient : IChatClient, IAsyncDisposable
         ChatOptions? options = null,
         CancellationToken cancellationToken = default)
     {
-        var chunks = new List<ChatResponseUpdate>();
-        await foreach (var update in GetStreamingResponseAsync(messages, options, cancellationToken))
-            chunks.Add(update);
-
-        // Build the response message with all content types preserved
         var contents = new List<AIContent>();
-        foreach (var chunk in chunks)
+        await foreach (var update in GetStreamingResponseAsync(messages, options, cancellationToken))
         {
-            foreach (var content in chunk.Contents)
+            foreach (var content in update.Contents)
             {
-                // Skip reasoning-tagged text from the primary response text
                 if (content is TextContent tc
-                    && tc.AdditionalProperties?.ContainsKey("reasoning") != true)
-                {
-                    contents.Add(tc);
-                }
-                else if (content is not TextContent)
-                {
-                    contents.Add(content);
-                }
+                    && tc.AdditionalProperties?.ContainsKey("reasoning") == true)
+                    continue;
+
+                contents.Add(content);
             }
         }
 
-        var fullText = string.Join("", contents.OfType<TextContent>().Select(tc => tc.Text));
-        var message = new ChatMessage(ChatRole.Assistant, fullText);
-
-        return new ChatResponse([message])
+        return new ChatResponse([new ChatMessage(ChatRole.Assistant, contents)])
         {
             ModelId = _sessionModel,
         };
