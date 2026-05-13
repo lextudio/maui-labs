@@ -45,12 +45,14 @@ Use this skill to add MAUI DevFlow to a project after `maui devflow init` has in
    maui devflow ui tree --depth 1
    ```
 
-   For programmatic use, pass `--json` to `maui doctor` / `maui devflow
-   diagnose` and read the top-level `code` and `remediation.command` (no
-   `error` wrapper; `snake_case` property names; `remediation.type` is
-   lowercase, e.g. `autofixable`). See
-   `maui-devflow-debug` references/troubleshooting.md for the full code
-   taxonomy (E1xxx tool, E2xxx platform/SDK, E3xxx user action, etc.).
+   For programmatic use, pass `--json` to `maui doctor` and read the
+   top-level `code` and `remediation.command` (no `error` wrapper;
+   `snake_case` property names; `remediation.type` is lowercase, e.g.
+   `autofixable`). **Note:** `maui devflow` commands use a different error
+   shape (`{"error":"...","type":"...","retryable":...}`) written to
+   **stderr**. See `maui-devflow-debug` references/troubleshooting.md for
+   the full code taxonomy (E1xxx tool, E2xxx platform/SDK, E3xxx user
+   action, etc.).
 
 If verification fails after integration, switch to `maui-devflow-debug` for connectivity recovery.
 

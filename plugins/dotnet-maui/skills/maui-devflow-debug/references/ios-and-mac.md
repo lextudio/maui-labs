@@ -226,8 +226,9 @@ maui devflow ui permission revoke location --bundle-id com.company.appid
 maui devflow ui permission reset all --bundle-id com.company.appid
 ```
 
-`--udid <UDID>` is optional and only needed if multiple simulators are
-booted; `--bundle-id` may be omitted when the DevFlow agent has it cached.
+`--udid <UDID>` is optional (auto-detects the booted simulator); `--bundle-id`
+is required for per-app grants — omitting it applies the permission to all
+apps on the simulator.
 
 Available services (passed straight through to `simctl privacy`): `all`,
 `calendar`, `contacts`, `contacts-limited`, `location`, `location-always`,

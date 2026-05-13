@@ -104,9 +104,14 @@ pgrep -f "YourApp"
 
 ## Reading errors from the CLI
 
-`maui` commands accept `--json` to emit a structured output that an AI agent
-can parse. On failure, error fields are at the **top level** of stdout (no
-`"error"` wrapper) with `snake_case` property names:
+Non-DevFlow `maui` commands (e.g. `maui doctor`, `maui android ...`,
+`maui apple ...`) accept `--json` to emit structured output. On failure,
+error fields are at the **top level** of stdout (no `"error"` wrapper) with
+`snake_case` property names:
+
+**Note:** `maui devflow ...` commands use a different error shape
+(`{"error":"...","type":"...","retryable":...}`) written to **stderr**.
+Parse stderr JSON for DevFlow command failures.
 
 ```json
 {

@@ -89,9 +89,12 @@ packages and `builder.AddMauiDevFlowAgent()` registered.
 Always prefer the unified `maui` CLI surface for device prep and DevFlow
 operations. For programmatic consumption:
 
-- Pass `--json` to any command an agent will parse. Errors are emitted as a
+- Pass `--json` to any command an agent will parse. Non-DevFlow commands
+  (e.g. `maui doctor`, `maui android ...`, `maui apple ...`) emit errors as a
   structured envelope at the **top level** of stdout (no `"error"` wrapper),
   with `snake_case` property names. See `references/troubleshooting.md`.
+  **Note:** `maui devflow ...` commands use a different error shape
+  (`{"error":"...","type":"...","retryable":...}`) written to **stderr**.
 - Inspect `code` to branch logic. Categories: `E1xxx` tool, `E2xxx`
   platform/SDK, `E3xxx` user action, `E4xxx` network, `E5xxx` permission.
 - When `remediation` is present and `remediation.type` is `autofixable`
