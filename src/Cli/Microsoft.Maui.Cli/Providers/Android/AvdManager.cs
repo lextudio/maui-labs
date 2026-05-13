@@ -20,20 +20,22 @@ public class AvdManager
 	readonly AvdManagerRunner? _runner;
 	readonly EmulatorRunner? _emulatorRunner;
 	readonly Adb? _adb;
+	readonly string? _avdManagerPath;
+	readonly IDictionary<string, string>? _env;
 
 	public AvdManager(Func<string?> getSdkPath, Func<string?> getJdkPath, Adb? adb = null)
 	{
 		_adb = adb;
 		var sdkPath = getSdkPath();
-		var env = AndroidEnvironment.BuildEnvironmentVariables(sdkPath, getJdkPath());
+		_env = AndroidEnvironment.BuildEnvironmentVariables(sdkPath, getJdkPath());
 
-		var avdManagerPath = ResolveAvdManagerPath(sdkPath);
-		if (avdManagerPath != null)
-			_runner = new AvdManagerRunner(avdManagerPath, env);
+		_avdManagerPath = ResolveAvdManagerPath(sdkPath);
+		if (_avdManagerPath != null)
+			_runner = new AvdManagerRunner(_avdManagerPath, _env);
 
 		var emulatorPath = ResolveEmulatorPath(sdkPath);
 		if (emulatorPath != null)
-			_emulatorRunner = new EmulatorRunner(emulatorPath, env);
+			_emulatorRunner = new EmulatorRunner(emulatorPath, _env);
 		_emulatorPath = emulatorPath;
 	}
 
@@ -106,16 +108,36 @@ public class AvdManager
 		}
 	}
 
+	/// <summary>
+	/// Lists available device profiles (hardware definitions) by running
+	/// <c>avdmanager list device --compact</c> and parsing one profile ID per line.
+	/// This is implemented directly rather than delegating to the upstream library
+	/// because the upstream <c>ListDeviceProfilesAsync</c> API was added after the
+	/// currently consumed package version.
+	/// </summary>
 	public async Task<List<string>> ListDeviceProfilesAsync(CancellationToken cancellationToken = default)
 	{
-		if (_runner == null)
+		if (string.IsNullOrEmpty(_avdManagerPath))
 			return new List<string>();
 
 		try
 		{
-			var profiles = await _runner.ListDeviceProfilesAsync(cancellationToken);
-			return profiles
-				.Select(p => p.Id)
+			var result = await ProcessRunner.RunAsync(
+				_avdManagerPath,
+				["list", "device", "--compact"],
+				timeout: TimeSpan.FromSeconds(30),
+				environmentVariables: _env is Dictionary<string, string> dict ? dict : _env?.ToDictionary(kv => kv.Key, kv => kv.Value),
+				cancellationToken: cancellationToken);
+
+			if (!result.Success)
+			{
+				System.Diagnostics.Trace.WriteLine($"avdmanager list device failed: {result.StandardError}");
+				return new List<string>();
+			}
+
+			return result.StandardOutput
+				.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+				.Select(line => line.Trim())
 				.Where(id => !string.IsNullOrWhiteSpace(id))
 				.Distinct(StringComparer.OrdinalIgnoreCase)
 				.Order(StringComparer.OrdinalIgnoreCase)

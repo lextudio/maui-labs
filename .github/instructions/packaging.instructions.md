@@ -80,7 +80,6 @@ When adding a new third-party dependency that gets bundled into a NuGet package,
 - `dotnet-eng` — engineering infrastructure
 - `dotnet10` — version-specific feed
 - `dotnet11` — version-specific feed
-- `dotnet11-transport` — transport feed for `dotnet/android` packages (e.g., `Xamarin.Android.Tools.AndroidSdk`)
 
 **Do NOT add `nuget.org` as a direct source.** All public packages are available through the dnceng proxy feeds.
 
