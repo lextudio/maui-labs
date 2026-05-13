@@ -9,6 +9,7 @@
         <RootNamespace>CopilotSdkSample</RootNamespace>
         <UseMaui>true</UseMaui>
         <SingleProject>true</SingleProject>
+        <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
         <ApplicationTitle>Copilot SDK Sample</ApplicationTitle>
         <ApplicationId>com.microsoft.maui.copilotsdksample</ApplicationId>
