@@ -137,7 +137,7 @@ Fix: Install the required .NET SDK version, or check `global.json` for version p
 ```
 error XA0000: Could not find Android SDK
 ```
-Fix: Install Android SDK via `maui android sdk install --package "platforms;android-35"`
+Fix: Install Android SDK via `maui android sdk install "platforms;android-35"`
 (or run `maui android install` for guided setup), or set `$ANDROID_HOME`.
 Error code via `maui` JSON: `E2101` AndroidSdkNotFound.
 

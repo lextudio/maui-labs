@@ -26,9 +26,9 @@ Verify: `maui devflow version` and `maui doctor` (with optional `--json`).
 ### Optional extras for operations not yet in `maui` CLI
 
 These standalone tools cover a few operations that the `maui` CLI does not yet
-wrap (simulator create/erase/install/launch/privacy/appearance, advanced
-Android SDK manager flows). Install only if you need them; raw `xcrun simctl`
-and `adb` already cover most gaps without an extra global tool.
+wrap (advanced Android SDK manager flows, some simctl utilities like
+appearance/openurl/push/location). Install only if you need them; raw
+`xcrun simctl` and `adb` already cover most gaps without an extra global tool.
 
 ```bash
 dotnet tool install --global androidsdk.tool               # `android` (Android only)
@@ -305,7 +305,7 @@ If status commands fail:
 - **All platforms:** Ensure the app is running and the `#if DEBUG` block is active
 - **Port conflict:** Check if another process holds the port: `lsof -i :9223` (raw; not yet wrapped by `maui`)
 - **Wrong port:** Use `maui devflow list` to find the assigned port, or ensure CLI is run from the project directory
-- **Reading errors:** Pass `--json` to any failing `maui` command and inspect the top-level `code` / `remediation` fields (no `error` wrapper; see [troubleshooting.md](troubleshooting.md#reading-machine-readable-output-and-errors))
+- **Reading errors:** Pass `--json` to any failing `maui` command and inspect the top-level `code` / `remediation` fields (no `error` wrapper; see [troubleshooting.md](troubleshooting.md#machine-readable-output-and-error-envelope))
 
 ## Quick Checklist
 

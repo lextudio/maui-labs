@@ -125,7 +125,7 @@ Note: the same `E2106` code is also thrown for "no AVD with that name" — that
 throw site emits the code **without** a `remediation` block. Always treat
 `remediation` as optional and fall back to surfacing `message`.
 
-Common code prefixes (see [troubleshooting.md](troubleshooting.md#reading-machine-readable-output-and-errors) for the full taxonomy):
+Common code prefixes (see [troubleshooting.md](troubleshooting.md#machine-readable-output-and-error-envelope) for the full taxonomy):
 
 | Prefix | Meaning |
 |--------|---------|

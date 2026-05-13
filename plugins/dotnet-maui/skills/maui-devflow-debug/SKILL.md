@@ -11,7 +11,7 @@ description: >-
   the unified `maui` CLI (devflow, device, android, apple, doctor command
   groups) and dotnet CLI. Falls back to raw `adb` and `xcrun simctl` only for
   operations not yet wrapped by the `maui` CLI (port forwarding, APK install,
-  logcat, simulator create/install/launch/appearance).
+  logcat, simulator appearance/openurl/push/location/addmedia).
 ---
 
 # DevFlow Debug

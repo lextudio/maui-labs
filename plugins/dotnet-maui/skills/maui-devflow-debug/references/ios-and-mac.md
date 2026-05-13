@@ -1,10 +1,10 @@
 # iOS & Mac Catalyst Reference
 
-Prefer the unified `maui` CLI for simulator/runtime/Xcode discovery and basic
-lifecycle. Permission management uses `maui devflow ui permission` (wraps
-`xcrun simctl privacy` with auto-detection). Raw `xcrun simctl` is kept only
-for operations not yet wrapped by the `maui` CLI (create / erase / install /
-launch / appearance / openurl / push / location / addmedia). Those are
+Prefer the unified `maui` CLI for simulator/runtime/Xcode discovery, full
+lifecycle (create / erase / install / uninstall / launch / terminate), and
+permission management (`maui devflow ui permission`). Raw `xcrun simctl` is
+kept only for a few utilities not yet wrapped by the `maui` CLI (appearance /
+openurl / push / location / addmedia / pbcopy / screenshots). Those are
 grouped under
 [Raw fallbacks not yet in `maui` CLI](#raw-fallbacks-not-yet-in-maui-cli).
 
@@ -36,12 +36,9 @@ maui apple simulator list                        # all simulators (use --json fo
 maui device list --platform apple                # cross-platform device discovery
 ```
 
-If a booted simulator is already running another project's agent, create a new one
-(creation is not yet wrapped by `maui` — use raw `xcrun simctl`):
+If a booted simulator is already running another project's agent, create a new one:
 ```bash
-# Not yet wrapped by 'maui' CLI — use raw xcrun simctl
-xcrun simctl create "ProjectName-iPhone17Pro" "iPhone 17 Pro" "iOS 26.2"
-# Use the returned UDID with maui apple simulator start <UDID>
+maui apple simulator create "iPhone 17 Pro" --name "ProjectName-iPhone17Pro" --runtime "iOS 26.2"
 ```
 
 **Naming convention:** Use `<ProjectName>-<DeviceType>` (e.g. `TodoApp-iPhone17Pro`) so
@@ -57,6 +54,16 @@ maui apple simulator list                        # formatted table (or --json)
 maui apple simulator start <name-or-udid>
 maui apple simulator stop <name-or-udid>         # accepts 'all' to stop everything
 maui apple simulator delete <name-or-udid>
+```
+
+### Create / erase / install / launch / terminate
+```bash
+maui apple simulator create "iPhone 17 Pro" --name "MyApp" --runtime "iOS 26.2"
+maui apple simulator erase <name-or-udid>        # factory reset
+maui apple simulator install <udid> /path/to/App.app
+maui apple simulator uninstall <udid> com.company.appid
+maui apple simulator launch <udid> com.company.appid
+maui apple simulator terminate <udid> com.company.appid
 ```
 
 ### Screenshots (Mac Catalyst, macOS, iOS — when DevFlow agent is connected)
@@ -155,25 +162,6 @@ These operations are not wrapped by the `maui` CLI today. Use raw `xcrun
 simctl` (preferred — built into Xcode) or the `apple` command from
 `appledev.tools` if installed.
 
-### Create / erase / delete
-```bash
-xcrun simctl list devicetypes                    # discover device types
-xcrun simctl list runtimes                       # discover runtimes
-xcrun simctl create "My iPhone" "iPhone 16 Pro" "iOS 18.2"
-xcrun simctl erase <UDID>                        # factory reset
-xcrun simctl delete <UDID>                       # permanently remove
-xcrun simctl delete unavailable                  # clean up old sims
-```
-
-### Install / launch / uninstall apps on simulator
-```bash
-xcrun simctl install booted /path/to/App.app
-xcrun simctl launch booted com.company.appid
-xcrun simctl uninstall booted com.company.appid
-xcrun simctl listapps <UDID>
-xcrun simctl get_app_container <UDID> com.company.appid
-```
-
 ### System-level simulator screenshots
 ```bash
 xcrun simctl io booted screenshot output.png
@@ -188,7 +176,8 @@ xcrun simctl io booted screenshot output.png
 | `xcrun simctl location <UDID> set 37.33,-122.03` | Set GPS location |
 | `xcrun simctl pbcopy <UDID>` / `pbpaste <UDID>` | Clipboard bridge |
 | `xcrun simctl ui <UDID> appearance dark\|light` | Toggle dark mode |
-| `xcrun simctl privacy <UDID> grant\|revoke\|reset …` | Permission management — prefer `maui devflow ui permission` (see [Permission & Dialog Handling](#permission--dialog-handling)) |
+| `xcrun simctl listapps <UDID>` | List all installed apps |
+| `xcrun simctl get_app_container <UDID> bundle` | Get app container path |
 
 ## Troubleshooting
 
