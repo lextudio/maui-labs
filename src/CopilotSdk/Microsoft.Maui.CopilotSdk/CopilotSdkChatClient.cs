@@ -73,11 +73,29 @@ public sealed class CopilotSdkChatClient : IChatClient, IAsyncDisposable
         await foreach (var update in GetStreamingResponseAsync(messages, options, cancellationToken))
             chunks.Add(update);
 
-        var fullText = string.Join("", chunks
-            .SelectMany(c => c.Contents.OfType<TextContent>())
-            .Select(tc => tc.Text));
+        // Build the response message with all content types preserved
+        var contents = new List<AIContent>();
+        foreach (var chunk in chunks)
+        {
+            foreach (var content in chunk.Contents)
+            {
+                // Skip reasoning-tagged text from the primary response text
+                if (content is TextContent tc
+                    && tc.AdditionalProperties?.ContainsKey("reasoning") != true)
+                {
+                    contents.Add(tc);
+                }
+                else if (content is not TextContent)
+                {
+                    contents.Add(content);
+                }
+            }
+        }
 
-        return new ChatResponse([new ChatMessage(ChatRole.Assistant, fullText)])
+        var fullText = string.Join("", contents.OfType<TextContent>().Select(tc => tc.Text));
+        var message = new ChatMessage(ChatRole.Assistant, fullText);
+
+        return new ChatResponse([message])
         {
             ModelId = _sessionModel,
         };
