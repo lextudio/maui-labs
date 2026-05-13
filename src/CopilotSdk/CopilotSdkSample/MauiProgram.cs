@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
 using Microsoft.Maui.CopilotSdk;
+using Microsoft.Maui.DevFlow.Agent;
 
 namespace CopilotSdkSample;
 
@@ -46,6 +47,10 @@ public static class MauiProgram
 
 #if DEBUG
         builder.Logging.AddDebug();
+        builder.AddMauiDevFlowAgent(options =>
+        {
+            options.Port = 9224;
+        });
 #endif
 
         return builder.Build();
