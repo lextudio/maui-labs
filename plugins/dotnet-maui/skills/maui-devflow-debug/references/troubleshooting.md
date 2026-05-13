@@ -35,6 +35,10 @@ Optional fields (`remediation`, `context`, `native_error`, `docs_url`, `correlat
 When `remediation.type` is `autofixable`, run `remediation.command` then retry the original command.
 When `remediation` is absent, surface `message` and stop retrying.
 
+> **Tip for AI agents:** `maui android sdk accept-licenses` is interactive
+> (prompts for each license). For non-interactive acceptance, use
+> `maui android install --accept-licenses --json` instead.
+
 ### Code categories
 
 | Prefix | Category | Examples |

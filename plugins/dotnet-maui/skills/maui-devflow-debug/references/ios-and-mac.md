@@ -38,8 +38,12 @@ maui device list --platform apple --json         # cross-platform device discove
 
 If a booted simulator is already running another project's agent, create a new one:
 ```bash
-maui apple simulator create "iPhone 17 Pro" --name "ProjectName-iPhone17Pro" --runtime "iOS 26.2"
+maui apple simulator create "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro" \
+  --name "ProjectName-iPhone17Pro" --runtime "com.apple.CoreSimulator.SimRuntime.iOS-26-2"
 ```
+
+To avoid creating duplicates, add `--if-not-exists` — reuses an existing
+simulator with the same name instead of failing.
 
 **Naming convention:** Use `<ProjectName>-<DeviceType>` (e.g. `TodoApp-iPhone17Pro`) so
 it's clear which simulator belongs to which project.
@@ -58,13 +62,17 @@ maui apple simulator delete <name-or-udid>
 
 ### Create / erase / install / launch / terminate
 ```bash
-maui apple simulator create "iPhone 17 Pro" --name "MyApp" --runtime "iOS 26.2"
+maui apple simulator create <device-type> --name <name> --runtime <runtime-id>
 maui apple simulator erase <name-or-udid>        # factory reset
 maui apple simulator install <udid> /path/to/App.app
 maui apple simulator uninstall <udid> com.company.appid
 maui apple simulator launch <udid> com.company.appid
 maui apple simulator terminate <udid> com.company.appid
 ```
+
+`device-type` is a positional arg (e.g. `com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro`).
+Discover available types with `xcrun simctl list devicetypes` and runtimes
+with `maui apple runtime list --json`.
 
 ### Screenshots (Mac Catalyst, macOS, iOS — when DevFlow agent is connected)
 

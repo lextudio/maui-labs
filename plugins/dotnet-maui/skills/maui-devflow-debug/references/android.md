@@ -111,7 +111,20 @@ maui android sdk accept-licenses
 `install` and `uninstall` accept package names as **positional** arguments
 (no `--package` flag); pass multiple packages by space-separating them.
 
-For a guided full-stack setup, run:
+### Accepting licenses non-interactively
+
+`maui android sdk accept-licenses` is interactive (prompts for each license).
+For AI agents or CI, use the guided installer with `--accept-licenses` to
+bypass prompts:
+
+```bash
+maui android install --accept-licenses --json
+```
+
+This accepts all pending SDK licenses non-interactively. Combine with `--ci`
+for fully non-interactive failure-fast runs.
+
+For a guided full-stack setup (interactive), run:
 ```bash
 maui android install                             # interactive: platform + scope
 ```
