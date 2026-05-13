@@ -58,10 +58,11 @@ When `remediation` is absent, surface `message` and stop retrying.
 
 ```bash
 maui android emulator start Pixel8 --json
-# → { "code": "E2106", "remediation": { "type": "autofixable", "command": "maui android emulator create Pixel8 --package ..." } }
+# → { "code": "E2106", "message": "Android emulator not installed",
+#     "remediation": { "type": "autofixable", "command": "maui android sdk install emulator" } }
 
 # Auto-fix path:
-maui android emulator create Pixel8 --package "system-images;android-35;google_apis;arm64-v8a" --device pixel_8 --json
+maui android sdk install emulator --json
 maui android emulator start Pixel8 --json   # retry original
 ```
 
