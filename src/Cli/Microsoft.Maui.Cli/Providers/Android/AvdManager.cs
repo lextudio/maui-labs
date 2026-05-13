@@ -99,7 +99,7 @@ public class AvdManager
 			var avds = await _runner.ListAvdsAsync(cancellationToken);
 			return avds.Select(MapToMauiAvd).ToList();
 		}
-		catch (InvalidOperationException ex)
+		catch (Exception ex) when (ex is not OperationCanceledException)
 		{
 			System.Diagnostics.Trace.WriteLine($"AVD list failed: {ex.Message}");
 			return new List<AvdInfo>();

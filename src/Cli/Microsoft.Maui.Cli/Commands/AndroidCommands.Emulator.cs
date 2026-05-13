@@ -512,6 +512,8 @@ public static partial class AndroidCommands
 	/// <summary>
 	/// Formats a device profile ID into a human-readable display name.
 	/// Converts "pixel_6" → "Pixel 6", "medium_phone" → "Medium Phone", etc.
+	/// Note: acronyms like "tv" are capitalized as "Tv" — acceptable for the
+	/// small number of affected profiles (tv_1080p, tv_4k).
 	/// </summary>
 	internal static string FormatDeviceProfileName(string id)
 	{
