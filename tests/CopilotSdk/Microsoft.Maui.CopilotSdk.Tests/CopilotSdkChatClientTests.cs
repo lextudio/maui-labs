@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using Microsoft.Extensions.AI;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -103,6 +104,99 @@ public class CopilotSdkChatClientUnitTests
         using var client = new CopilotSdkChatClient(new CopilotSdkConfiguration());
         Assert.IsAssignableFrom<IChatClient>(client);
         Assert.IsAssignableFrom<IAsyncDisposable>(client);
+    }
+}
+
+public class CopilotSdkDiRegistrationTests
+{
+    [Fact]
+    public void AddCopilotSdkChatClient_RegistersIChatClient()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddCopilotSdkChatClient();
+        var sp = services.BuildServiceProvider();
+        var chatClient = sp.GetService<IChatClient>();
+        Assert.NotNull(chatClient);
+        Assert.IsType<CopilotSdkChatClient>(chatClient);
+    }
+
+    [Fact]
+    public void AddCopilotSdkChatClient_AppliesConfiguration()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddCopilotSdkChatClient(config =>
+        {
+            config.Model = "claude-sonnet-4.5";
+            config.CliPath = "/custom/path";
+        });
+        var sp = services.BuildServiceProvider();
+        var config = sp.GetRequiredService<CopilotSdkConfiguration>();
+        Assert.Equal("claude-sonnet-4.5", config.Model);
+        Assert.Equal("/custom/path", config.CliPath);
+    }
+
+    [Fact]
+    public void AddCopilotSdkChatClient_RegistersConfiguration()
+    {
+        var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
+        services.AddCopilotSdkChatClient();
+        var sp = services.BuildServiceProvider();
+        var config = sp.GetService<CopilotSdkConfiguration>();
+        Assert.NotNull(config);
+    }
+}
+
+public class CopilotSdkChatClientAdditionalUnitTests
+{
+    [Fact]
+    public void StreamingTimeout_CanBeCustomized()
+    {
+        using var client = new CopilotSdkChatClient(new CopilotSdkConfiguration());
+        client.StreamingTimeout = TimeSpan.FromSeconds(30);
+        Assert.Equal(TimeSpan.FromSeconds(30), client.StreamingTimeout);
+    }
+
+    [Fact]
+    public void GetService_ReturnsCopilotClientType()
+    {
+        using var client = new CopilotSdkChatClient(new CopilotSdkConfiguration());
+        // Before first call, both should be null
+        Assert.Null(client.GetService(typeof(GitHub.Copilot.SDK.CopilotClient)));
+        Assert.Null(client.GetService(typeof(GitHub.Copilot.SDK.CopilotSession)));
+    }
+
+    [Fact]
+    public void GetService_UnknownType_ReturnsNull()
+    {
+        using var client = new CopilotSdkChatClient(new CopilotSdkConfiguration());
+        Assert.Null(client.GetService(typeof(string)));
+        Assert.Null(client.GetService(typeof(int)));
+        Assert.Null(client.GetService(typeof(IDisposable)));
+    }
+
+    [Fact]
+    public async Task EmptyToolsList_DoesNotCrash()
+    {
+        using var client = new CopilotSdkChatClient(new CopilotSdkConfiguration());
+        var count = 0;
+        // Empty prompt with empty tools should yield nothing (short-circuits before SDK call)
+        await foreach (var _ in client.GetStreamingResponseAsync(
+            [new ChatMessage(ChatRole.User, "")],
+            new ChatOptions { Tools = [] }))
+            count++;
+        Assert.Equal(0, count);
+    }
+
+    [Fact]
+    public async Task NullOptions_DoesNotCrash()
+    {
+        using var client = new CopilotSdkChatClient(new CopilotSdkConfiguration());
+        var count = 0;
+        await foreach (var _ in client.GetStreamingResponseAsync(
+            [new ChatMessage(ChatRole.User, "")],
+            null))
+            count++;
+        Assert.Equal(0, count);
     }
 }
 

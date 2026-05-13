@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'src/CopilotSdk/**'
+      - 'tests/CopilotSdk/**'
+      - 'samples/CopilotSdkSample/**'
       - 'eng/**'
       - 'Directory.Build.props'
       - 'Directory.Build.targets'
@@ -16,6 +18,8 @@ on:
     branches: [main]
     paths:
       - 'src/CopilotSdk/**'
+      - 'tests/CopilotSdk/**'
+      - 'samples/CopilotSdkSample/**'
       - 'eng/**'
       - 'Directory.Build.props'
       - 'Directory.Build.targets'

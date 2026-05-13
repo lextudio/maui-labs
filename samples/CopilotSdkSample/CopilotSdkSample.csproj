@@ -38,8 +38,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Microsoft.Maui.CopilotSdk\Microsoft.Maui.CopilotSdk.csproj" />
-        <ProjectReference Include="..\..\DevFlow\Microsoft.Maui.DevFlow.Agent\Microsoft.Maui.DevFlow.Agent.csproj" />
+        <ProjectReference Include="..\..\src\CopilotSdk\Microsoft.Maui.CopilotSdk\Microsoft.Maui.CopilotSdk.csproj" />
+        <ProjectReference Include="..\..\src\DevFlow\Microsoft.Maui.DevFlow.Agent\Microsoft.Maui.DevFlow.Agent.csproj" />
     </ItemGroup>
 
 </Project>
