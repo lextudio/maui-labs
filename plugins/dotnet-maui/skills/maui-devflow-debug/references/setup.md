@@ -25,13 +25,12 @@ Verify: `maui devflow version` and `maui doctor` (with optional `--json`).
 
 ### Optional extras for operations not yet in `maui` CLI
 
-These standalone tools cover a few operations that the `maui` CLI does not yet
-wrap (advanced Android SDK manager flows, some simctl utilities like
-appearance/openurl/push/location). Install only if you need them; raw
-`xcrun simctl` and `adb` already cover most gaps without an extra global tool.
+These standalone tools cover a few simctl utilities that the `maui` CLI does
+not yet wrap (appearance/openurl/push/location). Install only if you need
+them; raw `xcrun simctl` already covers these gaps without an extra global
+tool.
 
 ```bash
-dotnet tool install --global androidsdk.tool               # `android` (Android only)
 dotnet tool install --global appledev.tools                # `apple` (iOS/Mac only)
 ```
 

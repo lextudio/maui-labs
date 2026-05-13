@@ -1,8 +1,8 @@
 # Android Reference
 
 Prefer the unified `maui` CLI for Android device prep and DevFlow workflows.
-Raw `adb` and `android` (`androidsdk.tool`) commands are kept only for
-operations that the `maui` CLI does not yet wrap; those are grouped under
+Raw `adb` commands are kept only for operations that the `maui` CLI does not
+yet wrap; those are grouped under
 [Raw fallbacks not yet in `maui` CLI](#raw-fallbacks-not-yet-in-maui-cli).
 
 ## Table of Contents
