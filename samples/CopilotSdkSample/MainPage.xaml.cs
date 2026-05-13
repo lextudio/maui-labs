@@ -19,8 +19,12 @@ public partial class MainPage : ContentPage
         MessageEntry.Text = "";
         await _viewModel.SendMessageAsync(text);
 
-        // Scroll to the last message
         if (_viewModel.Messages.Count > 0)
             MessagesView.ScrollTo(_viewModel.Messages.Count - 1);
+    }
+
+    private async void OnResetClicked(object? sender, EventArgs e)
+    {
+        await _viewModel.ResetSessionAsync();
     }
 }

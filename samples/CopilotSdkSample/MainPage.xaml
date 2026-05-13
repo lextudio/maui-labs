@@ -4,30 +4,52 @@
              xmlns:local="clr-namespace:CopilotSdkSample"
              Title="Copilot Chat">
 
-    <Grid RowDefinitions="*,Auto" Padding="10">
+    <Grid RowDefinitions="Auto,*,Auto" Padding="10" RowSpacing="8">
+
+        <!-- Config toolbar -->
+        <Grid Grid.Row="0" ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+            <Label Text="Model:" VerticalOptions="Center" />
+            <Picker Grid.Column="1"
+                    ItemsSource="{Binding AvailableModels}"
+                    SelectedItem="{Binding SelectedModel}"
+                    IsEnabled="{Binding IsNotBusy}" />
+            <HorizontalStackLayout Grid.Column="2" Spacing="4" VerticalOptions="Center">
+                <Switch IsToggled="{Binding RequestJson}" />
+                <Label Text="JSON" VerticalOptions="Center" FontSize="12" />
+            </HorizontalStackLayout>
+            <Button Grid.Column="3"
+                    Text="Reset"
+                    Clicked="OnResetClicked"
+                    IsEnabled="{Binding IsNotBusy}"
+                    FontSize="12"
+                    Padding="8,4" />
+        </Grid>
 
         <!-- Chat messages -->
         <CollectionView x:Name="MessagesView"
                         ItemsSource="{Binding Messages}"
-                        Grid.Row="0">
+                        Grid.Row="1">
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="local:ChatMessageItem">
-                    <Grid Padding="4">
-                        <Frame Padding="12,8"
-                               CornerRadius="12"
+                    <Grid Padding="2,2">
+                        <Border Padding="10,6"
+                               StrokeShape="RoundRectangle 10"
+                               Stroke="Transparent"
                                BackgroundColor="{Binding BackgroundColor}"
                                HorizontalOptions="{Binding Alignment}"
                                MaximumWidthRequest="500">
                             <Label Text="{Binding Text}"
-                                   TextColor="{Binding TextColor}" />
-                        </Frame>
+                                   TextColor="{Binding TextColor}"
+                                   FontSize="{Binding FontSize}"
+                                   FontAttributes="{Binding IsItalic, Converter={StaticResource BoolToItalicConverter}}" />
+                        </Border>
                     </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
 
         <!-- Input area -->
-        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8" Padding="0,8,0,0">
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="8">
             <Entry x:Name="MessageEntry"
                    Placeholder="Type a message..."
                    ReturnType="Send"
