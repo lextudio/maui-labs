@@ -51,6 +51,12 @@ public interface IAndroidProvider : IDisposable
 	Task<List<AvdInfo>> GetAvdsAsync(CancellationToken cancellationToken = default);
 
 	/// <summary>
+	/// Lists available device profiles (hardware definitions) for AVD creation.
+	/// Returns device profile IDs like "pixel_6", "pixel_9", "medium_phone", etc.
+	/// </summary>
+	Task<List<string>> ListDeviceProfilesAsync(CancellationToken cancellationToken = default);
+
+	/// <summary>
 	/// Creates a new AVD.
 	/// </summary>
 	Task<AvdInfo> CreateAvdAsync(string name, string deviceProfile, string systemImage, bool force = false, CancellationToken cancellationToken = default);

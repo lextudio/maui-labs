@@ -106,6 +106,28 @@ public class AvdManager
 		}
 	}
 
+	public async Task<List<string>> ListDeviceProfilesAsync(CancellationToken cancellationToken = default)
+	{
+		if (_runner == null)
+			return new List<string>();
+
+		try
+		{
+			var profiles = await _runner.ListDeviceProfilesAsync(cancellationToken);
+			return profiles
+				.Select(p => p.Id)
+				.Where(id => !string.IsNullOrWhiteSpace(id))
+				.Distinct(StringComparer.OrdinalIgnoreCase)
+				.Order(StringComparer.OrdinalIgnoreCase)
+				.ToList();
+		}
+		catch (Exception ex) when (ex is not OperationCanceledException)
+		{
+			System.Diagnostics.Trace.WriteLine($"Device profile list failed: {ex.Message}");
+			return new List<string>();
+		}
+	}
+
 	static AvdInfo MapToMauiAvd(Xamarin.Android.Tools.AvdInfo avd)
 	{
 		string? systemImage = null;

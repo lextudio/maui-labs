@@ -531,4 +531,30 @@ public class AndroidCommandsTests
 		Assert.Contains(installCommand.Options, o => o.Name == "--sdk-install-path");
 		Assert.DoesNotContain(installCommand.Options, o => o.Name == "--sdk-path");
 	}
+
+	[Theory]
+	[InlineData("pixel_6", "Pixel 6")]
+	[InlineData("pixel_9", "Pixel 9")]
+	[InlineData("pixel_fold", "Pixel Fold")]
+	[InlineData("medium_phone", "Medium Phone")]
+	[InlineData("Nexus 5X", "Nexus 5X")]
+	[InlineData("tv_1080p", "Tv 1080p")]
+	public void FormatDeviceProfileName_ConvertsCorrectly(string id, string expected)
+	{
+		var result = AndroidCommands.FormatDeviceProfileName(id);
+		Assert.Equal(expected, result);
+	}
+
+	[Fact]
+	public void FallbackDeviceProfiles_ContainsExpectedProfiles()
+	{
+		var profiles = AndroidCommands.FallbackDeviceProfiles();
+
+		Assert.NotEmpty(profiles);
+		Assert.Contains(profiles, p => p.Id == "pixel_6");
+		Assert.Contains(profiles, p => p.Id == "pixel_9");
+		Assert.Contains(profiles, p => p.Id == "medium_phone");
+		Assert.All(profiles, p => Assert.False(string.IsNullOrWhiteSpace(p.Id)));
+		Assert.All(profiles, p => Assert.False(string.IsNullOrWhiteSpace(p.Name)));
+	}
 }

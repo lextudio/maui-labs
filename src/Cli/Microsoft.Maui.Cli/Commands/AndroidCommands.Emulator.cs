@@ -127,20 +127,18 @@ public static partial class AndroidCommands
 				// --- Step 2: Device profile selection ---
 				if (string.IsNullOrEmpty(device) && !useJson && !isCi && formatter is SpectreOutputFormatter spectre2)
 				{
-					var deviceProfiles = new List<(string Id, string Name)>
+					var deviceProfiles = await spectre2.StatusAsync("Querying device profiles...", async () =>
 					{
-						("pixel_6", "Pixel 6"),
-						("pixel_8", "Pixel 8"),
-						("pixel_9", "Pixel 9"),
-						("pixel_fold", "Pixel Fold"),
-						("pixel_tablet", "Pixel Tablet"),
-						("medium_phone", "Medium Phone"),
-						("small_phone", "Small Phone"),
-					};
+						var profiles = await androidProvider.ListDeviceProfilesAsync(cancellationToken);
+						return profiles.Count > 0
+							? profiles.Select(id => (Id: id, Name: FormatDeviceProfileName(id))).ToList()
+							: FallbackDeviceProfiles();
+					});
 
 					var selectedDevice = spectre2.Prompt(
 						new SelectionPrompt<(string Id, string Name)>()
 							.Title("[bold]Select a device profile[/]")
+							.PageSize(15)
 							.HighlightStyle(new Style(Color.DodgerBlue1))
 							.UseConverter(d => $"[bold]{Markup.Escape(d.Name)}[/]  [dim]{Markup.Escape(d.Id)}[/]")
 							.AddChoices(deviceProfiles));
@@ -510,4 +508,30 @@ public static partial class AndroidCommands
 
 		return command;
 	}
+
+	/// <summary>
+	/// Formats a device profile ID into a human-readable display name.
+	/// Converts "pixel_6" → "Pixel 6", "medium_phone" → "Medium Phone", etc.
+	/// </summary>
+	internal static string FormatDeviceProfileName(string id)
+	{
+		return string.Join(' ', id.Split('_')
+			.Select(word => word.Length > 0
+				? char.ToUpperInvariant(word[0]) + word[1..]
+				: word));
+	}
+
+	/// <summary>
+	/// Fallback device profiles when the SDK's avdmanager is not available.
+	/// </summary>
+	internal static List<(string Id, string Name)> FallbackDeviceProfiles() =>
+	[
+		("pixel_6", "Pixel 6"),
+		("pixel_8", "Pixel 8"),
+		("pixel_9", "Pixel 9"),
+		("pixel_fold", "Pixel Fold"),
+		("pixel_tablet", "Pixel Tablet"),
+		("medium_phone", "Medium Phone"),
+		("small_phone", "Small Phone"),
+	];
 }
