@@ -39,10 +39,10 @@ Use this skill to add MAUI DevFlow to a project after `maui devflow init` has in
 7. Verify with:
 
    ```bash
-   maui doctor                # environment health check (supports --json)
-   maui devflow diagnose      # connectivity diagnostic
-   maui devflow wait
-   maui devflow ui tree --depth 1
+   maui doctor --json             # environment health check
+   maui devflow diagnose --json   # connectivity diagnostic
+   maui devflow wait --json
+   maui devflow ui tree --depth 1 --json
    ```
 
    For programmatic use, pass `--json` to `maui doctor` and read the

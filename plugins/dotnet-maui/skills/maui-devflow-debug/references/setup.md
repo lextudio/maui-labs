@@ -286,11 +286,11 @@ adb forward tcp:9223 tcp:9223    # Direct agent port (single port for Agent + CD
 After building and running the app:
 
 ```bash
-maui doctor                       # Environment health check (--json supported)
-maui devflow diagnose             # Connectivity diagnostic
-maui devflow list                 # Should show registered agents (via broker)
-maui devflow ui status            # Should show agent info, platform, app name
-maui devflow webview status       # Should show "Connected" (Blazor Hybrid only)
+maui doctor --json                    # Environment health check
+maui devflow diagnose --json          # Connectivity diagnostic
+maui devflow list --json              # Should show registered agents (via broker)
+maui devflow ui status --json         # Should show agent info, platform, app name
+maui devflow webview status --json    # Should show "Connected" (Blazor Hybrid only)
 ```
 
 If status commands fail:

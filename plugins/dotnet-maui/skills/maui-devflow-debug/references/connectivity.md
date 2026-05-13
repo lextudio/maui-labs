@@ -7,7 +7,7 @@ Use this when a project already has DevFlow package references and `builder.AddM
 1. Run the built-in diagnostic:
 
    ```bash
-   maui devflow diagnose
+   maui devflow diagnose --json
    ```
 
    Use the result to separate broker startup, missing project integration, no running app, and target-device networking issues.
@@ -31,10 +31,10 @@ Use this when a project already has DevFlow package references and `builder.AddM
 4. List and wait for agents:
 
    ```bash
-   maui devflow list
-   maui devflow wait
-   maui devflow agent status
-   maui devflow ui tree --depth 1
+   maui devflow list --json
+   maui devflow wait --json
+   maui devflow agent status --json
+   maui devflow ui tree --depth 1 --json
    ```
 
    A successful `agent status` proves the CLI can reach the running app and
@@ -48,8 +48,8 @@ Use this when a project already has DevFlow package references and `builder.AddM
 Android emulators run in a separate network namespace. Broker registration and CLI-to-agent traffic need opposite forwarding directions. Discovery uses the unified `maui` CLI; the actual port forwarding is not yet wrapped by `maui` — use raw `adb`:
 
 ```bash
-maui devflow list                 # note the assigned agent port
-maui device list --platform android  # confirm the emulator is connected
+maui devflow list --json              # note the assigned agent port
+maui device list --platform android --json  # confirm the emulator is connected
 
 # Not yet wrapped by 'maui' CLI — use raw adb
 adb reverse tcp:19223 tcp:19223   # app in emulator -> host broker
@@ -76,7 +76,7 @@ and `--agent-port <port>` until broker registration is restored.
 No forwarding is normally needed because simulators share host networking:
 
 ```bash
-maui apple simulator list
+maui apple simulator list --json
 ```
 
 ### Mac Catalyst and macOS

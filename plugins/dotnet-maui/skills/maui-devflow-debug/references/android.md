@@ -24,8 +24,8 @@ multiple emulators are running.
 
 **Before creating or starting an emulator, check what's already in use:**
 ```bash
-maui devflow list                                 # agents with platform + port
-maui device list --platform android               # connected emulators / devices
+maui devflow list --json                          # agents with platform + port
+maui device list --platform android --json        # connected emulators / devices
 ```
 
 If an emulator is already running another project's agent, create a new AVD:
@@ -57,7 +57,7 @@ when run without `--package` / `--device`.
 
 ### Verify emulator is running
 ```bash
-maui device list --platform android
+maui device list --platform android --json
 ```
 
 ## Building and Deploying
@@ -96,10 +96,10 @@ Then verify: `maui devflow ui status` and `maui devflow webview status`.
 
 ### SDK
 ```bash
-maui android sdk check                           # status with --json support (also reports SDK path)
-maui android sdk list                            # installed packages
-maui android sdk list --available                # all available packages
-maui android sdk list --all                      # both installed and available
+maui android sdk check --json                    # status (also reports SDK path)
+maui android sdk list --json                     # installed packages
+maui android sdk list --available --json         # all available packages
+maui android sdk list --all --json               # both installed and available
 maui android sdk install "platforms;android-35"
 maui android sdk install "system-images;android-35;google_apis;arm64-v8a"
 maui android sdk install "emulator"
@@ -128,9 +128,9 @@ maui android sdk install "platform-tools"
 
 ### JDK
 ```bash
-maui android jdk check                           # current JDK status (path, version)
+maui android jdk check --json                    # current JDK status (path, version)
 maui android jdk install --version 17            # install OpenJDK 17 or 21
-maui android jdk list                            # available JDKs
+maui android jdk list --json                     # available JDKs
 ```
 
 ### Environment variables

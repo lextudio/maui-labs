@@ -31,9 +31,9 @@ will replace each other — only the last-deployed app survives.
 
 **Before creating or booting a simulator, check what's already in use:**
 ```bash
-maui devflow list                                # agents with platform + port
-maui apple simulator list                        # all simulators (use --json for parsing)
-maui device list --platform apple                # cross-platform device discovery
+maui devflow list --json                         # agents with platform + port
+maui apple simulator list --json                 # all simulators
+maui device list --platform apple --json         # cross-platform device discovery
 ```
 
 If a booted simulator is already running another project's agent, create a new one:
@@ -46,7 +46,7 @@ it's clear which simulator belongs to which project.
 
 ### List simulators
 ```bash
-maui apple simulator list                        # formatted table (or --json)
+maui apple simulator list --json                 # formatted table or JSON
 ```
 
 ### Boot / shutdown / delete
@@ -149,9 +149,9 @@ Common values: `net9.0-ios`, `net9.0-maccatalyst`, `net10.0-ios`, `net10.0-macca
 ## Xcode and Runtime Discovery
 
 ```bash
-maui apple xcode list                            # installed Xcode versions
-maui apple runtime list                          # installed simulator runtimes
-maui apple runtime list --platform ios           # filter by platform
+maui apple xcode list --json                     # installed Xcode versions
+maui apple runtime list --json                   # installed simulator runtimes
+maui apple runtime list --platform ios --json    # filter by platform
 ```
 
 All accept `--json` for machine-readable output.

@@ -61,9 +61,9 @@ packages and `builder.AddMauiDevFlowAgent()` registered.
 5. Wait for the DevFlow agent before inspecting UI:
 
    ```bash
-   maui devflow wait
-   maui devflow agent status
-   maui devflow ui tree --depth 3 --fields "id,type,text,automationId"
+   maui devflow wait --json
+   maui devflow agent status --json
+   maui devflow ui tree --depth 3 --fields "id,type,text,automationId" --json
    ```
 
    Treat `agent status` as the runtime truth for reachability and app identity.
@@ -75,8 +75,8 @@ packages and `builder.AddMauiDevFlowAgent()` registered.
 6. Prefer AutomationId-first validation for UI flows:
 
    ```bash
-   maui devflow ui query --automationId save-button
-   maui devflow ui tap <element-id-from-query>
+   maui devflow ui query --automationId save-button --json
+   maui devflow ui tap <element-id-from-query> --json
    ```
 
    If important controls do not have stable `AutomationId`s, add them before
