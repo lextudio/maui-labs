@@ -24,11 +24,17 @@ public static class MauiProgram
         {
             config.Model = "gpt-4.1";
             config.UseLoggedInUser = true;
-            // Connect to an external Copilot CLI server instead of spawning a child process.
-            // Mac Catalyst sandbox prevents forking. Start a server first:
-            //   copilot --server --port 8765 --no-auto-update
-            config.CliUrl = "localhost:8765";
             config.SystemMessage = "You are a helpful assistant. Be concise.";
+            // Point to a known working Copilot CLI binary.
+            // The SDK bundles one but it doesn't get copied into the Mac Catalyst app bundle.
+            var cachedCli = Directory.GetDirectories(
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Library/Caches"),
+                    "copilot-sdk-*")
+                .OrderByDescending(d => d)
+                .Select(d => Path.Combine(d, "copilot"))
+                .FirstOrDefault(File.Exists);
+            if (cachedCli is not null)
+                config.CliPath = cachedCli;
         });
 
         // Register sample tools

@@ -18,9 +18,6 @@
 
         <WindowsPackageType>None</WindowsPackageType>
         <TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
-        <!-- Disable sandbox for local development so DevFlow agent can bind TCP -->
-        <EnableCodeSigning>false</EnableCodeSigning>
-        <CodesignEntitlements Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'maccatalyst'"></CodesignEntitlements>
     </PropertyGroup>
 
     <ItemGroup>
