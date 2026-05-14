@@ -44,6 +44,13 @@ public sealed class ChatViewModel : INotifyPropertyChanged
 
     public bool IsNotBusy => !_isBusy;
 
+    private string _statusText = "";
+    public string StatusText
+    {
+        get => _statusText;
+        set { _statusText = value; OnPropertyChanged(); }
+    }
+
     public ChatViewModel(IChatClient chatClient, IList<AITool> tools)
     {
         _chatClient = (CopilotSdkChatClient)chatClient;
@@ -56,6 +63,7 @@ public sealed class ChatViewModel : INotifyPropertyChanged
 
         Messages.Add(ChatMessageItem.User(text));
         IsBusy = true;
+        StatusText = "Connecting to Copilot...";
 
         try
         {
@@ -71,46 +79,58 @@ public sealed class ChatViewModel : INotifyPropertyChanged
             var assistantItem = ChatMessageItem.Assistant("");
             Messages.Add(assistantItem);
 
-            await foreach (var update in _chatClient.GetStreamingResponseAsync(
-                [new ChatMessage(ChatRole.User, text)], options))
+            // Run SDK calls on thread pool to avoid main-thread SynchronizationContext
+            // deadlocks — the SDK's StartAsync may synchronously block in Mac Catalyst.
+            await Task.Run(async () =>
             {
-                foreach (var content in update.Contents)
+                await foreach (var update in _chatClient.GetStreamingResponseAsync(
+                    [new ChatMessage(ChatRole.User, text)], options))
                 {
-                    switch (content)
+                    await MainThread.InvokeOnMainThreadAsync(() =>
                     {
-                        case TextContent tc when tc.AdditionalProperties?.ContainsKey("reasoning") == true:
-                            // Show reasoning in a separate bubble if first reasoning chunk
-                            var reasoningItem = GetOrAddReasoningBubble();
-                            reasoningItem.Text += tc.Text;
-                            break;
+                        StatusText = "Streaming...";
+                        foreach (var content in update.Contents)
+                        {
+                            switch (content)
+                            {
+                                case TextContent tc when tc.AdditionalProperties?.ContainsKey("reasoning") == true:
+                                    var reasoningItem = GetOrAddReasoningBubble();
+                                    reasoningItem.Text += tc.Text;
+                                    break;
 
-                        case TextContent tc:
-                            assistantItem.Text += tc.Text;
-                            break;
+                                case TextContent tc:
+                                    assistantItem.Text += tc.Text;
+                                    break;
 
-                        case FunctionCallContent fc:
-                            Messages.Add(ChatMessageItem.ToolCall($"🔧 {fc.Name}"));
-                            break;
+                                case FunctionCallContent fc:
+                                    Messages.Add(ChatMessageItem.ToolCall($"🔧 {fc.Name}"));
+                                    break;
 
-                        case FunctionResultContent fr:
-                            var result = fr.Result?.ToString() ?? "";
-                            if (result.Length > 100) result = result[..100] + "…";
-                            Messages.Add(ChatMessageItem.ToolResult($"✅ {result}"));
-                            break;
-                    }
+                                case FunctionResultContent fr:
+                                    var result = fr.Result?.ToString() ?? "";
+                                    if (result.Length > 100) result = result[..100] + "…";
+                                    Messages.Add(ChatMessageItem.ToolResult($"✅ {result}"));
+                                    break;
+                            }
+                        }
+                    });
                 }
-            }
+            });
 
-            if (string.IsNullOrWhiteSpace(assistantItem.Text))
-                assistantItem.Text = "(no text response)";
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (string.IsNullOrWhiteSpace(assistantItem.Text))
+                    assistantItem.Text = "(no text response)";
+            });
         }
         catch (Exception ex)
         {
-            Messages.Add(ChatMessageItem.Error($"⚠️ {ex.Message}"));
+            await MainThread.InvokeOnMainThreadAsync(() =>
+                Messages.Add(ChatMessageItem.Error($"⚠️ {ex.Message}")));
         }
         finally
         {
-            IsBusy = false;
+            await MainThread.InvokeOnMainThreadAsync(() => { IsBusy = false; StatusText = ""; });
         }
     }
 

@@ -296,14 +296,47 @@ public sealed class CopilotSdkChatClient : IChatClient, IAsyncDisposable
         await _initLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            _client ??= new CopilotClient(new CopilotClientOptions
+            if (_client is not null) return;
+
+            _client = new CopilotClient(new CopilotClientOptions
             {
                 UseLoggedInUser = _config.UseLoggedInUser,
                 GitHubToken = _config.GitHubToken,
                 CliPath = _config.CliPath,
+                CliUrl = _config.CliUrl,
+                UseStdio = !string.IsNullOrEmpty(_config.CliUrl) ? false : true,
+                AutoStart = string.IsNullOrEmpty(_config.CliUrl),
             });
 
-            await _client.StartAsync(cancellationToken);
+            // Use a dedicated thread — Task.Run can deadlock if StartAsync blocks
+            // synchronously (e.g., Process.Start in Mac Catalyst sandbox).
+            var startTcs = new TaskCompletionSource();
+            var startThread = new Thread(() =>
+            {
+                try
+                {
+                    _client.StartAsync(cancellationToken).GetAwaiter().GetResult();
+                    startTcs.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    startTcs.TrySetException(ex);
+                }
+            }) { IsBackground = true, Name = "CopilotSdkStart" };
+            startThread.Start();
+
+            var timeoutTask = Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
+            var completed = await Task.WhenAny(startTcs.Task, timeoutTask).ConfigureAwait(false);
+            if (completed == timeoutTask)
+                throw new TimeoutException(
+                    "Copilot SDK failed to start within 15 seconds. " +
+                    "Ensure the Copilot CLI server is running: copilot --server --port 8765 --no-auto-update");
+            await startTcs.Task.ConfigureAwait(false);
+        }
+        catch
+        {
+            _client = null;
+            throw;
         }
         finally
         {

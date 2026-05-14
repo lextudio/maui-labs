@@ -24,7 +24,10 @@ public static class MauiProgram
         {
             config.Model = "gpt-4.1";
             config.UseLoggedInUser = true;
-            config.CliPath = "/opt/homebrew/bin/copilot";
+            // Connect to an external Copilot CLI server instead of spawning a child process.
+            // Mac Catalyst sandbox prevents forking. Start a server first:
+            //   copilot --server --port 8765 --no-auto-update
+            config.CliUrl = "localhost:8765";
             config.SystemMessage = "You are a helpful assistant. Be concise.";
         });
 

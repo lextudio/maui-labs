@@ -19,4 +19,11 @@ public sealed class CopilotSdkConfiguration
 
     /// <summary>Path to the Copilot CLI binary. If null, the SDK uses its bundled CLI or searches PATH.</summary>
     public string? CliPath { get; set; }
+
+    /// <summary>
+    /// URL of an external Copilot CLI server (e.g. "localhost:8765").
+    /// When set, the SDK connects to this server instead of spawning a child process.
+    /// Useful for Mac Catalyst and other sandboxed environments that cannot fork processes.
+    /// </summary>
+    public string? CliUrl { get; set; }
 }
