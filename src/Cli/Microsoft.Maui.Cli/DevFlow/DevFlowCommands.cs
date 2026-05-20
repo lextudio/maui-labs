@@ -2473,20 +2473,17 @@ public class DevFlowCommands
         try
         {
             using var client = new AgentClient(host, port);
-            AgentStatus? status = null;
-
-            if (scope != ThemeSetScope.System)
-                status = await client.GetStatusAsync();
+            var status = await client.GetStatusAsync();
 
             var platformName = status?.Platform ?? platform;
             var deviceType = status?.DeviceType;
             var useHost = scope == ThemeSetScope.System
-                || ShouldUseHostThemeScopeAutomatically(platformName, deviceType, theme, androidDevice, simulatorUdid);
+                || ThemeHostSelector.ShouldUseHostThemeScopeAutomatically(platformName, deviceType, theme, androidDevice, simulatorUdid);
 
             ThemeResult result;
             if (useHost)
             {
-                result = await SetHostThemeAsync(platformName, deviceType, theme, androidDevice, simulatorUdid);
+                result = await ThemeHostSelector.SetHostThemeAsync(platformName, deviceType, theme, androidDevice, simulatorUdid, "--scope app");
             }
             else
             {
@@ -2501,77 +2498,6 @@ public class DevFlowCommands
             _errorOccurred = true;
         }
     }
-
-    private static bool ShouldUseHostThemeScopeAutomatically(
-        string? platform,
-        string? deviceType,
-        DevFlowTheme theme,
-        string? androidDevice,
-        string? simulatorUdid)
-    {
-        if (IsAndroidTarget(platform, androidDevice))
-            return IsVirtualDevice(deviceType) || IsAndroidEmulatorSerial(androidDevice);
-
-        if (theme == DevFlowTheme.System)
-            return false;
-
-        return IsIosSimulatorTarget(platform, deviceType, simulatorUdid);
-    }
-
-    private static async Task<ThemeResult> SetHostThemeAsync(
-        string? platform,
-        string? deviceType,
-        DevFlowTheme theme,
-        string? androidDevice,
-        string? simulatorUdid)
-    {
-        if (IsAndroidTarget(platform, androidDevice))
-        {
-            var driver = new AndroidAppDriver { Serial = androidDevice };
-            return await driver.SetThemeAsync(theme, ThemeSetScope.System);
-        }
-
-        if (IsIosSimulatorTarget(platform, deviceType, simulatorUdid) || IsIosPlatform(platform))
-        {
-            var resolvedUdid = await ResolveUdidAsync(simulatorUdid);
-            var driver = new iOSSimulatorAppDriver { DeviceUdid = resolvedUdid };
-            return await driver.SetThemeAsync(theme, ThemeSetScope.System);
-        }
-
-        return new ThemeResult
-        {
-            Theme = theme,
-            RequestedTheme = theme,
-            Source = "system",
-            Success = false,
-            Message = $"System theme switching is not supported for platform '{platform ?? "unknown"}'. Use --scope app.",
-        };
-    }
-
-    private static bool IsAndroidTarget(string? platform, string? androidDevice)
-        => !string.IsNullOrWhiteSpace(androidDevice)
-            || (platform?.Contains("android", StringComparison.OrdinalIgnoreCase) == true);
-
-    private static bool IsIosSimulatorTarget(string? platform, string? deviceType, string? simulatorUdid)
-    {
-        if (!string.IsNullOrWhiteSpace(simulatorUdid))
-            return true;
-
-        if (!IsVirtualDevice(deviceType))
-            return false;
-
-        return IsIosPlatform(platform);
-    }
-
-    private static bool IsIosPlatform(string? platform)
-        => platform?.Equals("ios", StringComparison.OrdinalIgnoreCase) == true
-            || platform?.Contains("iossimulator", StringComparison.OrdinalIgnoreCase) == true;
-
-    private static bool IsVirtualDevice(string? deviceType)
-        => deviceType?.Equals("Virtual", StringComparison.OrdinalIgnoreCase) == true;
-
-    private static bool IsAndroidEmulatorSerial(string? androidDevice)
-        => androidDevice?.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase) == true;
 
     private static void WriteThemeResult(ThemeResult result, bool json)
     {

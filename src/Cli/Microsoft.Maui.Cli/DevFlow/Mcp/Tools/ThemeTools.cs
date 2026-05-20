@@ -1,9 +1,7 @@
 using System.ComponentModel;
-using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using Microsoft.Maui.Cli.DevFlow.Mcp;
-using Microsoft.Maui.Cli.Utils;
 using Microsoft.Maui.DevFlow.Driver;
 
 namespace Microsoft.Maui.Cli.DevFlow.Mcp.Tools;
@@ -42,17 +40,15 @@ public sealed class ThemeTools
             throw new McpException($"Invalid scope '{scope}'. Use auto, app, or system.");
 
         using var agent = await session.GetAgentClientAsync(agentPort);
-        AgentStatus? status = null;
-        if (parsedScope != ThemeSetScope.System)
-            status = await agent.GetStatusAsync();
+        var status = await agent.GetStatusAsync();
 
         var platform = status?.Platform;
         var deviceType = status?.DeviceType;
         var useHost = parsedScope == ThemeSetScope.System
-            || ShouldUseHostThemeScopeAutomatically(platform, deviceType, parsedTheme, androidDevice, simulatorUdid);
+            || ThemeHostSelector.ShouldUseHostThemeScopeAutomatically(platform, deviceType, parsedTheme, androidDevice, simulatorUdid);
 
         ThemeResult result = useHost
-            ? await SetHostThemeAsync(platform, deviceType, parsedTheme, androidDevice, simulatorUdid)
+            ? await ThemeHostSelector.SetHostThemeAsync(platform, deviceType, parsedTheme, androidDevice, simulatorUdid, "app scope")
             : await agent.SetThemeAsync(parsedTheme);
 
         if (!result.Success)
@@ -60,98 +56,4 @@ public sealed class ThemeTools
 
         return CliJson.SerializeUntyped(result, indented: false);
     }
-
-    private static bool ShouldUseHostThemeScopeAutomatically(
-        string? platform,
-        string? deviceType,
-        DevFlowTheme theme,
-        string? androidDevice,
-        string? simulatorUdid)
-    {
-        if (IsAndroidTarget(platform, androidDevice))
-            return IsVirtualDevice(deviceType) || IsAndroidEmulatorSerial(androidDevice);
-
-        if (theme == DevFlowTheme.System)
-            return false;
-
-        return IsIosSimulatorTarget(platform, deviceType, simulatorUdid);
-    }
-
-    private static async Task<ThemeResult> SetHostThemeAsync(
-        string? platform,
-        string? deviceType,
-        DevFlowTheme theme,
-        string? androidDevice,
-        string? simulatorUdid)
-    {
-        if (IsAndroidTarget(platform, androidDevice))
-        {
-            var driver = new AndroidAppDriver { Serial = androidDevice };
-            return await driver.SetThemeAsync(theme, ThemeSetScope.System);
-        }
-
-        if (IsIosSimulatorTarget(platform, deviceType, simulatorUdid))
-        {
-            var resolvedUdid = await ResolveUdidAsync(simulatorUdid);
-            var driver = new iOSSimulatorAppDriver { DeviceUdid = resolvedUdid };
-            return await driver.SetThemeAsync(theme, ThemeSetScope.System);
-        }
-
-        return new ThemeResult
-        {
-            Theme = theme,
-            RequestedTheme = theme,
-            Source = "system",
-            Success = false,
-            Message = $"System theme switching is not supported for platform '{platform ?? "unknown"}'. Use app scope.",
-        };
-    }
-
-    private static async Task<string> ResolveUdidAsync(string? udid)
-    {
-        if (!string.IsNullOrWhiteSpace(udid))
-            return udid;
-
-        var result = await ProcessRunner.RunAsync("xcrun", ["simctl", "list", "devices", "booted", "-j"]);
-        if (!result.Success)
-            throw new McpException($"Failed to resolve simulator UDID: {result.StandardError.Trim()}");
-
-        using var document = JsonDocument.Parse(result.StandardOutput);
-        if (document.RootElement.TryGetProperty("devices", out var devices))
-        {
-            foreach (var runtime in devices.EnumerateObject())
-            {
-                foreach (var device in runtime.Value.EnumerateArray())
-                {
-                    var state = device.TryGetProperty("state", out var stateElement) ? stateElement.GetString() : null;
-                    if (state == "Booted")
-                        return device.GetProperty("udid").GetString()!;
-                }
-            }
-        }
-
-        throw new McpException("No booted simulator found. Pass simulatorUdid or boot a simulator.");
-    }
-
-    private static bool IsAndroidTarget(string? platform, string? androidDevice)
-        => !string.IsNullOrWhiteSpace(androidDevice)
-            || (platform?.Contains("android", StringComparison.OrdinalIgnoreCase) == true);
-
-    private static bool IsIosSimulatorTarget(string? platform, string? deviceType, string? simulatorUdid)
-    {
-        if (!string.IsNullOrWhiteSpace(simulatorUdid))
-            return true;
-
-        if (!IsVirtualDevice(deviceType))
-            return false;
-
-        return platform?.Equals("ios", StringComparison.OrdinalIgnoreCase) == true
-            || platform?.Contains("iossimulator", StringComparison.OrdinalIgnoreCase) == true;
-    }
-
-    private static bool IsVirtualDevice(string? deviceType)
-        => deviceType?.Equals("Virtual", StringComparison.OrdinalIgnoreCase) == true;
-
-    private static bool IsAndroidEmulatorSerial(string? androidDevice)
-        => androidDevice?.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase) == true;
 }

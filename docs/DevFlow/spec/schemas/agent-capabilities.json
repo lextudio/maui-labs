@@ -2,220 +2,84 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "agent-capabilities.json",
   "title": "AgentCapabilities",
-  "description": "Capability discovery response describing what the agent supports.",
+  "description": "Flat capability discovery response describing what the agent supports.",
   "type": "object",
-  "required": [
-    "agent",
-    "capabilities"
-  ],
+  "additionalProperties": {
+    "$ref": "#/$defs/Capability"
+  },
   "properties": {
-    "agent": {
+    "ui": {
+      "$ref": "#/$defs/Capability",
+      "description": "UI automation capabilities."
+    },
+    "webview": {
+      "$ref": "#/$defs/Capability",
+      "description": "Blazor WebView/CDP capabilities."
+    },
+    "network": {
+      "$ref": "#/$defs/Capability",
+      "description": "Network capture capabilities."
+    },
+    "logs": {
+      "$ref": "#/$defs/Capability",
+      "description": "Log retrieval capabilities."
+    },
+    "sensors": {
+      "$ref": "#/$defs/Capability",
+      "description": "Device sensor capabilities."
+    },
+    "storage": {
+      "$ref": "#/$defs/Capability",
+      "description": "Preferences, secure storage, and app file capabilities."
+    },
+    "profiler": {
+      "$ref": "#/$defs/Capability",
+      "description": "Profiling capabilities."
+    },
+    "jobs": {
+      "$ref": "#/$defs/Capability",
+      "description": "Background job capabilities."
+    },
+    "theme": {
+      "$ref": "#/$defs/Capability",
+      "description": "Application theme switching capabilities."
+    },
+    "app.theme": {
+      "$ref": "#/$defs/Capability",
+      "description": "Application theme switching capability namespace."
+    },
+    "invoke": {
+      "$ref": "#/$defs/Capability",
+      "description": "Registered action invocation capabilities."
+    }
+  },
+  "$defs": {
+    "Capability": {
       "type": "object",
-      "description": "Information about the DevFlow agent itself.",
+      "description": "Capability details.",
       "required": [
-        "name",
-        "version",
-        "framework",
-        "frameworkVersion"
+        "supported",
+        "features"
       ],
       "properties": {
-        "name": {
-          "type": "string",
-          "description": "Name of the DevFlow agent implementation."
+        "supported": {
+          "type": "boolean",
+          "description": "Whether this capability is available in the running app."
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "List of supported features within this capability."
         },
         "version": {
-          "type": "string",
-          "description": "Semantic version of the agent."
-        },
-        "framework": {
-          "type": "string",
-          "description": "The UI framework the agent is instrumented for."
-        },
-        "frameworkVersion": {
-          "type": "string",
-          "description": "Version of the UI framework."
+          "type": "integer",
+          "description": "Optional capability version number.",
+          "minimum": 1
         }
-      }
-    },
-    "capabilities": {
-      "type": "object",
-      "description": "Map of capability namespaces to their details. Keys are dot-separated namespaces.",
-      "additionalProperties": {
-        "type": "object",
-        "required": [
-          "version",
-          "features"
-        ],
-        "properties": {
-          "version": {
-            "type": "integer",
-            "description": "Capability version number.",
-            "minimum": 1
-          },
-          "features": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "List of supported features within this capability namespace."
-          }
-        },
-        "additionalProperties": true,
-        "description": "Capability details including version, features, and optional extra fields."
       },
-      "examples": [
-        {
-          "ui.tree": {
-            "version": 1,
-            "features": [
-              "find",
-              "query",
-              "snapshot"
-            ]
-          },
-          "ui.actions": {
-            "version": 1,
-            "features": [
-              "tap",
-              "fill",
-              "scroll",
-              "gesture"
-            ]
-          },
-          "ui.screenshot": {
-            "version": 1,
-            "features": [
-              "fullPage",
-              "element"
-            ]
-          },
-          "webview": {
-            "version": 1,
-            "features": [
-              "evaluate",
-              "dom",
-              "navigate"
-            ]
-          },
-          "profiler": {
-            "version": 1,
-            "features": [
-              "samples",
-              "spans",
-              "markers"
-            ]
-          },
-          "network": {
-            "version": 1,
-            "features": [
-              "capture",
-              "detail"
-            ]
-          },
-          "logs": {
-            "version": 1,
-            "features": [
-              "stream",
-              "query"
-            ]
-          },
-          "device.info": {
-            "version": 1,
-            "features": [
-              "display",
-              "battery",
-              "connectivity"
-            ]
-          },
-          "app.theme": {
-            "version": 1,
-            "features": [
-              "get",
-              "set"
-            ]
-          },
-          "device.sensors": {
-            "version": 1,
-            "features": [
-              "accelerometer",
-              "gyroscope",
-              "compass"
-            ]
-          },
-          "device.jobs": {
-            "version": 1,
-            "features": [
-              "list",
-              "run"
-            ],
-            "supported": true
-          },
-          "storage.preferences": {
-            "version": 1,
-            "features": [
-              "get",
-              "set",
-              "delete"
-            ]
-          },
-          "storage.secure": {
-            "version": 1,
-            "features": [
-              "get",
-              "set",
-              "delete"
-            ]
-          },
-          "storage.files": {
-            "version": 1,
-            "features": [
-              "roots",
-              "list",
-              "download",
-              "upload",
-              "delete"
-            ]
-          }
-        }
-      ]
-    },
-    "extensions": {
-      "type": "object",
-      "description": "Map of extension namespaces (reverse-domain notation) to their route registrations.",
-      "additionalProperties": {
-        "type": "object",
-        "required": [
-          "routes"
-        ],
-        "properties": {
-          "routes": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "required": [
-                "method",
-                "path"
-              ],
-              "properties": {
-                "method": {
-                  "type": "string",
-                  "description": "HTTP method for this route (e.g. 'GET', 'POST')."
-                },
-                "path": {
-                  "type": "string",
-                  "description": "URL path for this route."
-                }
-              }
-            },
-            "description": "Routes registered by this extension."
-          },
-          "description": {
-            "type": "string",
-            "description": "Human-readable description of this extension."
-          }
-        },
-        "description": "Extension details including registered routes."
-      }
+      "additionalProperties": true
     }
   }
 }

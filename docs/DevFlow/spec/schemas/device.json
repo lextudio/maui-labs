@@ -189,8 +189,12 @@
           "description": "Effective application theme after applying any in-app override."
         },
         "requestedTheme": {
+          "type": "string",
+          "description": "Legacy MAUI AppTheme name requested by the host/device setting (for example, 'Light', 'Dark', or 'Unspecified')."
+        },
+        "requestedThemeValue": {
           "$ref": "#/$defs/ThemeValue",
-          "description": "Theme requested by the host/device setting."
+          "description": "Protocol-normalized theme requested by the host/device setting."
         },
         "userAppTheme": {
           "$ref": "#/$defs/ThemeValue",

@@ -76,17 +76,68 @@ public class ThemeAgentClientTests
 
     private static async Task<string> ReadRequestAsync(NetworkStream stream)
     {
-        var buffer = new byte[8192];
-        var builder = new StringBuilder();
-        int read;
-        do
-        {
-            read = await stream.ReadAsync(buffer);
-            builder.Append(Encoding.UTF8.GetString(buffer, 0, read));
-        }
-        while (stream.DataAvailable);
+        var buffer = new byte[1024];
+        using var request = new MemoryStream();
+        var headerEnd = -1;
+        var contentLength = 0;
 
-        return builder.ToString();
+        while (true)
+        {
+            var read = await stream.ReadAsync(buffer);
+            if (read == 0)
+                break;
+
+            request.Write(buffer, 0, read);
+            var bytes = request.ToArray();
+
+            if (headerEnd < 0)
+            {
+                headerEnd = IndexOf(bytes, HeaderTerminator);
+                if (headerEnd >= 0)
+                    contentLength = ParseContentLength(bytes.AsSpan(0, headerEnd));
+            }
+
+            if (headerEnd >= 0 && bytes.Length >= headerEnd + HeaderTerminator.Length + contentLength)
+                break;
+        }
+
+        return Encoding.UTF8.GetString(request.ToArray());
+    }
+
+    private static readonly byte[] HeaderTerminator = Encoding.ASCII.GetBytes("\r\n\r\n");
+
+    private static int ParseContentLength(ReadOnlySpan<byte> headerBytes)
+    {
+        var headers = Encoding.ASCII.GetString(headerBytes);
+        foreach (var line in headers.Split("\r\n"))
+        {
+            if (line.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase)
+                && int.TryParse(line["Content-Length:".Length..].Trim(), out var length))
+                return length;
+        }
+
+        return 0;
+    }
+
+    private static int IndexOf(byte[] source, byte[] pattern)
+    {
+        for (var i = 0; i <= source.Length - pattern.Length; i++)
+        {
+            var found = true;
+            for (var j = 0; j < pattern.Length; j++)
+            {
+                if (source[i + j] != pattern[j])
+                {
+                    found = false;
+                    break;
+                }
+            }
+
+            if (found)
+                return i;
+        }
+
+        return -1;
     }
 
     private static async Task WriteJsonResponseAsync(NetworkStream stream, string body)

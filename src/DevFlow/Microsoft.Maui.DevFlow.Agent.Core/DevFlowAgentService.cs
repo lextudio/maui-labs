@@ -636,60 +636,62 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private Task<HttpResponse> HandleCapabilities(HttpRequest request)
     {
-        var result = new
+        var themeCapability = new
         {
-            ui = new
+            supported = true,
+            features = new[] { "get", "set" }
+        };
+        var result = new Dictionary<string, object>
+        {
+            ["ui"] = new
             {
                 supported = true,
                 features = new[] { "tree", "query", "hit-test", "tap", "fill", "clear", "focus", "scroll", "navigate", "resize", "back", "key", "gesture", "batch", "properties", "screenshot" }
             },
-            webview = new
+            ["webview"] = new
             {
                 supported = _cdpWebViews.Any(v => v.IsReady),
                 features = _cdpWebViews.Any(v => v.IsReady)
                     ? new[] { "evaluate", "contexts", "source", "dom", "dom-query", "network", "console", "screenshot" }
                     : Array.Empty<string>()
             },
-            network = new
+            ["network"] = new
             {
                 supported = true,
                 features = new[] { "list", "detail", "clear", "stream" }
             },
-            logs = new
+            ["logs"] = new
             {
                 supported = true,
                 features = new[] { "list", "stream" }
             },
-            sensors = new
+            ["sensors"] = new
             {
                 supported = true,
                 features = new[] { "list", "start", "stop", "stream" }
             },
-            storage = new
+            ["storage"] = new
             {
                 supported = true,
                 features = new[] { "preferences", "secure-storage", "roots", "files" }
             },
-            profiler = new
+            ["profiler"] = new
             {
                 supported = IsProfilerFeatureAvailable,
                 features = IsProfilerFeatureAvailable
                     ? new[] { "capabilities", "sessions", "samples", "markers", "spans", "hotspots" }
                     : Array.Empty<string>()
             },
-            jobs = new
+            ["jobs"] = new
             {
                 supported = IsJobsSupported,
                 features = IsJobsSupported
                     ? IsJobRunSupported ? new[] { "list", "run" } : new[] { "list" }
                     : Array.Empty<string>()
             },
-            theme = new
-            {
-                supported = true,
-                features = new[] { "get", "set" }
-            },
-            invoke = new
+            ["theme"] = themeCapability,
+            ["app.theme"] = themeCapability,
+            ["invoke"] = new
             {
                 supported = true,
                 features = new[] { "actions" }
@@ -5892,7 +5894,8 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
                     version = info.VersionString,
                     buildNumber = info.BuildString,
                     theme = theme.Theme,
-                    requestedTheme = theme.RequestedTheme,
+                    requestedTheme = info.RequestedTheme.ToString(),
+                    requestedThemeValue = theme.RequestedTheme,
                     userAppTheme = theme.UserAppTheme,
                     effectiveTheme = theme.EffectiveTheme,
                     requestedLayoutDirection = info.RequestedLayoutDirection.ToString(),
