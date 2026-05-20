@@ -778,6 +778,11 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             return await DispatchAsync(uiCallback);
 
         var hwndSource = new TaskCompletionSource<IReadOnlyList<IntPtr>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Shared CTS so the surviving Task.Delay timers can be cancelled once a race
+        // is decided. Without this, every CaptureUiOrNativeAsync call leaves up to
+        // two timers running for the full NativeUiProbeTimeoutMs window, which under
+        // automation throughput accumulates uncancelled timers per second.
+        using var probeCts = new CancellationTokenSource();
         var uiTask = DispatchAsync(() =>
         {
             try
@@ -797,7 +802,17 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
         var nativeTask = Task.Run(async () =>
         {
-            var winner = await Task.WhenAny(hwndSource.Task, Task.Delay(NativeUiProbeTimeoutMs)).ConfigureAwait(false);
+            Task delayTask;
+            try
+            {
+                delayTask = Task.Delay(NativeUiProbeTimeoutMs, probeCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                delayTask = Task.CompletedTask;
+            }
+
+            var winner = await Task.WhenAny(hwndSource.Task, delayTask).ConfigureAwait(false);
             var hwnds = winner == hwndSource.Task
                 ? await hwndSource.Task.ConfigureAwait(false)
                 : Array.Empty<IntPtr>();
@@ -813,15 +828,47 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             }
         });
 
-        var uiWinner = await Task.WhenAny(uiTask, Task.Delay(NativeUiProbeTimeoutMs)).ConfigureAwait(false);
+        Task uiDelay;
+        try
+        {
+            uiDelay = Task.Delay(NativeUiProbeTimeoutMs, probeCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            uiDelay = Task.CompletedTask;
+        }
+
+        var uiWinner = await Task.WhenAny(uiTask, uiDelay).ConfigureAwait(false);
         if (uiWinner != uiTask)
         {
             hwndSource.TrySetResult(Array.Empty<IntPtr>());
-            return await nativeTask.ConfigureAwait(false);
+            // The UI dispatcher is blocked (the exact scenario this code path targets).
+            // Observe any later fault on the abandoned uiTask so it doesn't trigger
+            // TaskScheduler.UnobservedTaskException when it eventually completes.
+            _ = uiTask.ContinueWith(
+                t => System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] Abandoned uiTask faulted: {t.Exception?.GetBaseException().Message}"),
+                CancellationToken.None,
+                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
+            // Also bound the native await: NativeUiProbeTimeoutMs only guards the HWND
+            // discovery wait inside nativeTask; nativeCallback itself (a UIA tree walk)
+            // is unbounded and can block for minutes on a frozen app.
+            var nativeWinner = await Task.WhenAny(nativeTask, Task.Delay(NativeUiProbeTimeoutMs, CancellationToken.None)).ConfigureAwait(false);
+            probeCts.Cancel();
+            return nativeWinner == nativeTask
+                ? await nativeTask.ConfigureAwait(false)
+                : new List<ElementInfo>();
         }
 
+        probeCts.Cancel();
+
         var uiResult = await uiTask.ConfigureAwait(false);
-        var nativeResult = await nativeTask.ConfigureAwait(false);
+        // Bound the final native await for the same reason as above.
+        var finalNativeWinner = await Task.WhenAny(nativeTask, Task.Delay(NativeUiProbeTimeoutMs, CancellationToken.None)).ConfigureAwait(false);
+        var nativeResult = finalNativeWinner == nativeTask
+            ? await nativeTask.ConfigureAwait(false)
+            : new List<ElementInfo>();
         if (nativeResult.Count == 0)
             return uiResult;
 
@@ -1745,6 +1792,15 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     /// Allows platforms whose native click handlers may open synchronous modal loops to schedule
     /// a native tap before MAUI invokes the managed click event inline.
     /// </summary>
+    /// <remarks>
+    /// When an override returns <c>true</c>, the native invocation is typically queued onto the
+    /// platform dispatcher (e.g. <c>BeginInvoke</c>/<c>TryEnqueue</c>) rather than completed
+    /// synchronously. The HTTP caller receives <c>"ok"</c> as soon as the work is queued, so any
+    /// follow-up command (a screenshot or another query) may race against the dialog actually
+    /// appearing. Tests should use <c>maui_wait</c> or explicit polling after a tap that is
+    /// expected to surface a dialog. Faults inside the dispatched invocation are silent from the
+    /// caller's perspective and only surface in the agent's debug output.
+    /// </remarks>
     protected virtual bool TryScheduleNativeTapFirst(VisualElement ve)
     {
         return false;

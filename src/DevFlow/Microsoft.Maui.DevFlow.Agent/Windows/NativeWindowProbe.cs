@@ -13,6 +13,11 @@ public sealed class NativeWindowProbe
 {
     private const int DefaultMaxDepth = 10;
     private const int MaxNodesPerWindow = 256;
+    // Bounds the descendant scan during dialog discovery to avoid runaway UIA tree
+    // walks on large WinUI apps (where TreeScope.Descendants can return thousands of
+    // nodes via cross-process COM marshaling).
+    private const int MaxDialogScanNodes = 512;
+    private const int MaxDialogScanDepth = 8;
     private static readonly int CurrentProcessId = Environment.ProcessId;
 
     private static readonly HashSet<string> CommonDialogButtonLabels = new(StringComparer.OrdinalIgnoreCase)
@@ -80,6 +85,30 @@ public sealed class NativeWindowProbe
 
     public static AutomationElement? TryGetAutomationElement(IReadOnlyDictionary<string, object> nativeObjects, string id)
         => nativeObjects.TryGetValue(id, out var native) && native is AutomationElement element ? element : null;
+
+    /// <summary>
+    /// Rebuilds an <see cref="ElementInfo"/> for a previously-cached <see cref="AutomationElement"/>
+    /// without performing a fresh process-wide window enumeration. Returns <c>null</c> when the cached
+    /// element is no longer available (e.g. dialog closed).
+    /// </summary>
+    public static ElementInfo? TryBuildCachedElementInfo(
+        IReadOnlyDictionary<string, object> nativeObjects,
+        string id,
+        int? maxDepth = null)
+    {
+        if (TryGetAutomationElement(nativeObjects, id) is not { } element)
+            return null;
+
+        var depth = maxDepth is > 0 ? maxDepth.Value : DefaultMaxDepth;
+        // Build a throwaway nativeObjects map so child walks don't leak into the
+        // caller's cache. The returned ElementInfo's root id is rewritten to match
+        // the supplied id so it round-trips with the request that produced it.
+        var scratch = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        var info = WalkAutomationElement(element, id, [0], scratch, 0, depth, isRoot: true);
+        if (info is not null)
+            info.Id = id;
+        return info;
+    }
 
     public static bool TryInvoke(AutomationElement element)
     {
@@ -233,28 +262,48 @@ public sealed class NativeWindowProbe
 
     private static IReadOnlyList<AutomationElement> FindDialogCandidates(AutomationElement root, IntPtr rootHwnd)
     {
+        // Walk the subtree breadth-first via TreeScope.Children rather than calling
+        // FindAll(TreeScope.Descendants) which eagerly materializes the entire UIA
+        // subtree (potentially thousands of cross-process COM marshalled nodes).
+        // We cap both total nodes visited and depth to keep dialog discovery bounded.
         var candidates = new List<AutomationElement>();
-        AutomationElementCollection descendants;
-        try
-        {
-            descendants = root.FindAll(TreeScope.Descendants, System.Windows.Automation.Condition.TrueCondition);
-        }
-        catch (Exception ex) when (ex is ElementNotAvailableException or COMException)
-        {
-            return candidates;
-        }
+        var queue = new Queue<(AutomationElement Element, int Depth)>();
+        queue.Enqueue((root, 0));
+        var scanned = 0;
 
-        for (var i = 0; i < descendants.Count; i++)
+        while (queue.Count > 0 && scanned < MaxDialogScanNodes)
         {
-            var element = descendants[i];
-            if (element is null || !IsDialogCandidate(element, rootHwnd))
+            var (current, depth) = queue.Dequeue();
+            scanned++;
+
+            // Skip the root window itself - only its descendants are dialog candidates.
+            if (current != root && IsDialogCandidate(current, rootHwnd))
+            {
+                // Once we've identified a dialog candidate we don't need to keep
+                // descending into its subtree.
+                candidates.Add(current);
+                continue;
+            }
+
+            if (depth >= MaxDialogScanDepth)
                 continue;
 
-            if (candidates.Any(existing => IsAncestor(existing, element)))
+            AutomationElementCollection children;
+            try
+            {
+                children = current.FindAll(TreeScope.Children, System.Windows.Automation.Condition.TrueCondition);
+            }
+            catch (Exception ex) when (ex is ElementNotAvailableException or COMException)
+            {
                 continue;
+            }
 
-            candidates.RemoveAll(existing => IsAncestor(element, existing));
-            candidates.Add(element);
+            for (var i = 0; i < children.Count; i++)
+            {
+                var child = children[i];
+                if (child is not null)
+                    queue.Enqueue((child, depth + 1));
+            }
         }
 
         return candidates;

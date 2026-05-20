@@ -209,8 +209,20 @@ public class WpfVisualTreeWalker : VisualTreeWalker
     }
 
     public override ElementInfo? GetNativeElementInfoById(string id)
-        => FlattenElementInfos(WalkNativeTree(Array.Empty<IntPtr>()))
+    {
+        // Cache-first: avoid a full UIA tree walk (which calls EnumerateProcessTopLevels
+        // and enumerates every same-process window) when the requested id was already
+        // resolved by a recent tree/query call.
+        Dictionary<string, object> cache;
+        lock (_nativeObjectsLock)
+            cache = _nativeObjects;
+
+        if (NativeWindowProbe.TryBuildCachedElementInfo(cache, id) is { } cached)
+            return cached;
+
+        return FlattenElementInfos(WalkNativeTree(Array.Empty<IntPtr>()))
             .FirstOrDefault(e => e.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
+    }
 
     public override string TryNativeElementTap(string elementId)
     {
