@@ -57,6 +57,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     private int _uiHookGeneration = 1;
     private int _uiHookScanInFlight;
     private DateTime _lastUiHookScanTsUtc = DateTime.MinValue;
+    private const int NativeUiProbeTimeoutMs = 1500;
     private Shell? _hookedShell;
     private DateTime? _navigationStartedAtUtc;
     private string? _navigationTargetRoute;
@@ -700,7 +701,10 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             int.TryParse(depthStr, out maxDepth);
 
         var windowIndex = ParseWindowIndex(request);
-        var tree = await DispatchAsync(() => _treeWalker.WalkTree(_app, maxDepth, windowIndex));
+        var tree = await CaptureUiOrNativeAsync(
+            () => _treeWalker.WalkTree(_app, maxDepth, windowIndex),
+            hwnds => _treeWalker.WalkNativeTree(hwnds, maxDepth),
+            windowIndex);
         return HttpResponse.Json(tree);
     }
 
@@ -709,6 +713,12 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (_app == null) return HttpResponse.Error("Agent not bound to app");
         if (!request.RouteParams.TryGetValue("id", out var id))
             return HttpResponse.Error("Element ID required");
+
+        if (IsNativeElementId(id) && _treeWalker.SupportsNativeElements)
+        {
+            var nativeElement = await Task.Run(() => _treeWalker.GetNativeElementInfoById(id));
+            return nativeElement != null ? HttpResponse.Json(nativeElement) : HttpResponse.NotFound($"Element '{id}' not found");
+        }
 
         var element = await DispatchAsync(() =>
         {
@@ -735,7 +745,9 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         {
             try
             {
-                var results = await DispatchAsync(() => _treeWalker.QueryCss(_app, selector));
+                var results = await CaptureUiOrNativeAsync(
+                    () => _treeWalker.QueryCss(_app, selector),
+                    hwnds => _treeWalker.QueryNative(hwnds, selector: selector));
                 return HttpResponse.Json(results);
             }
             catch (FormatException ex)
@@ -751,9 +763,76 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (type == null && automationId == null && text == null)
             return HttpResponse.Error("At least one query parameter required: type, automationId, text, or selector");
 
-        var simpleResults = await DispatchAsync(() => _treeWalker.Query(_app, type, automationId, text));
+        var simpleResults = await CaptureUiOrNativeAsync(
+            () => _treeWalker.Query(_app, type, automationId, text),
+            hwnds => _treeWalker.QueryNative(hwnds, type, automationId, text));
         return HttpResponse.Json(simpleResults);
     }
+
+    private async Task<List<ElementInfo>> CaptureUiOrNativeAsync(
+        Func<List<ElementInfo>> uiCallback,
+        Func<IReadOnlyList<IntPtr>, List<ElementInfo>> nativeCallback,
+        int? windowIndex = null)
+    {
+        if (!_treeWalker.SupportsNativeElements)
+            return await DispatchAsync(uiCallback);
+
+        var hwndSource = new TaskCompletionSource<IReadOnlyList<IntPtr>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var uiTask = DispatchAsync(() =>
+        {
+            try
+            {
+                hwndSource.TrySetResult(_app is null
+                    ? Array.Empty<IntPtr>()
+                    : _treeWalker.GetKnownNativeWindowHandles(_app, windowIndex));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] Native HWND discovery failed: {ex.GetBaseException().Message}");
+                hwndSource.TrySetResult(Array.Empty<IntPtr>());
+            }
+
+            return uiCallback();
+        });
+
+        var nativeTask = Task.Run(async () =>
+        {
+            var winner = await Task.WhenAny(hwndSource.Task, Task.Delay(NativeUiProbeTimeoutMs)).ConfigureAwait(false);
+            var hwnds = winner == hwndSource.Task
+                ? await hwndSource.Task.ConfigureAwait(false)
+                : Array.Empty<IntPtr>();
+
+            try
+            {
+                return nativeCallback(hwnds);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] Native UI probe failed: {ex.GetBaseException().Message}");
+                return [];
+            }
+        });
+
+        var uiWinner = await Task.WhenAny(uiTask, Task.Delay(NativeUiProbeTimeoutMs)).ConfigureAwait(false);
+        if (uiWinner != uiTask)
+        {
+            hwndSource.TrySetResult(Array.Empty<IntPtr>());
+            return await nativeTask.ConfigureAwait(false);
+        }
+
+        var uiResult = await uiTask.ConfigureAwait(false);
+        var nativeResult = await nativeTask.ConfigureAwait(false);
+        if (nativeResult.Count == 0)
+            return uiResult;
+
+        var merged = new List<ElementInfo>(uiResult.Count + nativeResult.Count);
+        merged.AddRange(uiResult);
+        merged.AddRange(nativeResult);
+        return merged;
+    }
+
+    private static bool IsNativeElementId(string? elementId)
+        => elementId?.StartsWith("native:", StringComparison.Ordinal) == true;
 
     private async Task<HttpResponse> HandleHitTest(HttpRequest request)
     {
@@ -1429,6 +1508,19 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             return HttpResponse.Error("elementId is required");
 
         var startedAtUtc = DateTime.UtcNow;
+        if (IsNativeElementId(body.ElementId))
+        {
+            var nativeResult = await Task.Run(() => _treeWalker.TryNativeElementTap(body.ElementId!));
+            PublishUiOperationSpan(
+                "action.tap",
+                startedAtUtc,
+                nativeResult == "ok",
+                nativeResult == "ok" ? null : nativeResult,
+                body.ElementId);
+
+            return nativeResult == "ok" ? HttpResponse.Ok("Tapped") : HttpResponse.Error(nativeResult);
+        }
+
         var result = await DispatchAsync(() =>
         {
             var el = _treeWalker.GetElementById(body.ElementId, _app);
@@ -1437,10 +1529,14 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             switch (el)
             {
                 case Button btn:
+                    if (TryScheduleNativeTapFirst(btn))
+                        return "ok";
                     try { btn.SendClicked(); }
                     catch { if (btn is VisualElement ve && !TryNativeTap(ve)) return $"Native tap failed on Button"; }
                     return "ok";
                 case ImageButton imgBtn:
+                    if (TryScheduleNativeTapFirst(imgBtn))
+                        return "ok";
                     try { imgBtn.SendClicked(); }
                     catch { if (imgBtn is VisualElement ve && !TryNativeTap(ve)) return $"Native tap failed on ImageButton"; }
                     return "ok";
@@ -1646,6 +1742,15 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     }
 
     /// <summary>
+    /// Allows platforms whose native click handlers may open synchronous modal loops to schedule
+    /// a native tap before MAUI invokes the managed click event inline.
+    /// </summary>
+    protected virtual bool TryScheduleNativeTapFirst(VisualElement ve)
+    {
+        return false;
+    }
+
+    /// <summary>
     /// Attempts to tap a native platform view via handler for non-VisualElement IView types (e.g. Comet views).
     /// Uses reflection to get the PlatformView from the handler and invoke SendAccessibilityAction or performClick.
     /// Override in platform-specific subclasses for richer support.
@@ -1700,6 +1805,32 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             return HttpResponse.Error("elementId and text are required");
 
         var startedAtUtc = DateTime.UtcNow;
+        if (IsNativeElementId(body.ElementId))
+        {
+            var nativeResult = await Task.Run(() => _treeWalker.TryNativeElementSetValue(body.ElementId!, body.Text!));
+            PublishUiOperationSpan(
+                "action.fill",
+                startedAtUtc,
+                nativeResult == "ok",
+                nativeResult == "ok" ? null : nativeResult,
+                body.ElementId,
+                new { textLength = body.Text.Length });
+
+            if (nativeResult == "ok")
+            {
+                PublishUiEvent("treeChange", new
+                {
+                    changeType = "modified",
+                    elementId = body.ElementId,
+                    elementType = "input",
+                    parentId = (string?)null,
+                    timestamp = DateTimeOffset.UtcNow.ToString("O")
+                });
+            }
+
+            return nativeResult == "ok" ? HttpResponse.Ok("Text set") : HttpResponse.Error(nativeResult);
+        }
+
         var result = await DispatchAsync(() =>
         {
             var el = _treeWalker.GetElementById(body.ElementId, _app);
@@ -1756,6 +1887,32 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             return HttpResponse.Error("elementId is required");
 
         var startedAtUtc = DateTime.UtcNow;
+        if (IsNativeElementId(body.ElementId))
+        {
+            var nativeResult = await Task.Run(() => _treeWalker.TryNativeElementSetValue(body.ElementId!, string.Empty));
+            var nativeSuccess = nativeResult == "ok";
+            PublishUiOperationSpan(
+                "action.clear",
+                startedAtUtc,
+                nativeSuccess,
+                nativeSuccess ? null : nativeResult,
+                body.ElementId);
+
+            if (nativeSuccess)
+            {
+                PublishUiEvent("treeChange", new
+                {
+                    changeType = "modified",
+                    elementId = body.ElementId,
+                    elementType = "input",
+                    parentId = (string?)null,
+                    timestamp = DateTimeOffset.UtcNow.ToString("O")
+                });
+            }
+
+            return nativeSuccess ? HttpResponse.Ok("Cleared") : HttpResponse.Error(nativeResult);
+        }
+
         var success = await DispatchAsync(() =>
         {
             var el = _treeWalker.GetElementById(body.ElementId, _app);
@@ -1808,6 +1965,20 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             return HttpResponse.Error("elementId is required");
 
         var startedAtUtc = DateTime.UtcNow;
+        if (IsNativeElementId(body.ElementId))
+        {
+            var nativeResult = await Task.Run(() => _treeWalker.TryNativeElementFocus(body.ElementId!));
+            var nativeSuccess = nativeResult == "ok";
+            PublishUiOperationSpan(
+                "action.focus",
+                startedAtUtc,
+                nativeSuccess,
+                nativeSuccess ? null : nativeResult,
+                body.ElementId);
+
+            return nativeSuccess ? HttpResponse.Ok("Focused") : HttpResponse.Error(nativeResult);
+        }
+
         var success = await DispatchAsync(() =>
         {
             var el = _treeWalker.GetElementById(body.ElementId, _app);
@@ -2327,6 +2498,20 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
         var position = ParseScrollToPosition(body.ScrollToPosition);
         var startedAtUtc = DateTime.UtcNow;
+        if (IsNativeElementId(body.ElementId))
+        {
+            var nativeResult = await Task.Run(() => _treeWalker.TryNativeElementScroll(body.ElementId!, body.DeltaX, body.DeltaY));
+            PublishUiOperationSpan(
+                "action.scroll",
+                startedAtUtc,
+                nativeResult == "ok",
+                nativeResult == "ok" ? null : nativeResult,
+                body.ElementId,
+                new { body.DeltaX, body.DeltaY, body.Animated });
+
+            return nativeResult == "ok" ? HttpResponse.Ok("Scrolled") : HttpResponse.Error(nativeResult);
+        }
+
         var result = await DispatchAsync(async () =>
         {
             // Priority 1: Scroll by item index on a specific ItemsView

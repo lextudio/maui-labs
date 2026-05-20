@@ -135,6 +135,39 @@ public class WpfAgentService : DevFlowAgentService
         return false;
     }
 
+    protected override bool TryScheduleNativeTapFirst(VisualElement ve)
+    {
+        try
+        {
+            if (ve.Handler?.PlatformView is not ButtonBase buttonBase)
+                return false;
+
+            var peer = System.Windows.Automation.Peers.UIElementAutomationPeer.FromElement(buttonBase)
+                ?? System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(buttonBase);
+
+            if (peer?.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)
+                is System.Windows.Automation.Provider.IInvokeProvider invoke)
+            {
+                buttonBase.Dispatcher.BeginInvoke(() => invoke.Invoke());
+                return true;
+            }
+
+            if (peer?.GetPattern(System.Windows.Automation.Peers.PatternInterface.Toggle)
+                is System.Windows.Automation.Provider.IToggleProvider toggle)
+            {
+                buttonBase.Dispatcher.BeginInvoke(() => toggle.Toggle());
+                return true;
+            }
+
+            buttonBase.Dispatcher.BeginInvoke(() =>
+                buttonBase.RaiseEvent(new System.Windows.RoutedEventArgs(ButtonBase.ClickEvent, buttonBase)));
+            return true;
+        }
+        catch { }
+
+        return false;
+    }
+
     protected override async Task<byte[]?> CaptureElementScreenshotAsync(VisualElement element)
     {
         try
