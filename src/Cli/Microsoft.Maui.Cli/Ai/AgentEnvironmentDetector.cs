@@ -105,12 +105,18 @@ internal static class AgentEnvironmentDetector
 		var current = new DirectoryInfo(startDir);
 		while (current is not null)
 		{
-			if (Directory.Exists(Path.Combine(current.FullName, ".git")))
+			if (IsGitRoot(current.FullName))
 				return current.FullName;
 
 			current = current.Parent;
 		}
 
 		return null;
+	}
+
+	private static bool IsGitRoot(string directory)
+	{
+		var gitPath = Path.Combine(directory, ".git");
+		return Directory.Exists(gitPath) || File.Exists(gitPath);
 	}
 }

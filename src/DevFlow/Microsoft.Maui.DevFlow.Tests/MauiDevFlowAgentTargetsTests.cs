@@ -88,15 +88,82 @@ public sealed class MauiDevFlowAgentTargetsTests : IDisposable
         Assert.DoesNotContain("\"Microsoft.Maui.DevFlowPort\", \"9225\"", contents);
     }
 
+    [Theory]
+    [InlineData("build/Microsoft.Maui.DevFlow.Agent.targets")]
+    [InlineData("buildTransitive/Microsoft.Maui.DevFlow.Agent.targets")]
+    public void SetMauiDevFlowPort_EmitsSessionId_DerivedFromProjectPath(string relativeTargetPath)
+    {
+        CreateTestProject(relativeTargetPath);
+
+        RunSetMauiDevFlowPortTarget();
+
+        var contents = File.ReadAllText(GeneratedFilePath);
+        var expectedSessionId = ComputeExpectedSessionId(ProjectFilePath);
+        Assert.Contains($"\"Microsoft.Maui.DevFlowSessionId\", \"{expectedSessionId}\"", contents);
+        Assert.DoesNotContain("Microsoft.Maui.DevFlowBaseApplicationId", contents);
+        Assert.DoesNotContain("Microsoft.Maui.DevFlowApplicationId", contents);
+        Assert.DoesNotContain("Microsoft.Maui.DevFlowDebugAppIdentitySuffix", contents);
+    }
+
+    [Theory]
+    [InlineData("build/Microsoft.Maui.DevFlow.Agent.targets")]
+    [InlineData("buildTransitive/Microsoft.Maui.DevFlow.Agent.targets")]
+    public void SetMauiDevFlowPort_UsesExplicitSessionId_WhenProvided(string relativeTargetPath)
+    {
+        CreateTestProject(relativeTargetPath);
+
+        RunSetMauiDevFlowPortTarget("/p:MauiDevFlowSessionId=my-custom-session");
+
+        var contents = File.ReadAllText(GeneratedFilePath);
+        // Explicit values are sanitized (lowercase, alphanumeric only) for XML safety
+        Assert.Contains("\"Microsoft.Maui.DevFlowSessionId\", \"mycustomsession\"", contents);
+    }
+
+    [Theory]
+    [InlineData("build/Microsoft.Maui.DevFlow.Agent.targets")]
+    [InlineData("buildTransitive/Microsoft.Maui.DevFlow.Agent.targets")]
+    public void SetMauiDevFlowPort_EmitsSessionId_ForReleaseBuilds(string relativeTargetPath)
+    {
+        CreateTestProject(relativeTargetPath);
+
+        RunSetMauiDevFlowPortTarget("/p:Configuration=Release");
+
+        var contents = File.ReadAllText(GetGeneratedFilePath("Release"));
+        var expectedSessionId = ComputeExpectedSessionId(ProjectFilePath);
+        Assert.Contains($"\"Microsoft.Maui.DevFlowSessionId\", \"{expectedSessionId}\"", contents);
+    }
+
+    [Theory]
+    [InlineData("build/Microsoft.Maui.DevFlow.Agent.targets")]
+    [InlineData("buildTransitive/Microsoft.Maui.DevFlow.Agent.targets")]
+    public void SetMauiDevFlowPort_DoesNotRewriteApplicationId(string relativeTargetPath)
+    {
+        CreateTestProject(relativeTargetPath, """
+            <ApplicationId>com.example.myapp</ApplicationId>
+            """);
+
+        RunSetMauiDevFlowPortTarget();
+
+        var contents = File.ReadAllText(GeneratedFilePath);
+        // Session ID should be present
+        Assert.Contains("Microsoft.Maui.DevFlowSessionId", contents);
+        // ApplicationId must NOT be rewritten — no identity isolation metadata
+        Assert.DoesNotContain("Microsoft.Maui.DevFlowBaseApplicationId", contents);
+        Assert.DoesNotContain("Microsoft.Maui.DevFlowApplicationId", contents);
+    }
+
     private string ProjectFilePath => Path.Combine(_projectDirectory, "Test.csproj");
 
     private string ConfigFilePath => Path.Combine(_projectDirectory, ".mauidevflow");
 
-    private string GeneratedFilePath => Path.Combine(_projectDirectory, "obj", "Debug", "net10.0", "Microsoft.Maui.DevFlowPort.g.cs");
+    private string GeneratedFilePath => GetGeneratedFilePath("Debug");
 
     private static DateTime SentinelTimestampUtc { get; } = new(2001, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    private void CreateTestProject(string relativeTargetPath)
+    private string GetGeneratedFilePath(string configuration) =>
+        Path.Combine(_projectDirectory, "obj", configuration, "net10.0", "Microsoft.Maui.DevFlowPort.g.cs");
+
+    private void CreateTestProject(string relativeTargetPath, string? additionalProperties = null)
     {
         var targetFilePath = Path.Combine(
             RepoRoot,
@@ -111,10 +178,25 @@ public sealed class MauiDevFlowAgentTargetsTests : IDisposable
             <Project Sdk="Microsoft.NET.Sdk">
               <PropertyGroup>
                 <TargetFramework>net10.0</TargetFramework>
+            {{additionalProperties}}
               </PropertyGroup>
               <Import Project="{{escapedTargetFilePath}}" />
             </Project>
             """);
+    }
+
+    private static string ComputeExpectedSessionId(string projectFilePath)
+    {
+        var sanitized = new string(
+            projectFilePath
+                .ToLowerInvariant()
+                .Where(static ch => char.IsAsciiLetterOrDigit(ch))
+                .ToArray());
+
+        if (sanitized.Length > 24)
+            sanitized = sanitized[^24..];
+
+        return $"dw{sanitized}";
     }
 
     private void RunSetMauiDevFlowPortTarget(params string[] properties)

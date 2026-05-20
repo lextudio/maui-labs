@@ -41,6 +41,8 @@ internal sealed class ProfileSessionContext
 	internal IOutputFormatter Formatter => Request.Formatter;
 	internal bool UseJson => Request.UseJson;
 	internal bool Verbose => Request.Verbose;
+	internal bool ManualStart => Request.ManualStart;
+	internal bool DiagnosticSuspend => !Request.ManualStart;
 
 	internal string PrimaryOutputPath { get; }
 	internal string ProfilePlatform { get; }
@@ -52,6 +54,9 @@ internal sealed class ProfileSessionContext
 	internal DateTimeOffset StartedAtUtc { get; }
 	internal bool UseRuntimeOwnedTraceCollection { get; set; }
 	internal string? RuntimeOwnedTraceDevicePath { get; set; }
+	internal bool StartTraceAfterLaunch =>
+		string.Equals(Transport.Platform, Platforms.Android, StringComparison.OrdinalIgnoreCase) ||
+		string.Equals(Transport.Platform, Platforms.iOS, StringComparison.OrdinalIgnoreCase);
 
 	internal ReservedProfilePorts? ReservedPorts { get; set; }
 	internal ExitControlServer? ExitControlServer { get; set; }

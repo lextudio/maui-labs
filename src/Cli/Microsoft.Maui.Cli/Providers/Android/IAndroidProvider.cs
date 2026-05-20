@@ -123,19 +123,33 @@ public interface IAndroidProvider : IDisposable
 	(string Command, string Arguments)? GetLicenseAcceptanceCommand();
 
 	/// <summary>
-	/// Installs JDK if not present.
+	/// Installs JDK if not present. When <paramref name="version"/> is null,
+	/// <see cref="JdkManager.DefaultJdkVersion"/> is used.
 	/// </summary>
-	Task InstallJdkAsync(int version = 17, string? installPath = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+	Task InstallJdkAsync(int? version = null, string? installPath = null, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
 	/// <summary>
-	/// Installs the Android development environment.
+	/// Installs the Android development environment. When <paramref name="jdkVersion"/> is null,
+	/// <see cref="JdkManager.DefaultJdkVersion"/> is used.
 	/// </summary>
-	Task InstallAsync(string? sdkPath = null, string? jdkPath = null, int jdkVersion = 17, IEnumerable<string>? additionalPackages = null, bool acceptLicenses = false, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
+	Task InstallAsync(string? sdkPath = null, string? jdkPath = null, int? jdkVersion = null, IEnumerable<string>? additionalPackages = null, bool acceptLicenses = false, IProgress<string>? progress = null, CancellationToken cancellationToken = default);
 
 	/// <summary>
 	/// Installs Android SDK command-line tools with structured progress reporting.
 	/// </summary>
 	Task InstallSdkToolsAsync(string targetPath, Action<string, int, string>? onProgress = null, CancellationToken cancellationToken = default);
+
+	/// <summary>
+	/// Overrides the Android SDK path for the current session.
+	/// Rebuilds downstream tool wrappers (SdkManager, AvdManager, Adb) to use the new path.
+	/// </summary>
+	void OverrideSdkPath(string path);
+
+	/// <summary>
+	/// Overrides the JDK path for the current session.
+	/// Rebuilds downstream tool wrappers so JAVA_HOME reflects the new path.
+	/// </summary>
+	void OverrideJdkPath(string path);
 
 }
 
@@ -146,9 +160,24 @@ public record AvdInfo
 {
 	public required string Name { get; init; }
 	public string? DeviceProfile { get; init; }
+
+	/// <summary>
+	/// Device manufacturer as configured in the AVD (e.g. "Google", "Samsung").
+	/// Read from <c>hw.device.manufacturer</c> in config.ini.
+	/// </summary>
+	public string? Manufacturer { get; init; }
+
 	public string? SystemImage { get; init; }
 	public string? Target { get; init; }
 	public string? Path { get; init; }
+
+	/// <summary>
+	/// True when the AVD directory contains a runtime lock file
+	/// (e.g. <c>hardware-qemu.ini.lock</c>), indicating that an
+	/// emulator instance is currently starting, booting, or running
+	/// for this AVD.
+	/// </summary>
+	public bool IsLocked { get; init; }
 }
 
 /// <summary>

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Target net9.0 and net10.0 — this is a pure .NET library with no platform
+         dependencies. MAUI apps on Android/iOS/Mac Catalyst can reference it via the
+         standard TFM compatibility fallback. -->
+    <TargetFrameworks>net9.0;net10.0</TargetFrameworks>
+    <RootNamespace>Microsoft.Maui.ProfilingHelper</RootNamespace>
+    <PackageId>Microsoft.Maui.ProfilingHelper</PackageId>
+    <Description>A lightweight helper for .NET MAUI profiling. The maui CLI injects this assembly to drive its exit-control handshake; you can also reference it directly to mark startup completion via MauiProfilingMarker.Complete().</Description>
+    <IsPackable>true</IsPackable>
+    <IsShipping>true</IsShipping>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- No dependencies on MAUI or any other runtime packages -->
+    <NoWarn>$(NoWarn);CS1572;CS1573;CA2255</NoWarn>
+    <!-- Use product-specific README instead of repo-root one -->
+    <PackRepoRootReadme>false</PackRepoRootReadme>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+</Project>

@@ -14,7 +14,17 @@ applyTo: "**/*Tests*/**,**/*.Tests.*"
 
 | Product | Test Project | Target |
 |---------|-------------|--------|
+| AIExtensions | `tests/AIExtensions/Microsoft.Maui.AI.Attributes.Tests/` | `net10.0` |
+| AIExtensions | `tests/AIExtensions/Microsoft.Maui.AI.Attributes.Generators.Tests/` | `net10.0` |
+| AppProjectReference | `src/AppProjectReference/Microsoft.Maui.Build.AppProjectReference.Tests/` | `net10.0` |
+| Cli | `src/Cli/Microsoft.Maui.Cli.UnitTests/` | `net10.0` |
+| Comet | `src/Comet/tests/Comet.Tests/` | multi-TFM |
+| Comet | `src/Comet/tests/Comet.Blazor.Tests/` | multi-TFM |
+| Comet | `src/Comet/src/Comet.Layout.Yoga.Tests/` | multi-TFM |
 | DevFlow | `src/DevFlow/Microsoft.Maui.DevFlow.Tests/` | `net10.0` |
+| DevFlow (integration) | `src/DevFlow/Microsoft.Maui.DevFlow.Agent.IntegrationTests/` | `net10.0` |
+| WPF | `platforms/Windows.WPF/tests/HandlerTests/` | `net10.0-windows` |
+| WPF | `platforms/Windows.WPF/tests/UITests/` | `net10.0-windows` |
 
 ## Running Tests
 
@@ -24,6 +34,12 @@ dotnet test MauiLabs.sln
 
 # DevFlow tests
 dotnet test src/DevFlow/Microsoft.Maui.DevFlow.Tests/
+
+# DevFlow integration tests
+dotnet test src/DevFlow/Microsoft.Maui.DevFlow.Agent.IntegrationTests/
+
+# Cli unit tests
+dotnet test src/Cli/Microsoft.Maui.Cli.UnitTests/
 
 # Specific test
 dotnet test --filter "FullyQualifiedName~MyTestClass.MyTestMethod"

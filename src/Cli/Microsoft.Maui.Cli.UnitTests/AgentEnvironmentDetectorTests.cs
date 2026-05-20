@@ -183,4 +183,19 @@ public class AgentEnvironmentDetectorTests : IDisposable
 		// Should still find .claude at the git root
 		Assert.Contains(environments, e => e.Kind == AgentEnvironmentKind.Claude);
 	}
+
+	[Fact]
+	public void Detect_StopsAtGitRootFileForWorktree()
+	{
+		File.WriteAllText(Path.Combine(_tempDir, ".git"), "gitdir: ../repo/.git/worktrees/project");
+		Directory.CreateDirectory(Path.Combine(_tempDir, ".vscode"));
+
+		var subDir = Path.Combine(_tempDir, "src", "project");
+		Directory.CreateDirectory(subDir);
+
+		var environments = AgentEnvironmentDetector.Detect(subDir);
+		var vscode = Assert.Single(environments, e => e.Kind == AgentEnvironmentKind.VsCode);
+
+		Assert.Equal(Path.Combine(_tempDir, ".github", "skills"), vscode.SkillsDirectory);
+	}
 }

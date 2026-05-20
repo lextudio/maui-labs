@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.Maui.DevFlow.Agent.IntegrationTests.Fixtures;
+using Microsoft.Maui.DevFlow.Driver;
 using Xunit.Abstractions;
 
 namespace Microsoft.Maui.DevFlow.Agent.IntegrationTests;
@@ -90,11 +91,59 @@ public class UiActionTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task Fill_AndTap_AddsTodo()
+    {
+        await NavigateToMainPageAsync();
+        await SettleAsync(1000);
+
+        var entry = await FindElementAsync("NewTodoEntry");
+        var addButton = await FindElementAsync("AddButton");
+
+        await Client.ClearAsync(entry.Id);
+        await SettleAsync();
+        await Client.FocusAsync(entry.Id);
+        await SettleAsync();
+        await Client.FillAsync(entry.Id, "IntegrationTodo123");
+        await SettleAsync(1000);
+
+        await Client.TapAsync(addButton.Id);
+
+        await WaitForAsync(async () =>
+        {
+            var items = await Client.QueryAsync(text: "IntegrationTodo123");
+            return items.Count > 0;
+        }, timeoutMs: 5000, pollIntervalMs: 500);
+
+        var addedItems = await Client.QueryAsync(text: "IntegrationTodo123");
+        Assert.NotEmpty(addedItems);
+
+        await CleanupAddedTodoAsync("IntegrationTodo123");
+    }
+
+    [Fact]
     public async Task Navigate_ToRoute_ChangesPage()
     {
         await NavigateToPageAsync("//interactions", "StatusLabel");
         var statusLabel = await TryFindElementAsync("StatusLabel");
         Assert.NotNull(statusLabel);
+
+        await NavigateToMainPageAsync();
+    }
+
+    [Fact]
+    public async Task Navigate_ToMultipleRoutes_Works()
+    {
+        await NavigateToPageAsync("//interactions", "StatusLabel");
+        var interactionsEl = await TryFindElementAsync("StatusLabel");
+        Assert.NotNull(interactionsEl);
+
+        await NavigateToPageAsync("//network", "GetPostsButton");
+        var networkEl = await TryFindElementAsync("GetPostsButton");
+        Assert.NotNull(networkEl);
+
+        await NavigateToPageAsync("//dialogs", "DialogStatusLabel");
+        var dialogEl = await TryFindElementAsync("DialogStatusLabel");
+        Assert.NotNull(dialogEl);
 
         await NavigateToMainPageAsync();
     }
@@ -282,6 +331,31 @@ public class UiActionTests : IntegrationTestBase
         await Client.ClearAsync(descEntry.Id);
     }
 
+    [Fact]
+    public async Task Tap_WindowsNativeAlertButton_DismissesDialog()
+    {
+        if (!Platform.Equals("windows", StringComparison.OrdinalIgnoreCase))
+        {
+            Output.WriteLine("Windows native dialog action test skipped on non-Windows platform.");
+            return;
+        }
+
+        await NavigateToPageAsync("//dialogs", "AlertOkOnlyBtn");
+
+        var trigger = await FindElementAsync("AlertOkOnlyBtn");
+        var triggered = await Client.TapAsync(trigger.Id).WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(triggered);
+
+        var okButton = await WaitForNativeButtonAsync("OK");
+        Assert.True(await Client.TapAsync(okButton.Id));
+
+        await WaitForAsync(async () =>
+        {
+            var status = await FindElementAsync("DialogStatusLabel");
+            return status.Text?.Contains("OK dismissed", StringComparison.OrdinalIgnoreCase) == true;
+        }, timeoutMs: 5000);
+    }
+
     async Task CleanupAddedTodoAsync(string todoTitle)
     {
         try
@@ -298,5 +372,20 @@ public class UiActionTests : IntegrationTestBase
         {
             Output.WriteLine($"Cleanup warning: Could not delete todo '{todoTitle}': {ex.Message}");
         }
+    }
+
+    async Task<ElementInfo> WaitForNativeButtonAsync(string text)
+    {
+        ElementInfo? match = null;
+        await WaitForAsync(async () =>
+        {
+            var buttons = await Client.QueryAsync(type: "Button", text: text);
+            match = buttons.FirstOrDefault(e =>
+                e.Id.StartsWith("native:", StringComparison.Ordinal) &&
+                string.Equals(e.Text, text, StringComparison.OrdinalIgnoreCase));
+            return match is not null;
+        }, timeoutMs: 5000);
+
+        return match!;
     }
 }

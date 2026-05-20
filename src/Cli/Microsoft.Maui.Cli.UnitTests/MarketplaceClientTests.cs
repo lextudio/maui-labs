@@ -222,6 +222,37 @@ public class MarketplaceClientTests : IDisposable
 	}
 
 	[Fact]
+	public async Task GetSkillsFromDirectoryAsync_DiscoversRepositorySkills()
+	{
+		var handler = new FakeHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)
+		{
+			Content = new StringContent("""
+				---
+				name: comet-go
+				description: Build Comet Go apps
+				---
+				# Comet Go
+				""")
+		});
+		using var http = new HttpClient(handler);
+		var treeEntries = new List<(string Path, string Type)>
+		{
+			(".github/skills/comet-go/SKILL.md", "blob"),
+			(".github/skills/comet-go/references/setup.md", "blob"),
+			(".github/skills/ignored.txt", "blob")
+		};
+
+		var skills = await MarketplaceClient.GetSkillsFromDirectoryAsync(
+			http, "owner/repo", "main", ".github/skills", "repo-skills", treeEntries);
+
+		var skill = Assert.Single(skills);
+		Assert.Equal("comet-go", skill.Name);
+		Assert.Equal("repo-skills", skill.PluginName);
+		Assert.Equal(".github/skills/comet-go", skill.RemotePath);
+		Assert.Contains(".github/skills/comet-go/references/setup.md", skill.Files);
+	}
+
+	[Fact]
 	public async Task DownloadSkillFilesAsync_RejectsPathTraversal()
 	{
 		var handler = new FakeHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)

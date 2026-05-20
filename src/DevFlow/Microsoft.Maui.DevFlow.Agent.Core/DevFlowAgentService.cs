@@ -22,13 +22,14 @@ namespace Microsoft.Maui.DevFlow.Agent.Core;
 /// The main agent service that hosts the HTTP API and coordinates
 /// visual tree inspection and element interactions.
 /// </summary>
-public class DevFlowAgentService : IDisposable, IMarkerPublisher
+public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 {
     private readonly AgentOptions _options;
     private readonly AgentHttpServer _server;
     private readonly VisualTreeWalker _treeWalker;
     private FileLogProvider? _logProvider;
     private BrokerRegistration? _brokerRegistration;
+    private string? _sessionId;
     protected Application? _app;
     protected IDispatcher? _dispatcher;
     private bool _disposed;
@@ -56,6 +57,12 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
     private int _uiHookGeneration = 1;
     private int _uiHookScanInFlight;
     private DateTime _lastUiHookScanTsUtc = DateTime.MinValue;
+    private const int NativeUiProbeTimeoutMs = 1500;
+    // Tracks a previously-dispatched UI capture task that timed out. If still
+    // pending when a new CaptureUiOrNativeAsync arrives we skip enqueuing another
+    // uiCallback to avoid unbounded queueing on a blocked dispatcher.
+    private Task? _pendingCaptureUiTask;
+    private readonly object _pendingCaptureUiGate = new();
     private Shell? _hookedShell;
     private DateTime? _navigationStartedAtUtc;
     private string? _navigationTargetRoute;
@@ -158,6 +165,25 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
     public int RegisterCdpWebView(Func<string, Task<string>> commandHandler, Func<bool> readyCheck,
         string? automationId = null, string? elementId = null, string? url = null)
     {
+        // Shell route changes can recreate the same logical BlazorWebView multiple times.
+        // Reuse the existing slot for the same AutomationId/ElementId so callers don't get
+        // stranded on a stale index 0 bridge after navigating away and back.
+        var existing = _cdpWebViews.LastOrDefault(w =>
+            (!string.IsNullOrWhiteSpace(elementId) &&
+             string.Equals(w.ElementId, elementId, StringComparison.OrdinalIgnoreCase)) ||
+            (!string.IsNullOrWhiteSpace(automationId) &&
+             string.Equals(w.AutomationId, automationId, StringComparison.OrdinalIgnoreCase)));
+
+        if (existing != null)
+        {
+            existing.CommandHandler = commandHandler;
+            existing.ReadyCheck = readyCheck;
+            existing.AutomationId = automationId ?? existing.AutomationId;
+            existing.ElementId = elementId ?? existing.ElementId;
+            existing.Url = url ?? existing.Url;
+            return existing.Index;
+        }
+
         var index = _nextWebViewIndex++;
         _cdpWebViews.Add(new CdpWebViewInfo
         {
@@ -190,7 +216,13 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
     private CdpWebViewInfo? ResolveCdpWebView(string? webviewId)
     {
         if (_cdpWebViews.Count == 0) return null;
-        if (string.IsNullOrEmpty(webviewId)) return _cdpWebViews[0]; // default to first
+        if (string.IsNullOrEmpty(webviewId))
+        {
+            // Prefer the most recently registered ready bridge, falling back to the newest
+            // bridge overall. This avoids defaulting to a stale, no-longer-visible WebView
+            // after Shell recreates a page.
+            return _cdpWebViews.LastOrDefault(w => w.IsReady) ?? _cdpWebViews.Last();
+        }
 
         // Try index
         if (int.TryParse(webviewId, out var idx))
@@ -200,12 +232,12 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         }
 
         // Try AutomationId
-        var byAutomationId = _cdpWebViews.FirstOrDefault(w =>
+        var byAutomationId = _cdpWebViews.LastOrDefault(w =>
             !string.IsNullOrEmpty(w.AutomationId) && w.AutomationId.Equals(webviewId, StringComparison.OrdinalIgnoreCase));
         if (byAutomationId != null) return byAutomationId;
 
         // Try ElementId
-        var byElementId = _cdpWebViews.FirstOrDefault(w =>
+        var byElementId = _cdpWebViews.LastOrDefault(w =>
             !string.IsNullOrEmpty(w.ElementId) && w.ElementId.Equals(webviewId, StringComparison.OrdinalIgnoreCase));
         if (byElementId != null) return byElementId;
 
@@ -231,6 +263,7 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (_options.EnableNetworkMonitoring)
             DevFlowHttp.SetStore(NetworkStore);
         NetworkStore.OnRequestCaptured += HandleCapturedNetworkRequest;
+        AppDomain.CurrentDomain.AssemblyLoad += OnAssemblyLoaded;
         RegisterRoutes();
     }
 
@@ -293,6 +326,24 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
     /// <summary>Gets native window dimensions when MAUI reports 0. Override for platform-specific access.</summary>
     protected virtual (double width, double height) GetNativeWindowSize(IWindow window) => (0, 0);
 
+    /// <summary>Whether platform background jobs can be queried on this agent.</summary>
+    protected virtual bool IsJobsSupported => false;
+
+    /// <summary>Whether platform background jobs can be triggered on this agent.</summary>
+    protected virtual bool IsJobRunSupported => IsJobsSupported;
+
+    /// <summary>
+    /// Gets the list of platform background jobs (Android Workers / iOS BGTasks).
+    /// Override in platform-specific subclasses to query WorkManager or BGTaskScheduler.
+    /// </summary>
+    protected virtual Task<object?> GetPlatformJobsAsync() => Task.FromResult<object?>(null);
+
+    /// <summary>
+    /// Triggers a platform background job by identifier.
+    /// Override in platform-specific subclasses to enqueue via WorkManager or submit via BGTaskScheduler.
+    /// </summary>
+    protected virtual Task<object?> RunPlatformJobAsync(string identifier, string? type = null) => Task.FromResult<object?>(null);
+
     private bool IsProfilerFeatureAvailable => _options.EnableProfiler;
 
     /// <summary>
@@ -304,6 +355,13 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     public void SetBrokerRegistration(BrokerRegistration registration)
         => _brokerRegistration = registration;
+
+    /// <summary>
+    /// Sets the DevFlow session identity for this agent, derived from the build environment.
+    /// Included in status responses so clients can identify which environment built the running app.
+    /// </summary>
+    public void SetSessionId(string? sessionId)
+        => _sessionId = sessionId;
 
     /// <summary>
     /// Writes a log entry originating from the WebView/Blazor console.
@@ -464,6 +522,9 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         _server.MapPost("/api/v1/device/sensors/{sensor}/stop", HandleSensorStop);
         _server.MapWebSocket("/ws/v1/sensors", HandleSensorWebSocket);
 
+        _server.MapGet("/api/v1/device/jobs", HandleJobsList);
+        _server.MapPost("/api/v1/device/jobs/{identifier}/run", HandleJobRun);
+
         _server.MapGet("/api/v1/storage/preferences", HandlePreferencesList);
         _server.MapGet("/api/v1/storage/preferences/{key}", HandlePreferencesGet);
         _server.MapPut("/api/v1/storage/preferences/{key}", HandlePreferencesSet);
@@ -473,6 +534,16 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         _server.MapPut("/api/v1/storage/secure/{key}", HandleSecureStorageSet);
         _server.MapDelete("/api/v1/storage/secure/{key}", HandleSecureStorageDelete);
         _server.MapDelete("/api/v1/storage/secure", HandleSecureStorageClear);
+
+        _server.MapGet("/api/v1/storage/roots", HandleStorageRoots);
+        _server.MapGet("/api/v1/storage/files", HandleFilesList);
+        _server.MapGet("/api/v1/storage/files/{path}", HandleFileDownload);
+        _server.MapPut("/api/v1/storage/files/{path}", HandleFileUpload);
+        _server.MapDelete("/api/v1/storage/files/{path}", HandleFileDelete);
+
+        // Invoke / reflection
+        _server.MapGet("/api/v1/invoke/actions", HandleListActions);
+        _server.MapPost("/api/v1/invoke/actions/{name}", HandleInvokeAction);
     }
 
     private async Task<HttpResponse> HandleStatus(HttpRequest request)
@@ -508,6 +579,7 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                         .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown",
                     framework = ".NET MAUI",
                     frameworkVersion = Environment.Version.ToString(),
+                    sessionId = _sessionId,
                 },
                 device = new
                 {
@@ -536,6 +608,7 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                     sensors = true,
                     storage = true,
                     profiler = IsProfilerFeatureAvailable,
+                    jobs = IsJobsSupported,
                 },
                 running = _app != null,
                 cdpReady = _cdpWebViews.Any(v => v.IsReady),
@@ -598,7 +671,7 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             storage = new
             {
                 supported = true,
-                features = new[] { "preferences", "secure-storage" }
+                features = new[] { "preferences", "secure-storage", "roots", "files" }
             },
             profiler = new
             {
@@ -606,6 +679,18 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                 features = IsProfilerFeatureAvailable
                     ? new[] { "capabilities", "sessions", "samples", "markers", "spans", "hotspots" }
                     : Array.Empty<string>()
+            },
+            jobs = new
+            {
+                supported = IsJobsSupported,
+                features = IsJobsSupported
+                    ? IsJobRunSupported ? new[] { "list", "run" } : new[] { "list" }
+                    : Array.Empty<string>()
+            },
+            invoke = new
+            {
+                supported = true,
+                features = new[] { "actions" }
             }
         };
 
@@ -621,7 +706,10 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             int.TryParse(depthStr, out maxDepth);
 
         var windowIndex = ParseWindowIndex(request);
-        var tree = await DispatchAsync(() => _treeWalker.WalkTree(_app, maxDepth, windowIndex));
+        var tree = await CaptureUiOrNativeAsync(
+            () => _treeWalker.WalkTree(_app, maxDepth, windowIndex),
+            hwnds => _treeWalker.WalkNativeTree(hwnds, maxDepth),
+            windowIndex);
         return HttpResponse.Json(tree);
     }
 
@@ -630,6 +718,12 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (_app == null) return HttpResponse.Error("Agent not bound to app");
         if (!request.RouteParams.TryGetValue("id", out var id))
             return HttpResponse.Error("Element ID required");
+
+        if (IsNativeElementId(id) && _treeWalker.SupportsNativeElements)
+        {
+            var nativeElement = await Task.Run(() => _treeWalker.GetNativeElementInfoById(id));
+            return nativeElement != null ? HttpResponse.Json(nativeElement) : HttpResponse.NotFound($"Element '{id}' not found");
+        }
 
         var element = await DispatchAsync(() =>
         {
@@ -656,7 +750,9 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         {
             try
             {
-                var results = await DispatchAsync(() => _treeWalker.QueryCss(_app, selector));
+                var results = await CaptureUiOrNativeAsync(
+                    () => _treeWalker.QueryCss(_app, selector),
+                    hwnds => _treeWalker.QueryNative(hwnds, selector: selector));
                 return HttpResponse.Json(results);
             }
             catch (FormatException ex)
@@ -672,9 +768,169 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (type == null && automationId == null && text == null)
             return HttpResponse.Error("At least one query parameter required: type, automationId, text, or selector");
 
-        var simpleResults = await DispatchAsync(() => _treeWalker.Query(_app, type, automationId, text));
+        var simpleResults = await CaptureUiOrNativeAsync(
+            () => _treeWalker.Query(_app, type, automationId, text),
+            hwnds => _treeWalker.QueryNative(hwnds, type, automationId, text));
         return HttpResponse.Json(simpleResults);
     }
+
+    private async Task<List<ElementInfo>> CaptureUiOrNativeAsync(
+        Func<List<ElementInfo>> uiCallback,
+        Func<IReadOnlyList<IntPtr>, List<ElementInfo>> nativeCallback,
+        int? windowIndex = null)
+    {
+        if (!_treeWalker.SupportsNativeElements)
+            return await DispatchAsync(uiCallback);
+
+        // Gate: if a previous CaptureUiOrNativeAsync's UI dispatch is still
+        // pending (the dispatcher is blocked), skip enqueuing another one and
+        // go native-only. Otherwise repeated tree/query calls while the UI
+        // thread is blocked would accumulate unbounded queued work.
+        Task? priorPending;
+        lock (_pendingCaptureUiGate)
+            priorPending = _pendingCaptureUiTask;
+
+        if (priorPending is not null && !priorPending.IsCompleted)
+        {
+            try
+            {
+                var hwnds = _app is null
+                    ? Array.Empty<IntPtr>()
+                    : _treeWalker.GetKnownNativeWindowHandles(_app, windowIndex);
+                return await Task.Run(() =>
+                {
+                    try { return nativeCallback(hwnds); }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] Native UI probe failed (gated): {ex.GetBaseException().Message}");
+                        return new List<ElementInfo>();
+                    }
+                }).ConfigureAwait(false);
+            }
+            catch
+            {
+                return new List<ElementInfo>();
+            }
+        }
+
+        var hwndSource = new TaskCompletionSource<IReadOnlyList<IntPtr>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Shared CTS so the surviving Task.Delay timers can be cancelled once a race
+        // is decided. Without this, every CaptureUiOrNativeAsync call leaves up to
+        // two timers running for the full NativeUiProbeTimeoutMs window, which under
+        // automation throughput accumulates uncancelled timers per second.
+        using var probeCts = new CancellationTokenSource();
+        var uiTask = DispatchAsync(() =>
+        {
+            try
+            {
+                hwndSource.TrySetResult(_app is null
+                    ? Array.Empty<IntPtr>()
+                    : _treeWalker.GetKnownNativeWindowHandles(_app, windowIndex));
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] Native HWND discovery failed: {ex.GetBaseException().Message}");
+                hwndSource.TrySetResult(Array.Empty<IntPtr>());
+            }
+
+            return uiCallback();
+        });
+
+        var nativeTask = Task.Run(async () =>
+        {
+            Task delayTask;
+            try
+            {
+                delayTask = Task.Delay(NativeUiProbeTimeoutMs, probeCts.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                delayTask = Task.CompletedTask;
+            }
+
+            var winner = await Task.WhenAny(hwndSource.Task, delayTask).ConfigureAwait(false);
+            var hwnds = winner == hwndSource.Task
+                ? await hwndSource.Task.ConfigureAwait(false)
+                : Array.Empty<IntPtr>();
+
+            try
+            {
+                return nativeCallback(hwnds);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] Native UI probe failed: {ex.GetBaseException().Message}");
+                return [];
+            }
+        });
+
+        Task uiDelay;
+        try
+        {
+            uiDelay = Task.Delay(NativeUiProbeTimeoutMs, probeCts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            uiDelay = Task.CompletedTask;
+        }
+
+        var uiWinner = await Task.WhenAny(uiTask, uiDelay).ConfigureAwait(false);
+        if (uiWinner != uiTask)
+        {
+            // Record this pending uiTask so concurrent callers can detect the
+            // dispatcher is blocked and avoid enqueuing additional UI work.
+            lock (_pendingCaptureUiGate)
+                _pendingCaptureUiTask = uiTask;
+
+            hwndSource.TrySetResult(Array.Empty<IntPtr>());
+            // The UI dispatcher is blocked (the exact scenario this code path targets).
+            // Observe any later fault on the abandoned uiTask so it doesn't trigger
+            // TaskScheduler.UnobservedTaskException when it eventually completes.
+            _ = uiTask.ContinueWith(
+                t =>
+                {
+                    lock (_pendingCaptureUiGate)
+                    {
+                        if (ReferenceEquals(_pendingCaptureUiTask, t))
+                            _pendingCaptureUiTask = null;
+                    }
+
+                    if (t.IsFaulted)
+                        System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] Abandoned uiTask faulted: {t.Exception?.GetBaseException().Message}");
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+
+            // Also bound the native await: NativeUiProbeTimeoutMs only guards the HWND
+            // discovery wait inside nativeTask; nativeCallback itself (a UIA tree walk)
+            // is unbounded and can block for minutes on a frozen app.
+            var nativeWinner = await Task.WhenAny(nativeTask, Task.Delay(NativeUiProbeTimeoutMs, CancellationToken.None)).ConfigureAwait(false);
+            probeCts.Cancel();
+            return nativeWinner == nativeTask
+                ? await nativeTask.ConfigureAwait(false)
+                : new List<ElementInfo>();
+        }
+
+        probeCts.Cancel();
+
+        var uiResult = await uiTask.ConfigureAwait(false);
+        // Bound the final native await for the same reason as above.
+        var finalNativeWinner = await Task.WhenAny(nativeTask, Task.Delay(NativeUiProbeTimeoutMs, CancellationToken.None)).ConfigureAwait(false);
+        var nativeResult = finalNativeWinner == nativeTask
+            ? await nativeTask.ConfigureAwait(false)
+            : new List<ElementInfo>();
+        if (nativeResult.Count == 0)
+            return uiResult;
+
+        var merged = new List<ElementInfo>(uiResult.Count + nativeResult.Count);
+        merged.AddRange(uiResult);
+        merged.AddRange(nativeResult);
+        return merged;
+    }
+
+    private static bool IsNativeElementId(string? elementId)
+        => elementId?.StartsWith("native:", StringComparison.Ordinal) == true;
 
     private async Task<HttpResponse> HandleHitTest(HttpRequest request)
     {
@@ -1350,6 +1606,19 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             return HttpResponse.Error("elementId is required");
 
         var startedAtUtc = DateTime.UtcNow;
+        if (IsNativeElementId(body.ElementId))
+        {
+            var nativeResult = await Task.Run(() => _treeWalker.TryNativeElementTap(body.ElementId!));
+            PublishUiOperationSpan(
+                "action.tap",
+                startedAtUtc,
+                nativeResult == "ok",
+                nativeResult == "ok" ? null : nativeResult,
+                body.ElementId);
+
+            return nativeResult == "ok" ? HttpResponse.Ok("Tapped") : HttpResponse.Error(nativeResult);
+        }
+
         var result = await DispatchAsync(() =>
         {
             var el = _treeWalker.GetElementById(body.ElementId, _app);
@@ -1358,10 +1627,14 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             switch (el)
             {
                 case Button btn:
+                    if (TryScheduleNativeTapFirst(btn))
+                        return "ok";
                     try { btn.SendClicked(); }
                     catch { if (btn is VisualElement ve && !TryNativeTap(ve)) return $"Native tap failed on Button"; }
                     return "ok";
                 case ImageButton imgBtn:
+                    if (TryScheduleNativeTapFirst(imgBtn))
+                        return "ok";
                     try { imgBtn.SendClicked(); }
                     catch { if (imgBtn is VisualElement ve && !TryNativeTap(ve)) return $"Native tap failed on ImageButton"; }
                     return "ok";
@@ -1567,6 +1840,24 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
     }
 
     /// <summary>
+    /// Allows platforms whose native click handlers may open synchronous modal loops to schedule
+    /// a native tap before MAUI invokes the managed click event inline.
+    /// </summary>
+    /// <remarks>
+    /// When an override returns <c>true</c>, the native invocation is typically queued onto the
+    /// platform dispatcher (e.g. <c>BeginInvoke</c>/<c>TryEnqueue</c>) rather than completed
+    /// synchronously. The HTTP caller receives <c>"ok"</c> as soon as the work is queued, so any
+    /// follow-up command (a screenshot or another query) may race against the dialog actually
+    /// appearing. Tests should use <c>maui_wait</c> or explicit polling after a tap that is
+    /// expected to surface a dialog. Faults inside the dispatched invocation are silent from the
+    /// caller's perspective and only surface in the agent's debug output.
+    /// </remarks>
+    protected virtual bool TryScheduleNativeTapFirst(VisualElement ve)
+    {
+        return false;
+    }
+
+    /// <summary>
     /// Attempts to tap a native platform view via handler for non-VisualElement IView types (e.g. Comet views).
     /// Uses reflection to get the PlatformView from the handler and invoke SendAccessibilityAction or performClick.
     /// Override in platform-specific subclasses for richer support.
@@ -1621,6 +1912,32 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             return HttpResponse.Error("elementId and text are required");
 
         var startedAtUtc = DateTime.UtcNow;
+        if (IsNativeElementId(body.ElementId))
+        {
+            var nativeResult = await Task.Run(() => _treeWalker.TryNativeElementSetValue(body.ElementId!, body.Text!));
+            PublishUiOperationSpan(
+                "action.fill",
+                startedAtUtc,
+                nativeResult == "ok",
+                nativeResult == "ok" ? null : nativeResult,
+                body.ElementId,
+                new { textLength = body.Text.Length });
+
+            if (nativeResult == "ok")
+            {
+                PublishUiEvent("treeChange", new
+                {
+                    changeType = "modified",
+                    elementId = body.ElementId,
+                    elementType = "input",
+                    parentId = (string?)null,
+                    timestamp = DateTimeOffset.UtcNow.ToString("O")
+                });
+            }
+
+            return nativeResult == "ok" ? HttpResponse.Ok("Text set") : HttpResponse.Error(nativeResult);
+        }
+
         var result = await DispatchAsync(() =>
         {
             var el = _treeWalker.GetElementById(body.ElementId, _app);
@@ -1677,6 +1994,32 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             return HttpResponse.Error("elementId is required");
 
         var startedAtUtc = DateTime.UtcNow;
+        if (IsNativeElementId(body.ElementId))
+        {
+            var nativeResult = await Task.Run(() => _treeWalker.TryNativeElementSetValue(body.ElementId!, string.Empty));
+            var nativeSuccess = nativeResult == "ok";
+            PublishUiOperationSpan(
+                "action.clear",
+                startedAtUtc,
+                nativeSuccess,
+                nativeSuccess ? null : nativeResult,
+                body.ElementId);
+
+            if (nativeSuccess)
+            {
+                PublishUiEvent("treeChange", new
+                {
+                    changeType = "modified",
+                    elementId = body.ElementId,
+                    elementType = "input",
+                    parentId = (string?)null,
+                    timestamp = DateTimeOffset.UtcNow.ToString("O")
+                });
+            }
+
+            return nativeSuccess ? HttpResponse.Ok("Cleared") : HttpResponse.Error(nativeResult);
+        }
+
         var success = await DispatchAsync(() =>
         {
             var el = _treeWalker.GetElementById(body.ElementId, _app);
@@ -1729,6 +2072,20 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             return HttpResponse.Error("elementId is required");
 
         var startedAtUtc = DateTime.UtcNow;
+        if (IsNativeElementId(body.ElementId))
+        {
+            var nativeResult = await Task.Run(() => _treeWalker.TryNativeElementFocus(body.ElementId!));
+            var nativeSuccess = nativeResult == "ok";
+            PublishUiOperationSpan(
+                "action.focus",
+                startedAtUtc,
+                nativeSuccess,
+                nativeSuccess ? null : nativeResult,
+                body.ElementId);
+
+            return nativeSuccess ? HttpResponse.Ok("Focused") : HttpResponse.Error(nativeResult);
+        }
+
         var success = await DispatchAsync(() =>
         {
             var el = _treeWalker.GetElementById(body.ElementId, _app);
@@ -1919,6 +2276,8 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         public string? Direction { get; set; }
         public double Distance { get; set; } = 120;
         public int DurationMs { get; set; } = 200;
+        public JsonElement[]? Args { get; set; }
+        public string? Name { get; set; }
     }
 
     private async Task<HttpResponse> HandleBack(HttpRequest request)
@@ -2198,6 +2557,18 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                         Body = JsonSerializer.Serialize(new SetPropertyRequest { Value = action.Value ?? string.Empty })
                     });
                     break;
+                case "invoke-action":
+                case "invoke_action":
+                    response = await HandleInvokeAction(new HttpRequest
+                    {
+                        Method = "POST",
+                        RouteParams = new Dictionary<string, string>
+                        {
+                            ["name"] = action.Name ?? string.Empty
+                        },
+                        Body = JsonSerializer.Serialize(new InvokeActionRequest { Args = action.Args })
+                    });
+                    break;
                 default:
                     response = HttpResponse.Error($"Unsupported batch action '{actionName}'");
                     break;
@@ -2234,6 +2605,20 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
 
         var position = ParseScrollToPosition(body.ScrollToPosition);
         var startedAtUtc = DateTime.UtcNow;
+        if (IsNativeElementId(body.ElementId))
+        {
+            var nativeResult = await Task.Run(() => _treeWalker.TryNativeElementScroll(body.ElementId!, body.DeltaX, body.DeltaY));
+            PublishUiOperationSpan(
+                "action.scroll",
+                startedAtUtc,
+                nativeResult == "ok",
+                nativeResult == "ok" ? null : nativeResult,
+                body.ElementId,
+                new { body.DeltaX, body.DeltaY, body.Animated });
+
+            return nativeResult == "ok" ? HttpResponse.Ok("Scrolled") : HttpResponse.Error(nativeResult);
+        }
+
         var result = await DispatchAsync(async () =>
         {
             // Priority 1: Scroll by item index on a specific ItemsView
@@ -2557,11 +2942,20 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     protected async Task<T> DispatchAsync<T>(Func<T> func)
     {
-        if (_dispatcher == null || _dispatcher.IsDispatchRequired == false)
-            return func();
+        if (_dispatcher is { IsDispatchRequired: true })
+            return await DispatchViaMauiDispatcherAsync(func);
 
-        var tcs = new TaskCompletionSource<T>();
-        _dispatcher.Dispatch(() =>
+        if (IsMainThreadDispatchRequired())
+            return await DispatchViaMainThreadAsync(func);
+
+        return func();
+    }
+
+    private async Task<T> DispatchViaMauiDispatcherAsync<T>(Func<T> func)
+    {
+        var dispatcher = _dispatcher ?? throw new InvalidOperationException("Dispatcher is not available.");
+        var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        dispatcher.Dispatch(() =>
         {
             try { tcs.SetResult(func()); }
             catch (Exception ex) { tcs.SetException(ex); }
@@ -2571,17 +2965,38 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     protected async Task<T?> DispatchAsync<T>(Func<Task<T?>> func) where T : class
     {
-        if (_dispatcher == null || _dispatcher.IsDispatchRequired == false)
-            return await func();
+        if (_dispatcher is { IsDispatchRequired: true })
+            return await DispatchViaMauiDispatcherAsync(func);
 
-        var tcs = new TaskCompletionSource<T?>();
-        _dispatcher.Dispatch(async () =>
+        if (IsMainThreadDispatchRequired())
+            return await DispatchViaMainThreadAsync(func);
+
+        return await func();
+    }
+
+    private async Task<T?> DispatchViaMauiDispatcherAsync<T>(Func<Task<T?>> func) where T : class
+    {
+        var dispatcher = _dispatcher ?? throw new InvalidOperationException("Dispatcher is not available.");
+        var tcs = new TaskCompletionSource<T?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        dispatcher.Dispatch(async () =>
         {
             try { tcs.SetResult(await func()); }
             catch (Exception ex) { tcs.SetException(ex); }
         });
         return await tcs.Task;
     }
+
+    protected virtual bool IsMainThreadDispatchRequired()
+    {
+        try { return !MainThread.IsMainThread; }
+        catch { return false; }
+    }
+
+    protected virtual Task<T> DispatchViaMainThreadAsync<T>(Func<T> func)
+        => MainThread.InvokeOnMainThreadAsync(func);
+
+    protected virtual Task<T?> DispatchViaMainThreadAsync<T>(Func<Task<T?>> func) where T : class
+        => MainThread.InvokeOnMainThreadAsync(func);
 
     private object BuildProfilerCapabilitiesPayload()
     {
@@ -3929,6 +4344,7 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (_disposed) return;
         _disposed = true;
         NetworkStore.OnRequestCaptured -= HandleCapturedNetworkRequest;
+        AppDomain.CurrentDomain.AssemblyLoad -= OnAssemblyLoaded;
         StopAutoUiHooks();
         Sensors.Dispose();
 
@@ -4476,12 +4892,10 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             return false;
         }
 
-        if (!webView.IsReady)
-        {
-            error = HttpResponse.Error($"CDP not ready on WebView {webView.Index} (WebView not initialized)");
-            return false;
-        }
-
+        // Do not hard-block transient "not ready" states here. The underlying
+        // WebView bridge can re-inject chobitsu on demand inside CommandHandler,
+        // so rejecting the request at resolution time prevents the self-heal path
+        // from ever running and leaves callers stuck in a 400 loop.
         error = null;
         return true;
     }
@@ -4502,6 +4916,14 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         };
     }
 
+    private static bool TryGetCdpValue(JsonElement root, out JsonElement value)
+    {
+        value = default;
+        return root.TryGetProperty("result", out var result) &&
+               result.TryGetProperty("result", out var innerResult) &&
+               innerResult.TryGetProperty("value", out value);
+    }
+
     private async Task<JsonElement?> EvaluateWebViewExpressionAsync(CdpWebViewInfo webView, string expression, int id = 99996)
     {
         var resultJson = await webView.CommandHandler(BuildCdpCommand(id, "Runtime.evaluate", new
@@ -4515,11 +4937,43 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (!string.IsNullOrWhiteSpace(error))
             throw new InvalidOperationException(error);
 
-        if (doc.RootElement.TryGetProperty("result", out var result) &&
-            result.TryGetProperty("result", out var innerResult) &&
-            innerResult.TryGetProperty("value", out var value))
-        {
+        if (TryGetCdpValue(doc.RootElement, out var value))
             return value.Clone();
+
+        // Some bridges (notably Android's Chobitsu-backed path) do not reliably honor
+        // returnByValue for arrays/objects and instead hand back an object reference.
+        // Fall back to JSON.stringify() so callers still get structured data.
+        var fallbackJson = await webView.CommandHandler(BuildCdpCommand(id + 1, "Runtime.evaluate", new
+        {
+            expression = $"JSON.stringify(({expression}))",
+            returnByValue = true
+        }));
+
+        using var fallbackDoc = JsonDocument.Parse(fallbackJson);
+        error = TryGetCdpError(fallbackDoc.RootElement);
+        if (!string.IsNullOrWhiteSpace(error))
+            throw new InvalidOperationException(error);
+
+        if (TryGetCdpValue(fallbackDoc.RootElement, out var fallbackValue))
+        {
+            if (fallbackValue.ValueKind == JsonValueKind.String)
+            {
+                var json = fallbackValue.GetString();
+                if (!string.IsNullOrWhiteSpace(json) && !string.Equals(json, "undefined", StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        using var jsonDoc = JsonDocument.Parse(json);
+                        return jsonDoc.RootElement.Clone();
+                    }
+                    catch
+                    {
+                        return JsonSerializer.SerializeToElement(json);
+                    }
+                }
+            }
+
+            return fallbackValue.Clone();
         }
 
         return null;
@@ -4766,36 +5220,25 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         try
         {
             var selectorJson = JsonSerializer.Serialize(body.Selector);
-            var cdpCommand = JsonSerializer.Serialize(new
-            {
-                id = 99998,
-                method = "Runtime.evaluate",
-                @params = new
-                {
-                    expression = $@"(function() {{
-                        return Array.from(document.querySelectorAll({selectorJson})).map((el, index) => ({{
-                            index,
-                            tagName: el.tagName ? el.tagName.toLowerCase() : null,
-                            id: el.id || null,
-                            className: el.className || null,
-                            text: (el.innerText || el.textContent || '').trim(),
-                            html: el.outerHTML
-                        }}));
-                    }})()",
-                    returnByValue = true
-                }
-            });
+            var value = await EvaluateWebViewExpressionAsync(
+                webView!,
+                $@"(function() {{
+                    return Array.from(document.querySelectorAll({selectorJson})).map((el, index) => ({{
+                        index,
+                        tagName: el.tagName ? el.tagName.toLowerCase() : null,
+                        id: el.id || null,
+                        className: el.className || null,
+                        text: (el.innerText || el.textContent || '').trim()
+                    }}));
+                }})()",
+                id: 99998);
 
-            var resultJson = await webView.CommandHandler(cdpCommand);
-            using var doc = JsonDocument.Parse(resultJson);
-            if (doc.RootElement.TryGetProperty("result", out var result) &&
-                result.TryGetProperty("result", out var innerResult) &&
-                innerResult.TryGetProperty("value", out var value))
+            if (value is JsonElement matches)
             {
                 return new HttpResponse
                 {
                     ContentType = "application/json",
-                    Body = value.GetRawText()
+                    Body = matches.GetRawText()
                 };
             }
 
@@ -4824,6 +5267,10 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
 
         try
         {
+            var nativeCapture = await TryCaptureRegisteredWebViewAsync(webView!);
+            if (nativeCapture != null)
+                return nativeCapture;
+
             var cdpCommand = JsonSerializer.Serialize(new
             {
                 id = 99997,
@@ -4840,11 +5287,55 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
                 return HttpResponse.Png(Convert.FromBase64String(base64));
             }
 
-            return HttpResponse.Error("Failed to capture WebView screenshot");
+            var fallback = await TryCaptureRegisteredWebViewAsync(webView!);
+            return fallback ?? HttpResponse.Error("Failed to capture WebView screenshot");
         }
         catch (Exception ex)
         {
-            return HttpResponse.Error($"WebView screenshot failed: {ex.Message}");
+            var fallback = webView != null
+                ? await TryCaptureRegisteredWebViewAsync(webView)
+                : null;
+            return fallback ?? HttpResponse.Error($"WebView screenshot failed: {ex.Message}");
+        }
+    }
+
+    private async Task<HttpResponse?> TryCaptureRegisteredWebViewAsync(CdpWebViewInfo webView)
+    {
+        if (_app == null)
+            return null;
+
+        try
+        {
+            var element = await DispatchAsync(() =>
+            {
+                if (!string.IsNullOrWhiteSpace(webView.ElementId))
+                {
+                    var byId = _treeWalker.GetElementById(webView.ElementId!, _app) as VisualElement;
+                    if (byId != null)
+                        return byId;
+                }
+
+                if (!string.IsNullOrWhiteSpace(webView.AutomationId))
+                {
+                    var match = _treeWalker.Query(_app, automationId: webView.AutomationId).FirstOrDefault();
+                    if (match?.Id is { Length: > 0 } matchId)
+                        return _treeWalker.GetElementById(matchId, _app) as VisualElement;
+                }
+
+                return null;
+            });
+
+            if (element == null)
+                return null;
+
+            var pngData = await DispatchAsync(() => CaptureElementScreenshotAsync(element));
+            return pngData is { Length: > 0 }
+                ? HttpResponse.Png(pngData)
+                : null;
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -5251,6 +5742,316 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
         catch (Exception ex)
         {
             return Task.FromResult(HttpResponse.Error($"Failed to clear secure storage: {ex.Message}"));
+        }
+    }
+
+    // ── File storage endpoints ──
+
+    private const string DefaultFileStorageRootId = "appData";
+    private const string FileStorageOperationList = "list";
+    private const string FileStorageOperationDownload = "download";
+    private const string FileStorageOperationUpload = "upload";
+    private const string FileStorageOperationDelete = "delete";
+
+    protected sealed class FileStorageRoot
+    {
+        public FileStorageRoot(
+            string id,
+            string displayName,
+            string kind,
+            string basePath,
+            bool isWritable,
+            bool isPersistent,
+            bool isBackedUp,
+            bool mayBeClearedBySystem,
+            bool isUserVisible,
+            params string[] supportedOperations)
+        {
+            Id = id;
+            DisplayName = displayName;
+            Kind = kind;
+            BasePath = basePath;
+            IsWritable = isWritable;
+            IsPersistent = isPersistent;
+            IsBackedUp = isBackedUp;
+            MayBeClearedBySystem = mayBeClearedBySystem;
+            IsUserVisible = isUserVisible;
+            SupportedOperations = supportedOperations;
+        }
+
+        public string Id { get; }
+        public string DisplayName { get; }
+        public string Kind { get; }
+        public string BasePath { get; }
+        public bool IsWritable { get; }
+        public bool IsReadOnly => !IsWritable;
+        public bool IsPersistent { get; }
+        public bool IsBackedUp { get; }
+        public bool MayBeClearedBySystem { get; }
+        public bool IsUserVisible { get; }
+        public IReadOnlyList<string> SupportedOperations { get; }
+
+        public bool SupportsOperation(string operation)
+            => SupportedOperations.Contains(operation, StringComparer.Ordinal);
+    }
+
+    protected virtual string GetAppDataBasePath()
+        => FileSystem.AppDataDirectory;
+
+    protected virtual IReadOnlyList<FileStorageRoot> GetFileStorageRoots()
+    {
+        var appDataPath = GetAppDataBasePath();
+        if (string.IsNullOrWhiteSpace(appDataPath))
+            return Array.Empty<FileStorageRoot>();
+
+        return new[]
+        {
+            new FileStorageRoot(
+                DefaultFileStorageRootId,
+                "App data",
+                "appData",
+                appDataPath,
+                isWritable: true,
+                isPersistent: true,
+                isBackedUp: true,
+                mayBeClearedBySystem: false,
+                isUserVisible: false,
+                FileStorageOperationList,
+                FileStorageOperationDownload,
+                FileStorageOperationUpload,
+                FileStorageOperationDelete)
+        };
+    }
+
+    private Task<HttpResponse> HandleStorageRoots(HttpRequest request)
+    {
+        try
+        {
+            return Task.FromResult(HttpResponse.Json(new
+            {
+                roots = GetFileStorageRoots().Select(ToFileStorageRootDescriptor).ToArray()
+            }));
+        }
+        catch (Exception)
+        {
+            return Task.FromResult(HttpResponse.Error("Failed to list storage roots"));
+        }
+    }
+
+    private static object ToFileStorageRootDescriptor(FileStorageRoot root)
+        => new
+        {
+            id = root.Id,
+            displayName = root.DisplayName,
+            kind = root.Kind,
+            isWritable = root.IsWritable,
+            isReadOnly = root.IsReadOnly,
+            isPersistent = root.IsPersistent,
+            isBackedUp = root.IsBackedUp,
+            mayBeClearedBySystem = root.MayBeClearedBySystem,
+            isUserVisible = root.IsUserVisible,
+            supportedOperations = root.SupportedOperations.ToArray()
+        };
+
+    private FileStorageRoot ResolveFileStorageRoot(HttpRequest request, string operation)
+    {
+        var rootId = request.QueryParams.GetValueOrDefault("root");
+        if (string.IsNullOrWhiteSpace(rootId))
+            rootId = DefaultFileStorageRootId;
+
+        var root = GetFileStorageRoots().FirstOrDefault(
+            r => string.Equals(r.Id, rootId, StringComparison.Ordinal));
+
+        if (root == null)
+            throw new InvalidOperationException($"Storage root '{rootId}' is not available. Use /api/v1/storage/roots to list supported roots.");
+
+        if (!root.SupportsOperation(operation))
+            throw new InvalidOperationException($"Storage root '{root.Id}' does not support '{operation}'.");
+
+        if (string.IsNullOrWhiteSpace(root.BasePath))
+            throw new InvalidOperationException($"Storage root '{root.Id}' is not available.");
+
+        return root;
+    }
+
+    private Task<HttpResponse> HandleFilesList(HttpRequest request)
+    {
+        try
+        {
+            var root = ResolveFileStorageRoot(request, FileStorageOperationList);
+            var subdir = request.QueryParams.GetValueOrDefault("path", "");
+            var resolved = FileStoragePathResolver.Resolve(root.BasePath, subdir, allowRoot: true);
+            FileStoragePathResolver.EnsureNoReparsePointTraversal(resolved.BasePath, resolved.FullPath, includeTarget: true);
+
+            if (!Directory.Exists(resolved.FullPath))
+                return Task.FromResult(HttpResponse.Json(new
+                {
+                    root = root.Id,
+                    path = resolved.RelativePath,
+                    entries = Array.Empty<object>()
+                }));
+
+            var entries = new List<object>();
+            foreach (var dir in Directory.GetDirectories(resolved.FullPath))
+            {
+                var info = new DirectoryInfo(dir);
+                entries.Add(new
+                {
+                    name = info.Name,
+                    type = "directory",
+                    lastModified = info.LastWriteTimeUtc.ToString("O")
+                });
+            }
+            foreach (var file in Directory.GetFiles(resolved.FullPath))
+            {
+                var info = new FileInfo(file);
+                entries.Add(new
+                {
+                    name = info.Name,
+                    type = "file",
+                    size = info.Length,
+                    lastModified = info.LastWriteTimeUtc.ToString("O")
+                });
+            }
+
+            return Task.FromResult(HttpResponse.Json(new
+            {
+                root = root.Id,
+                path = resolved.RelativePath,
+                entries
+            }));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromResult(ex is InvalidOperationException
+                ? HttpResponse.Error(ex.Message)
+                : HttpResponse.Error("Failed to list files"));
+        }
+    }
+
+    private async Task<HttpResponse> HandleFileDownload(HttpRequest request)
+    {
+        try
+        {
+            if (!request.RouteParams.TryGetValue("path", out var relativePath) || string.IsNullOrWhiteSpace(relativePath))
+                return HttpResponse.Error("file path is required");
+
+            var root = ResolveFileStorageRoot(request, FileStorageOperationDownload);
+            relativePath = Uri.UnescapeDataString(relativePath);
+            var resolved = FileStoragePathResolver.Resolve(root.BasePath, relativePath);
+            FileStoragePathResolver.EnsureNoReparsePointTraversal(resolved.BasePath, resolved.FullPath, includeTarget: true);
+
+            if (!File.Exists(resolved.FullPath))
+                return HttpResponse.NotFound($"File not found: {relativePath}");
+
+            var bytes = await File.ReadAllBytesAsync(resolved.FullPath);
+            var contentBase64 = Convert.ToBase64String(bytes);
+            var info = new FileInfo(resolved.FullPath);
+
+            return HttpResponse.Json(new
+            {
+                root = root.Id,
+                path = resolved.RelativePath,
+                size = info.Length,
+                lastModified = info.LastWriteTimeUtc.ToString("O"),
+                contentBase64
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return HttpResponse.Error(ex.Message);
+        }
+        catch (Exception)
+        {
+            return HttpResponse.Error("Failed to download file");
+        }
+    }
+
+    private async Task<HttpResponse> HandleFileUpload(HttpRequest request)
+    {
+        try
+        {
+            if (!request.RouteParams.TryGetValue("path", out var relativePath) || string.IsNullOrWhiteSpace(relativePath))
+                return HttpResponse.Error("file path is required");
+
+            var root = ResolveFileStorageRoot(request, FileStorageOperationUpload);
+            relativePath = Uri.UnescapeDataString(relativePath);
+            var resolved = FileStoragePathResolver.Resolve(root.BasePath, relativePath);
+            FileStoragePathResolver.EnsureNoReparsePointTraversal(resolved.BasePath, resolved.FullPath, includeTarget: true);
+
+            var body = request.BodyAs<FileUploadRequest>();
+            if (body == null || string.IsNullOrEmpty(body.ContentBase64))
+                return HttpResponse.Error("Request body must include 'contentBase64'");
+
+            byte[] bytes;
+            try
+            {
+                bytes = Convert.FromBase64String(body.ContentBase64);
+            }
+            catch (FormatException)
+            {
+                return HttpResponse.Error("Invalid base64 content");
+            }
+
+            var dir = Path.GetDirectoryName(resolved.FullPath);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            FileStoragePathResolver.EnsureNoReparsePointTraversal(resolved.BasePath, resolved.FullPath, includeTarget: true);
+
+            await File.WriteAllBytesAsync(resolved.FullPath, bytes);
+            var info = new FileInfo(resolved.FullPath);
+
+            return HttpResponse.Json(new
+            {
+                success = true,
+                root = root.Id,
+                path = resolved.RelativePath,
+                size = info.Length,
+                lastModified = info.LastWriteTimeUtc.ToString("O")
+            });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return HttpResponse.Error(ex.Message);
+        }
+        catch (Exception)
+        {
+            return HttpResponse.Error("Failed to upload file");
+        }
+    }
+
+    private Task<HttpResponse> HandleFileDelete(HttpRequest request)
+    {
+        try
+        {
+            if (!request.RouteParams.TryGetValue("path", out var relativePath) || string.IsNullOrWhiteSpace(relativePath))
+                return Task.FromResult(HttpResponse.Error("file path is required"));
+
+            var root = ResolveFileStorageRoot(request, FileStorageOperationDelete);
+            relativePath = Uri.UnescapeDataString(relativePath);
+            var resolved = FileStoragePathResolver.Resolve(root.BasePath, relativePath);
+            FileStoragePathResolver.EnsureNoReparsePointTraversal(resolved.BasePath, resolved.FullPath, includeTarget: true);
+
+            if (!File.Exists(resolved.FullPath))
+                return Task.FromResult(HttpResponse.NotFound($"File not found: {relativePath}"));
+
+            File.Delete(resolved.FullPath);
+            return Task.FromResult(HttpResponse.Json(new
+            {
+                success = true,
+                root = root.Id,
+                path = resolved.RelativePath,
+                message = $"File deleted: {resolved.RelativePath}"
+            }));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Task.FromResult(HttpResponse.Error(ex.Message));
+        }
+        catch (Exception)
+        {
+            return Task.FromResult(HttpResponse.Error("Failed to delete file"));
         }
     }
 
@@ -5767,6 +6568,34 @@ public class DevFlowAgentService : IDisposable, IMarkerPublisher
             Sensors.Unsubscribe(sensorName, queue);
         }
     }
+
+    // ── Job endpoints ──
+
+    private async Task<HttpResponse> HandleJobsList(HttpRequest request)
+    {
+        var jobs = await GetPlatformJobsAsync();
+        if (jobs == null)
+            return HttpResponse.Json(new { platform = PlatformName, supported = false, jobs = Array.Empty<object>() });
+
+        return HttpResponse.Json(jobs);
+    }
+
+    private async Task<HttpResponse> HandleJobRun(HttpRequest request)
+    {
+        if (!request.RouteParams.TryGetValue("identifier", out var identifier) || string.IsNullOrWhiteSpace(identifier))
+            return HttpResponse.Error("job identifier is required");
+
+        var runRequest = request.BodyAs<JobRunRequest>();
+        var type = runRequest?.Type;
+        if (string.IsNullOrWhiteSpace(type) && request.QueryParams.TryGetValue("type", out var queryType))
+            type = queryType;
+
+        var result = await RunPlatformJobAsync(identifier, type);
+        if (result == null)
+            return HttpResponse.Error($"Running jobs is not supported on {PlatformName}", 501, "unsupported-capability");
+
+        return HttpResponse.Json(result);
+    }
 }
 
 // Request DTOs
@@ -5779,6 +6608,11 @@ public class FillRequest
 {
     public string? ElementId { get; set; }
     public string? Text { get; set; }
+}
+
+public class JobRunRequest
+{
+    public string? Type { get; set; }
 }
 
 public class NavigateRequest
@@ -5837,4 +6671,9 @@ public class PreferenceSetRequest
 public class SecureStorageSetRequest
 {
     public string? Value { get; set; }
+}
+
+public class FileUploadRequest
+{
+    public string? ContentBase64 { get; set; }
 }

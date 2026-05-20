@@ -115,52 +115,39 @@ internal static class MarketplaceClient
 		if (entries is null)
 			return skills;
 
-		var normalizedPluginPath = NormalizePath(pluginSourcePath);
-
 		foreach (var skillGlob in plugin.Skills)
 		{
-			var basePath = NormalizePath($"{normalizedPluginPath}/{skillGlob}");
-			var prefix = basePath + "/";
-
-			// Find SKILL.md files exactly one level below the base path.
-			var skillMdPaths = new List<string>();
-			foreach (var (entryPath, entryType) in entries)
-			{
-				if (entryType != "blob" || !entryPath.StartsWith(prefix, StringComparison.Ordinal))
-					continue;
-
-				var relative = entryPath[prefix.Length..];
-				var slashIndex = relative.IndexOf('/');
-				if (slashIndex > 0 && relative[(slashIndex + 1)..].Equals("SKILL.md", StringComparison.OrdinalIgnoreCase))
-					skillMdPaths.Add(entryPath);
-			}
-
-			foreach (var skillMdPath in skillMdPaths)
-			{
-				var skillDir = skillMdPath[..skillMdPath.LastIndexOf('/')];
-				var skillDirPrefix = skillDir + "/";
-
-				// Collect all blob entries in this skill directory.
-				var skillFiles = entries
-					.Where(e => e.Type == "blob" && e.Path.StartsWith(skillDirPrefix, StringComparison.Ordinal))
-					.Select(e => e.Path)
-					.ToList();
-
-				var (name, description) = await ParseSkillFrontmatterAsync(http, repo, branch, skillMdPath, ct).ConfigureAwait(false);
-				var dirName = skillDir.Contains('/')
-					? skillDir[(skillDir.LastIndexOf('/') + 1)..]
-					: skillDir;
-
-				skills.Add(new SkillInfo
-				{
-					Name = name ?? dirName,
-					Description = description,
-					PluginName = plugin.Name,
-					RemotePath = skillDir,
-					Files = skillFiles
-				});
-			}
+			var basePath = NormalizePath($"{pluginSourcePath}/{skillGlob}");
+			await AddSkillsFromDirectoryAsync(http, repo, branch, plugin.Name, basePath, entries, skills, ct).ConfigureAwait(false);
 		}
+
+		return skills;
+	}
+
+	/// <summary>
+	/// Discovers skills below a repository directory that contains one subdirectory
+	/// per skill, each with a <c>SKILL.md</c> file.
+	/// </summary>
+	/// <param name="http">Configured <see cref="HttpClient"/>.</param>
+	/// <param name="repo">Repository in "owner/repo" format.</param>
+	/// <param name="branch">Branch name to read from.</param>
+	/// <param name="skillsRootPath">Repository-relative directory containing skill folders.</param>
+	/// <param name="pluginName">Logical source name used in output.</param>
+	/// <param name="cachedTreeEntries">
+	/// Optional pre-fetched tree entries from <see cref="FetchTreeEntriesAsync"/>.
+	/// </param>
+	/// <returns>List of discovered skills (empty on failure).</returns>
+	public static async Task<List<SkillInfo>> GetSkillsFromDirectoryAsync(
+		HttpClient http, string repo, string branch, string skillsRootPath, string pluginName,
+		List<(string Path, string Type)>? cachedTreeEntries = null, CancellationToken ct = default)
+	{
+		var skills = new List<SkillInfo>();
+		var entries = cachedTreeEntries ?? await FetchTreeEntriesAsync(http, repo, branch, ct).ConfigureAwait(false);
+		if (entries is null)
+			return skills;
+
+		await AddSkillsFromDirectoryAsync(
+			http, repo, branch, pluginName, NormalizePath(skillsRootPath), entries, skills, ct).ConfigureAwait(false);
 
 		return skills;
 	}
@@ -189,8 +176,7 @@ internal static class MarketplaceClient
 			if (filePath.StartsWith(remotePrefix, StringComparison.Ordinal))
 				relativePath = filePath[remotePrefix.Length..];
 
-			var url = $"{GitHubRawBase}/{repo}/{branch}/{filePath}";
-			var content = await FetchBytesAsync(http, url, ct).ConfigureAwait(false);
+			var content = await FetchRawBytesAsync(http, repo, branch, filePath, ct).ConfigureAwait(false);
 			if (content is null)
 				continue;
 
@@ -232,6 +218,28 @@ internal static class MarketplaceClient
 	}
 
 	/// <summary>
+	/// Fetches a raw repository text file.
+	/// </summary>
+	internal static async Task<string?> FetchRawStringAsync(
+		HttpClient http, string repo, string branch, string path, CancellationToken ct = default)
+	{
+		var normalizedPath = NormalizePath(path);
+		var url = $"{GitHubRawBase}/{repo}/{branch}/{normalizedPath}";
+		return await FetchStringAsync(http, url, ct).ConfigureAwait(false);
+	}
+
+	/// <summary>
+	/// Fetches a raw repository binary file.
+	/// </summary>
+	internal static async Task<byte[]?> FetchRawBytesAsync(
+		HttpClient http, string repo, string branch, string path, CancellationToken ct = default)
+	{
+		var normalizedPath = NormalizePath(path);
+		var url = $"{GitHubRawBase}/{repo}/{branch}/{normalizedPath}";
+		return await FetchBytesAsync(http, url, ct).ConfigureAwait(false);
+	}
+
+	/// <summary>
 	/// Resolves the tree SHA for the given branch by fetching the latest commit.
 	/// </summary>
 	private static async Task<string?> ResolveTreeShaAsync(HttpClient http, string repo, string branch, CancellationToken ct = default)
@@ -251,12 +259,62 @@ internal static class MarketplaceClient
 	private static async Task<(string? Name, string? Description)> ParseSkillFrontmatterAsync(
 		HttpClient http, string repo, string branch, string skillMdPath, CancellationToken ct = default)
 	{
-		var url = $"{GitHubRawBase}/{repo}/{branch}/{skillMdPath}";
-		var content = await FetchStringAsync(http, url, ct).ConfigureAwait(false);
+		var content = await FetchRawStringAsync(http, repo, branch, skillMdPath, ct).ConfigureAwait(false);
 		if (content is null)
 			return (null, null);
 
 		return ParseFrontmatter(content);
+	}
+
+	static async Task AddSkillsFromDirectoryAsync(
+		HttpClient http,
+		string repo,
+		string branch,
+		string pluginName,
+		string basePath,
+		List<(string Path, string Type)> entries,
+		List<SkillInfo> skills,
+		CancellationToken ct)
+	{
+		var prefix = NormalizePath(basePath) + "/";
+
+		// Find SKILL.md files exactly one level below the base path.
+		var skillMdPaths = new List<string>();
+		foreach (var (entryPath, entryType) in entries)
+		{
+			if (entryType != "blob" || !entryPath.StartsWith(prefix, StringComparison.Ordinal))
+				continue;
+
+			var relative = entryPath[prefix.Length..];
+			var slashIndex = relative.IndexOf('/');
+			if (slashIndex > 0 && relative[(slashIndex + 1)..].Equals("SKILL.md", StringComparison.OrdinalIgnoreCase))
+				skillMdPaths.Add(entryPath);
+		}
+
+		foreach (var skillMdPath in skillMdPaths)
+		{
+			var skillDir = skillMdPath[..skillMdPath.LastIndexOf('/')];
+			var skillDirPrefix = skillDir + "/";
+
+			var skillFiles = entries
+				.Where(e => e.Type == "blob" && e.Path.StartsWith(skillDirPrefix, StringComparison.Ordinal))
+				.Select(e => e.Path)
+				.ToList();
+
+			var (name, description) = await ParseSkillFrontmatterAsync(http, repo, branch, skillMdPath, ct).ConfigureAwait(false);
+			var dirName = skillDir.Contains('/')
+				? skillDir[(skillDir.LastIndexOf('/') + 1)..]
+				: skillDir;
+
+			skills.Add(new SkillInfo
+			{
+				Name = name ?? dirName,
+				Description = description,
+				PluginName = pluginName,
+				RemotePath = skillDir,
+				Files = skillFiles
+			});
+		}
 	}
 
 	/// <summary>
@@ -337,7 +395,7 @@ internal static class MarketplaceClient
 	/// Normalizes a repository-relative path by removing <c>./</c> prefixes,
 	/// collapsing double slashes, and trimming trailing slashes.
 	/// </summary>
-	private static string NormalizePath(string path)
+	internal static string NormalizePath(string path)
 	{
 		var normalized = path.Replace('\\', '/');
 		while (normalized.Contains("/./"))

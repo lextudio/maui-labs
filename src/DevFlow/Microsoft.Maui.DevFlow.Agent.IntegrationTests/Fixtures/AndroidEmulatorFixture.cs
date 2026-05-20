@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 
 namespace Microsoft.Maui.DevFlow.Agent.IntegrationTests.Fixtures;
 
@@ -12,7 +13,12 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
     const string PackageId = "com.companyname.mauitodo";
 
     Process? _emulatorProcess;
+    CancellationTokenSource? _appMonitorCts;
+    Task? _appMonitorTask;
     bool _weStartedEmulator;
+    bool _appSeenRunning;
+    string? _lastKnownPid;
+    string? _diagnosticsDir;
     string? _serialNumber;
     int _apiLevel;
     string _sdkRoot = null!;
@@ -25,11 +31,28 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
         _apiLevel = GetTargetApiLevel();
         var avdName = GetTargetAvdName(_apiLevel);
 
-        await EnsureAvdExistsAsync(avdName, _apiLevel);
+        // If the caller pinned a non-emulator (i.e. physical) device that is already
+        // online, skip AVD provisioning entirely so the physical-device path works
+        // even when cmdline-tools / system-images aren't installed locally.
+        var skipAvdSetup = await IsPhysicalDeviceReadyAsync();
+
+        if (!skipAvdSetup)
+            await EnsureAvdExistsAsync(avdName, _apiLevel);
+
         _serialNumber = await EnsureEmulatorRunningAsync(avdName);
 
         await WithBuildLockAsync(async () =>
         {
+            try
+            {
+                // Start with a clean log buffer so crash dumps are focused on this run.
+                await RunProcessAsync(AdbPath(), $"-s {_serialNumber} logcat -c", timeoutSeconds: 10);
+            }
+            catch
+            {
+                // Best-effort only; some emulator states reject logcat clear briefly.
+            }
+
             var projectPath = GetSampleProjectPath();
             await BuildSampleAsync(projectPath, "net10.0-android",
                 $"-p:EmbedAssembliesIntoApk=true -p:MauiDevFlowPort={AgentPort}");
@@ -40,10 +63,43 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
             await AdbCheckedAsync($"forward tcp:{AgentPort} tcp:{AgentPort}", timeoutSeconds: 15);
             await LaunchAppAsync();
         });
+
+        StartAppMonitor();
     }
 
     protected override async Task DisposePlatformAsync()
     {
+        if (_appMonitorCts != null)
+        {
+            try
+            {
+                await _appMonitorCts.CancelAsync();
+            }
+            catch
+            {
+                // No-op
+            }
+        }
+
+        if (_appMonitorTask != null)
+        {
+            try
+            {
+                await _appMonitorTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch
+            {
+                // No-op
+            }
+        }
+
+        _appMonitorTask = null;
+        _appMonitorCts?.Dispose();
+        _appMonitorCts = null;
+
         if (_serialNumber != null)
         {
             try { await AdbAsync($"shell am force-stop {PackageId}", timeoutSeconds: 5); } catch { }
@@ -67,6 +123,306 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
         _emulatorProcess?.Dispose();
     }
 
+    void StartAppMonitor()
+    {
+        _diagnosticsDir = Path.Combine(
+            FindRepoRoot(),
+            "artifacts",
+            "TestResults",
+            "devflow-integration",
+            "android",
+            "diagnostics");
+
+        Directory.CreateDirectory(_diagnosticsDir);
+
+        _appMonitorCts?.Dispose();
+        _appMonitorCts = new CancellationTokenSource();
+        _appMonitorTask = Task.Run(() => MonitorAppProcessAsync(_appMonitorCts.Token));
+
+        Console.WriteLine($"[AndroidFixture] App crash diagnostics enabled. Output: {_diagnosticsDir}");
+    }
+
+    async Task MonitorAppProcessAsync(CancellationToken cancellationToken)
+    {
+        var missingProcessChecks = 0;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await EnsureAgentPortForwardAsync();
+
+                var pid = await TryGetAppPidAsync();
+                if (!string.IsNullOrWhiteSpace(pid))
+                {
+                    _appSeenRunning = true;
+                    _lastKnownPid = pid.Trim();
+                    missingProcessChecks = 0;
+                }
+                else if (_appSeenRunning)
+                {
+                    missingProcessChecks++;
+                    Console.WriteLine(
+                        $"[AndroidFixture] App process probe missed '{PackageId}' " +
+                        $"({missingProcessChecks}/3). Last known pid: {_lastKnownPid ?? "<unknown>"}");
+
+                    if (missingProcessChecks >= 3)
+                    {
+                        _appSeenRunning = false;
+                        missingProcessChecks = 0;
+                        var reason = $"App process '{PackageId}' disappeared after repeated probes. Last known pid: {_lastKnownPid ?? "<unknown>"}";
+                        await CaptureCrashDiagnosticsAsync(reason);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[AndroidFixture] App monitor warning: {ex.GetType().Name}: {ex.Message}");
+            }
+
+            try
+            {
+                await Task.Delay(2000, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    async Task EnsureAgentPortForwardAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_serialNumber))
+            return;
+
+        if (await IsAgentForwardEstablishedAsync())
+            return;
+
+        Console.WriteLine($"[AndroidFixture] Re-establishing missing ADB forward tcp:{AgentPort} tcp:{AgentPort}.");
+
+        // Best-effort remove first so a stale or partial mapping (e.g. left
+        // behind by a previous adb-server crash) doesn't block the re-add.
+        try { await AdbAsync($"forward --remove tcp:{AgentPort}", timeoutSeconds: 5); } catch { }
+
+        await AdbCheckedAsync($"forward tcp:{AgentPort} tcp:{AgentPort}", timeoutSeconds: 15);
+
+        // Verify the mapping actually landed - `adb forward` can return 0 while
+        // the daemon is in an inconsistent state, and silently failing here
+        // amplifies into a slow, opaque retry storm in the agent client.
+        if (!await IsAgentForwardEstablishedAsync())
+        {
+            throw new InvalidOperationException(
+                $"adb forward tcp:{AgentPort} tcp:{AgentPort} reported success on '{_serialNumber}' " +
+                "but the mapping is not visible in `adb forward --list`.");
+        }
+    }
+
+    async Task<bool> IsAgentForwardEstablishedAsync()
+    {
+        // Scope the listing to this device so we get the 2-column
+        // `<local> <remote>` form regardless of how many devices are attached.
+        var (output, _, exitCode) = await AdbAsync("forward --list", timeoutSeconds: 5);
+        if (exitCode != 0)
+            return false;
+
+        var expectedLocal = $"tcp:{AgentPort}";
+        var expectedRemote = $"tcp:{AgentPort}";
+
+        foreach (var rawLine in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var parts = rawLine.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries);
+            // Tolerate both `<serial> <local> <remote>` and `<local> <remote>`
+            // shapes - older `adb` releases emit the 3-column form even with `-s`.
+            string? local;
+            string? remote;
+            if (parts.Length >= 3)
+            {
+                // Defensive: even though `AdbAsync` already scopes the listing to
+                // this device via `-s {_serialNumber}`, older adb releases can emit
+                // 3-column output. Skip rows whose serial does not match so we
+                // never accept a forward belonging to a different attached device.
+                if (!string.Equals(parts[0], _serialNumber, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                local = parts[1];
+                remote = parts[2];
+            }
+            else if (parts.Length == 2)
+            {
+                local = parts[0];
+                remote = parts[1];
+            }
+            else
+            {
+                continue;
+            }
+
+            if (string.Equals(local, expectedLocal, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(remote, expectedRemote, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    async Task<string?> TryGetAppPidAsync(int timeoutSeconds = 5)
+    {
+        if (string.IsNullOrWhiteSpace(_serialNumber))
+            return null;
+
+        var (output, _, exitCode) = await RunProcessAsync(
+            AdbPath(),
+            $"-s {_serialNumber} shell pidof {PackageId}",
+            timeoutSeconds: timeoutSeconds);
+
+        if (exitCode == 0)
+        {
+            var pid = output.Trim();
+            if (!string.IsNullOrWhiteSpace(pid))
+                return pid;
+        }
+
+        return await TryGetAppPidFromPsAsync(timeoutSeconds);
+    }
+
+    async Task<string?> TryGetAppPidFromPsAsync(int timeoutSeconds)
+    {
+        if (string.IsNullOrWhiteSpace(_serialNumber))
+            return null;
+
+        var (output, _, exitCode) = await RunProcessAsync(
+            AdbPath(),
+            $"-s {_serialNumber} shell ps -A",
+            timeoutSeconds: timeoutSeconds);
+
+        if (exitCode != 0)
+            return null;
+
+        foreach (var line in output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            var columns = line.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (columns.Length < 2)
+                continue;
+
+            var processName = columns[^1];
+            if (!processName.Equals(PackageId, StringComparison.Ordinal)
+                && !line.EndsWith($" {PackageId}", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // Standard `ps -A` output is `USER PID PPID VSZ RSS ...`, so the PID is
+            // always column index 1. Avoid scanning for the first integer-parseable
+            // column because some ROMs use numeric UIDs in the USER column.
+            if (int.TryParse(columns[1], out _))
+                return columns[1];
+        }
+
+        return null;
+    }
+
+    async Task CaptureCrashDiagnosticsAsync(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(_serialNumber))
+            return;
+
+        _diagnosticsDir ??= Path.Combine(
+            FindRepoRoot(),
+            "artifacts",
+            "TestResults",
+            "devflow-integration",
+            "android",
+            "diagnostics");
+        Directory.CreateDirectory(_diagnosticsDir);
+
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+        var prefix = Path.Combine(_diagnosticsDir, $"android-app-loss-{stamp}");
+
+        try
+        {
+            var metadata = string.Join(Environment.NewLine, new[]
+            {
+                $"timestamp_utc={DateTime.UtcNow:O}",
+                $"reason={reason}",
+                $"serial={_serialNumber}",
+                $"package={PackageId}",
+            });
+            await File.WriteAllTextAsync($"{prefix}.meta.txt", metadata);
+        }
+        catch
+        {
+            // Continue collecting best-effort diagnostics.
+        }
+
+        try
+        {
+            var (stdout, stderr, _) = await RunProcessAsync(
+                AdbPath(),
+                $"-s {_serialNumber} logcat -d -v threadtime",
+                timeoutSeconds: 30);
+            await File.WriteAllTextAsync($"{prefix}.logcat.txt", $"{stdout}{Environment.NewLine}{Environment.NewLine}STDERR:{Environment.NewLine}{stderr}");
+        }
+        catch (Exception ex)
+        {
+            await File.WriteAllTextAsync($"{prefix}.logcat.error.txt", ex.ToString());
+        }
+
+        try
+        {
+            var (stdout, stderr, _) = await RunProcessAsync(
+                AdbPath(),
+                $"-s {_serialNumber} shell dumpsys activity top",
+                timeoutSeconds: 30);
+            await File.WriteAllTextAsync($"{prefix}.activity-top.txt", $"{stdout}{Environment.NewLine}{Environment.NewLine}STDERR:{Environment.NewLine}{stderr}");
+        }
+        catch (Exception ex)
+        {
+            await File.WriteAllTextAsync($"{prefix}.activity-top.error.txt", ex.ToString());
+        }
+
+        try
+        {
+            var (stdout, stderr, _) = await RunProcessAsync(
+                AdbPath(),
+                $"-s {_serialNumber} forward --list",
+                timeoutSeconds: 10);
+            await File.WriteAllTextAsync($"{prefix}.forward-list.txt", $"{stdout}{Environment.NewLine}{Environment.NewLine}STDERR:{Environment.NewLine}{stderr}");
+        }
+        catch (Exception ex)
+        {
+            await File.WriteAllTextAsync($"{prefix}.forward-list.error.txt", ex.ToString());
+        }
+
+        try
+        {
+            var (stdout, stderr, _) = await RunProcessAsync(
+                AdbPath(),
+                $"-s {_serialNumber} reverse --list",
+                timeoutSeconds: 10);
+            await File.WriteAllTextAsync($"{prefix}.reverse-list.txt", $"{stdout}{Environment.NewLine}{Environment.NewLine}STDERR:{Environment.NewLine}{stderr}");
+        }
+        catch (Exception ex)
+        {
+            await File.WriteAllTextAsync($"{prefix}.reverse-list.error.txt", ex.ToString());
+        }
+
+        try
+        {
+            using var response = await Http.GetAsync("/api/v1/agent/status");
+            var body = await response.Content.ReadAsStringAsync();
+            await File.WriteAllTextAsync($"{prefix}.agent-status.txt", $"HTTP {(int)response.StatusCode}{Environment.NewLine}{body}");
+        }
+        catch (Exception ex)
+        {
+            await File.WriteAllTextAsync($"{prefix}.agent-status.error.txt", ex.ToString());
+        }
+
+        Console.WriteLine($"[AndroidFixture] Captured app-loss diagnostics at '{prefix}.*'");
+    }
+
     static string ResolveSdkRoot()
     {
         var root = Environment.GetEnvironmentVariable("ANDROID_HOME")
@@ -78,6 +434,7 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
             var candidates = new[]
             {
                 Path.Combine(home, "Library", "Android", "sdk"),
+                "/usr/local/lib/android/sdk",
                 Path.Combine(home, "Android", "Sdk"),
                 @"C:\Users\" + Environment.UserName + @"\AppData\Local\Android\Sdk",
             };
@@ -140,6 +497,31 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
         Environment.GetEnvironmentVariable("DEVFLOW_TEST_ANDROID_AVD")
         ?? $"devflow-tests-api{apiLevel}";
 
+    async Task<bool> IsPhysicalDeviceReadyAsync()
+    {
+        var requestedSerial = Environment.GetEnvironmentVariable("DEVFLOW_TEST_ANDROID_SERIAL");
+        if (string.IsNullOrWhiteSpace(requestedSerial))
+            return false;
+
+        if (requestedSerial.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        try
+        {
+            var (stateOutput, _, stateExitCode) = await RunProcessAsync(
+                AdbPath(),
+                $"-s {requestedSerial} get-state",
+                timeoutSeconds: 10);
+
+            return stateExitCode == 0
+                && stateOutput.Trim().Equals("device", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     async Task EnsureAvdExistsAsync(string avdName, int apiLevel)
     {
         var (stdout, _, _) = await RunProcessAsync(AvdManagerPath(), "list avd -c");
@@ -148,7 +530,7 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
         if (existingAvds.Any(a => a.Equals(avdName, StringComparison.OrdinalIgnoreCase)))
             return;
 
-        var systemImage = $"system-images;android-{apiLevel};google_apis;arm64-v8a";
+        var systemImage = $"system-images;android-{apiLevel};google_apis;{GetSystemImageAbi()}";
         await RunProcessCheckedAsync(SdkManagerPath(), $"--install \"{systemImage}\"", timeoutSeconds: 600);
 
         var psi = new ProcessStartInfo(AvdManagerPath(), $"create avd -n {avdName} -k \"{systemImage}\" -d pixel_6 --force")
@@ -189,6 +571,18 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
                 return requestedSerial;
             }
 
+            if (!requestedSerial.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase))
+            {
+                var (stateOutput, _, stateExitCode) = await RunProcessAsync(adb,
+                    $"-s {requestedSerial} get-state", timeoutSeconds: 10);
+
+                if (stateExitCode == 0 && stateOutput.Trim().Equals("device", StringComparison.OrdinalIgnoreCase))
+                {
+                    _weStartedEmulator = false;
+                    return requestedSerial;
+                }
+            }
+
             throw new InvalidOperationException(
                 $"Requested Android serial '{requestedSerial}' is not running AVD '{avdName}'.");
         }
@@ -204,6 +598,17 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
         {
             var (avdOutput, _, exitCode) = await RunProcessAsync(adb, $"-s {serial} emu avd name", timeoutSeconds: 5);
             if (exitCode == 0 && avdOutput.Trim().StartsWith(avdName, StringComparison.OrdinalIgnoreCase))
+            {
+                _weStartedEmulator = false;
+                return serial;
+            }
+        }
+
+        foreach (var serial in runningEmulators)
+        {
+            var (apiOutput, _, exitCode) = await RunProcessAsync(adb,
+                $"-s {serial} shell getprop ro.build.version.sdk", timeoutSeconds: 5);
+            if (exitCode == 0 && int.TryParse(apiOutput.Trim(), out var runningApi) && runningApi == _apiLevel)
             {
                 _weStartedEmulator = false;
                 return serial;
@@ -244,6 +649,9 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
         throw new InvalidOperationException("Could not find a free Android emulator port in the 5580-5680 range.");
     }
 
+    static string GetSystemImageAbi() =>
+        RuntimeInformation.OSArchitecture == Architecture.Arm64 ? "arm64-v8a" : "x86_64";
+
     static bool IsPortAvailable(int port)
     {
         try
@@ -266,8 +674,13 @@ public sealed class AndroidEmulatorFixture : AppFixtureBase
         while (DateTime.UtcNow < deadline)
         {
             if (_emulatorProcess is { HasExited: true })
+            {
+                var stdout = await _emulatorProcess.StandardOutput.ReadToEndAsync();
+                var stderr = await _emulatorProcess.StandardError.ReadToEndAsync();
                 throw new InvalidOperationException(
-                    $"Emulator process exited with code {_emulatorProcess.ExitCode} before becoming ready.");
+                    $"Emulator process exited with code {_emulatorProcess.ExitCode} before becoming ready." +
+                    $"\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}");
+            }
 
             var (output, _, _) = await RunProcessAsync(adb, "devices");
             var emulatorSerials = output

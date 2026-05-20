@@ -53,6 +53,11 @@ dotnet tool install -g Microsoft.Maui.Cli --prerelease
 ### 4. Interact with your running app
 
 ```bash
+# Install DevFlow skills for AI agent integration (auto-detects target directory;
+# defaults to .claude/skills/ — configurable via --target: claude, github, agent, agents, or auto)
+# (configurable via --target: claude, github, agent, agents, or auto)
+maui devflow init
+
 # Visual tree
 maui devflow ui tree
 
@@ -66,6 +71,32 @@ maui devflow ui tap --automationid "MyButton"
 maui devflow mcp
 ```
 
+### Session identity
+
+When `Microsoft.Maui.DevFlow.Agent` is referenced, builds are tagged with a **session identity**
+derived from the project path. This metadata-only identifier helps DevFlow distinguish builds
+from different environments (e.g. worktrees, CI agents, dev machines) without modifying
+the app's `ApplicationId` or bundle identifier.
+
+The session identity is included in:
+- Assembly metadata (`Microsoft.Maui.DevFlowSessionId`) — compile-time injected by the `Microsoft.Maui.DevFlow.Agent` MSBuild targets
+- Broker registration (visible via `maui devflow list`)
+- Agent status endpoint (`/api/v1/agent/status`)
+
+You can override the automatically derived identity:
+
+```bash
+# Set a specific session identity
+dotnet build -p:MauiDevFlowSessionId=mysession
+```
+
+> **Note:** Session IDs are sanitized to lowercase alphanumeric characters only.
+> For example, `My-Session` would become `mysession`. Auto-derived IDs (from the
+> project path) are prefixed with `dw` and truncated to 26 characters. Explicit
+> overrides keep the full sanitized value without prefix or truncation.
+
+The same value can also be supplied via the `MAUI_DEVFLOW_SESSION_ID` environment variable.
+
 ## Features
 
 - **Visual Tree Inspection** — query the full MAUI visual tree via HTTP API or CLI
@@ -75,10 +106,10 @@ maui devflow mcp
 - **Network Monitoring** — intercept and inspect HTTP requests/responses
 - **Performance Profiling** — CPU, memory, GC, and jank detection with markers and spans
 - **Blazor CDP Bridge** — Chrome DevTools Protocol for Blazor WebViews (DOM, JS eval, navigation, input)
-- **MCP Server** — 50+ structured tools for AI agent integration (Claude, etc.)
+- **MCP Server** — 69 structured tools for AI agent integration (Claude, etc.)
 - **Logging** — buffered JSONL file logging with WebView JS console capture
 - **Real-time Streaming** — WebSocket channels for logs, network, sensors, profiler, and UI events
-- **Storage Access** — read/write app preferences and secure storage remotely
+- **Storage Access** — read/write app preferences, secure storage, discover file storage roots, and manage sandboxed app files remotely
 - **Device Introspection** — battery, connectivity, geolocation, display, permissions, and sensor data
 - **Dialog Handling** — detect and dismiss alerts/action sheets programmatically
 - **Batch Operations** — execute command sequences from stdin for scripting
@@ -95,7 +126,7 @@ All DevFlow commands are available under `maui devflow`. Run `maui devflow <comm
 | `webview` | Blazor WebView automation — DOM, JS eval, navigation, input, screenshots |
 | `logs` | Fetch and stream application logs |
 | `network` | Monitor and inspect HTTP requests |
-| `storage` | Read/write app preferences and secure storage |
+| `storage` | Read/write app preferences, secure storage, discover file storage roots, and manage sandboxed app files |
 | `agent` | Discover and inspect connected agents (status, list, wait, diagnose) |
 | `broker` | Manage the agent broker (start, stop, status, log) |
 | `batch` | Execute command sequences from stdin |
@@ -146,7 +177,7 @@ dotnet test src/DevFlow/Microsoft.Maui.DevFlow.Tests/
 
 ### Real app integration tests
 
-The simulator/emulator-driven suite is kept separate from the fast PR test pass and is intended to be run explicitly:
+The simulator/emulator-driven suite is kept separate from the fast PR test pass and is intended to be run explicitly. Set `DEVFLOW_TEST_PLATFORM` to one of: `maccatalyst` (or `mac`/`catalyst`), `ios`, `android`, `windows`. Defaults to `maccatalyst` on macOS, `windows` on Windows.
 
 ```bash
 # Mac Catalyst
@@ -168,4 +199,4 @@ There is also a manual GitHub Actions workflow at `.github/workflows/devflow-int
 
 ## Version
 
-Current version is managed in [`Version.props`](Version.props).
+Current version is managed in [`eng/Versions.props`](../../eng/Versions.props).

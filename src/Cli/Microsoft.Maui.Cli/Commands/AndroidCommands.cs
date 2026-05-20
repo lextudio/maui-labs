@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.CommandLine.Parsing;
 using Microsoft.Maui.Cli.Output;
 using Microsoft.Maui.Cli.Providers.Android;
 using Microsoft.Maui.Cli.Utils;
@@ -15,9 +16,24 @@ namespace Microsoft.Maui.Cli.Commands;
 /// </summary>
 public static partial class AndroidCommands
 {
+	internal static readonly Option<string> SdkOption = new("--sdk")
+	{
+		Description = "Override Android SDK root path for this command (sets ANDROID_HOME for all SDK tools)",
+		Recursive = true
+	};
+
+	internal static readonly Option<string> JdkOption = new("--jdk")
+	{
+		Description = "Override JDK path used by Android SDK tools (sets JAVA_HOME); does not affect 'jdk' subcommands",
+		Recursive = true
+	};
+
 	public static Command Create()
 	{
 		var command = new Command("android", "Android SDK and device management");
+
+		command.Add(SdkOption);
+		command.Add(JdkOption);
 
 		command.Add(CreateInstallCommand());
 		command.Add(CreateJdkCommand());
@@ -25,6 +41,32 @@ public static partial class AndroidCommands
 		command.Add(CreateEmulatorCommand());
 
 		return command;
+	}
+
+	/// <summary>
+	/// Resolves the Android provider, applying any --sdk / --jdk path overrides from the parse result.
+	/// NOTE: This mutates the singleton IAndroidProvider. Safe because the CLI runs a single
+	/// command per process; if this assumption changes, switch to a scoped provider pattern.
+	/// </summary>
+	internal static IAndroidProvider GetAndroidProvider(ParseResult parseResult)
+	{
+		var provider = Program.AndroidProvider;
+		var sdk = parseResult.GetValue(SdkOption);
+		var jdk = parseResult.GetValue(JdkOption);
+
+		if (!string.IsNullOrWhiteSpace(sdk))
+		{
+			if (!Directory.Exists(sdk))
+				throw new DirectoryNotFoundException($"--sdk path does not exist: {sdk}");
+			provider.OverrideSdkPath(sdk);
+		}
+		if (!string.IsNullOrWhiteSpace(jdk))
+		{
+			if (!Directory.Exists(jdk))
+				throw new DirectoryNotFoundException($"--jdk path does not exist: {jdk}");
+			provider.OverrideJdkPath(jdk);
+		}
+		return provider;
 	}
 
 
@@ -196,6 +238,6 @@ public static partial class AndroidCommands
 			return true;
 
 		throw new UnauthorizedAccessException(
-			$"Administrator access is required for {androidProvider.SdkPath}. Run this command from an administrator terminal, or set ANDROID_HOME to a user-writable location.");
+			$"Administrator access is required for {androidProvider.SdkPath}. Run this command from an administrator terminal, or set ANDROID_HOME or ANDROID_SDK_ROOT to a user-writable location.");
 	}
 }

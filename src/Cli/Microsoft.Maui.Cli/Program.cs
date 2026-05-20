@@ -101,6 +101,7 @@ public class Program
 		rootCommand.Add(DoctorCommand.Create());
 		rootCommand.Add(DeviceCommand.Create());
 		rootCommand.Add(ProfileCommand.Create());
+		rootCommand.Add(ProjectCommands.Create());
 		rootCommand.Add(VersionCommand.Create());
 
 		// Platform-specific command groups
@@ -112,6 +113,9 @@ public class Program
 
 		// AI agent skill management (maui ai ...)
 		rootCommand.Add(Commands.AiCommands.Create());
+
+		// Comet Go single-file dev experience (maui go ...)
+		rootCommand.Add(Commands.GoCommands.Create());
 
 		return rootCommand;
 	}

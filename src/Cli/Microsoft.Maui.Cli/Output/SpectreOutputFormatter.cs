@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Maui.Cli.Models;
 using Spectre.Console;
 
@@ -120,6 +121,7 @@ public class SpectreOutputFormatter : IOutputFormatter
 			{
 				DeviceState.Booted => "green",
 				DeviceState.Connected => "green",
+				DeviceState.Booting => "yellow",
 				DeviceState.Shutdown => "grey",
 				DeviceState.Offline => "red",
 				_ => "white"
@@ -255,10 +257,6 @@ public class SpectreOutputFormatter : IOutputFormatter
 	{
 		return await RunTimedStatusAsync(message, (updateStatus, _) => operation(updateStatus));
 	}
-
-	/// <summary>
-	/// Runs an async operation with a spinner indicator.
-	/// </summary>
 	public async Task<T> StatusAsync<T>(string message, Func<Task<T>> operation)
 	{
 		return await RunTimedStatusAsync(message, (_, _) => operation());
@@ -372,10 +370,10 @@ public class SpectreOutputFormatter : IOutputFormatter
 		{
 			var totalMinutes = (int)elapsed.TotalMinutes;
 			var tenths = elapsed.Milliseconds / 100;
-			return $"{totalMinutes}:{elapsed.Seconds:00}.{tenths:0}s";
+			return FormattableString.Invariant($"{totalMinutes}:{elapsed.Seconds:00}.{tenths}s");
 		}
 
-		return $"{elapsed.TotalSeconds:0.0}s";
+		return elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture) + "s";
 	}
 
 	internal static string FormatTimedStatusMarkup(string statusMarkup, TimeSpan elapsed)

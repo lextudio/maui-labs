@@ -79,13 +79,14 @@ When adding a new third-party dependency that gets bundled into a NuGet package,
 - `dotnet-tools` — internal tooling
 - `dotnet-eng` — engineering infrastructure
 - `dotnet10` — version-specific feed
+- `dotnet11` — version-specific feed
 
 **Do NOT add `nuget.org` as a direct source.** All public packages are available through the dnceng proxy feeds.
 
 ## Publishing Flow
 
 1. **GitHub Actions CI**: Build + test on PR (no publishing)
-2. **Azure DevOps official build**: Build → Sign (MicroBuild) → Validate → Publish to internal feeds via DARC
-3. **NuGet.org release**: Separate pipeline (`eng/pipelines/release-publish-nuget.yml`) with `networkIsolationPolicy: Permissive`
+2. **Azure DevOps official build** (`eng/pipelines/devflow-official.yml`): Build → Sign (MicroBuild/ESRP) → Validate → Publish to internal feeds via DARC
+3. **NuGet.org release**: Conditional publish stages in `eng/pipelines/devflow-official.yml`, gated per-product by boolean parameters (e.g., `publishDevFlowNuget`). Uses `1ES.PublishNuget@1` with `networkIsolationPolicy: Permissive`.
 
-The official build pipeline (`eng/pipelines/devflow-official.yml`) has `enableMicrobuild: true` which enforces CFS network isolation — this is why NuGet.org publishing must happen in a separate pipeline.
+See `.github/copilot-instructions.md` § "CI/CD — New Product Checklist" for templates when adding a new product.

@@ -43,6 +43,30 @@ public class DeviceTests : IntegrationTestBase
     }
 
     [Fact]
+    public async Task DeviceInfo_HasManufacturer()
+    {
+        var json = await Client.GetPlatformInfoAsync("info");
+        var text = json.ToString();
+
+        if (Platform == "android")
+        {
+            Assert.True(
+                text.Contains("manufacturer", StringComparison.OrdinalIgnoreCase),
+                $"Expected manufacturer field in device info, got: {text}");
+        }
+        else if (Platform == "ios" || Platform == "maccatalyst")
+        {
+            Assert.Contains("Apple", text, StringComparison.OrdinalIgnoreCase);
+        }
+        else
+        {
+            Assert.True(
+                text.Contains("manufacturer", StringComparison.OrdinalIgnoreCase),
+                $"Expected manufacturer field in device info, got: {text}");
+        }
+    }
+
+    [Fact]
     public async Task Display_ReturnsMetrics()
     {
         var json = await Client.GetPlatformInfoAsync("display");
@@ -106,5 +130,20 @@ public class DeviceTests : IntegrationTestBase
         {
             Output.WriteLine($"Geolocation not available: {ex.Message}");
         }
+    }
+
+    [Fact]
+    public async Task Jobs_ReturnsSupportedFlagAndJobArray()
+    {
+        var json = await Client.GetJobsAsync();
+
+        Assert.Equal(JsonValueKind.Object, json.ValueKind);
+        Assert.True(json.TryGetProperty("supported", out var supported));
+        Assert.True(supported.ValueKind is JsonValueKind.True or JsonValueKind.False);
+        Assert.True(json.TryGetProperty("jobs", out var jobs));
+        Assert.Equal(JsonValueKind.Array, jobs.ValueKind);
+
+        if (Platform is "android" or "ios" or "maccatalyst")
+            Assert.True(supported.GetBoolean());
     }
 }

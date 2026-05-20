@@ -3,9 +3,11 @@
 
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Microsoft.Maui.Cli.Commands;
 using Microsoft.Maui.Cli.Models;
 using Microsoft.Maui.Cli.Providers.Android;
 using Microsoft.Maui.Cli.Providers.Apple;
+using Microsoft.Maui.Cli.Services;
 
 namespace Microsoft.Maui.Cli.Output;
 
@@ -42,7 +44,21 @@ namespace Microsoft.Maui.Cli.Output;
 [JsonSerializable(typeof(List<RuntimeInfo>))]
 [JsonSerializable(typeof(SimulatorInfo))]
 [JsonSerializable(typeof(List<SimulatorInfo>))]
+[JsonSerializable(typeof(AppleInstallResult))]
 [JsonSerializable(typeof(StatusMessageResult))]
 [JsonSerializable(typeof(VersionResult))]
 [JsonSerializable(typeof(CliCommandResult))]
+[JsonSerializable(typeof(MauiPackageFeedVersion))]
+[JsonSerializable(typeof(List<MauiPackageFeedVersion>))]
+[JsonSerializable(typeof(MauiProjectPackageVersion))]
+[JsonSerializable(typeof(List<MauiProjectPackageVersion>))]
+[JsonSerializable(typeof(MauiProjectVersionChange))]
+[JsonSerializable(typeof(List<MauiProjectVersionChange>))]
+[JsonSerializable(typeof(MauiProjectVersionCommandResult))]
+[JsonSerializable(typeof(MauiProjectVersionInfo))]
+[JsonSerializable(typeof(MauiVersionListResult))]
+[JsonSerializable(typeof(SimulatorCreateResult))]
+[JsonSerializable(typeof(SimulatorEraseResult))]
+[JsonSerializable(typeof(SimulatorAppResult))]
+[JsonSerializable(typeof(SimulatorAppContainerResult))]
 internal sealed partial class MauiCliJsonContext : JsonSerializerContext;

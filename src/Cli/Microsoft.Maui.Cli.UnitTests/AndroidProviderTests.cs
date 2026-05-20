@@ -105,6 +105,7 @@ public class SdkManagerTests : IDisposable
 	}
 }
 
+[Collection("AndroidEnvironment")]
 public class AndroidProviderTests
 {
 	sealed class StubJdkManager : IJdkManager
@@ -122,13 +123,13 @@ public class AndroidProviderTests
 				Message = "JDK 17"
 			});
 
-		public Task InstallAsync(int version = 17, string? installPath = null, CancellationToken cancellationToken = default) =>
+		public Task InstallAsync(int? version = null, string? installPath = null, CancellationToken cancellationToken = default) =>
 			Task.CompletedTask;
 
-		public Task InstallAsync(int version, string? installPath, Action<double, string>? onProgress, CancellationToken cancellationToken = default) =>
+		public Task InstallAsync(int? version, string? installPath, Action<double, string>? onProgress, CancellationToken cancellationToken = default) =>
 			Task.CompletedTask;
 
-		public IEnumerable<int> GetAvailableVersions() => [17, 21];
+		public IEnumerable<int> GetAvailableVersions() => JdkManager.SupportedInstallVersions;
 	}
 
 	[Fact]
@@ -139,11 +140,15 @@ public class AndroidProviderTests
 
 		var originalAndroidHome = Environment.GetEnvironmentVariable("ANDROID_HOME");
 		var originalAndroidSdkRoot = Environment.GetEnvironmentVariable("ANDROID_SDK_ROOT");
+		var originalPath = Environment.GetEnvironmentVariable("PATH");
 
 		try
 		{
 			Environment.SetEnvironmentVariable("ANDROID_HOME", tempSdk);
 			Environment.SetEnvironmentVariable("ANDROID_SDK_ROOT", null);
+			// Clear PATH so the fallback SdkManager discovery doesn't find a
+			// system-wide sdkmanager (e.g. from a CI runner's Android SDK).
+			Environment.SetEnvironmentVariable("PATH", "");
 
 			using var provider = new AndroidProvider(new StubJdkManager());
 			var checks = await provider.CheckHealthAsync();
@@ -158,6 +163,7 @@ public class AndroidProviderTests
 		{
 			Environment.SetEnvironmentVariable("ANDROID_HOME", originalAndroidHome);
 			Environment.SetEnvironmentVariable("ANDROID_SDK_ROOT", originalAndroidSdkRoot);
+			Environment.SetEnvironmentVariable("PATH", originalPath);
 
 			if (Directory.Exists(tempSdk))
 				Directory.Delete(tempSdk, recursive: true);
@@ -447,5 +453,98 @@ public class AndroidProviderTests
 			}
 		}
 		return 0;
+	}
+}
+
+public class AndroidProviderOverrideTests : IDisposable
+{
+	readonly string _originalSdkDir;
+	readonly string _overrideSdkDir;
+
+	sealed class StubJdkManager : IJdkManager
+	{
+		public string? DetectedJdkPath { get; init; } = Path.GetTempPath();
+		public int? DetectedJdkVersion { get; init; } = 17;
+		public bool IsInstalled => true;
+		public Task<HealthCheck> CheckHealthAsync(CancellationToken ct = default) =>
+			Task.FromResult(new HealthCheck { Category = "android", Name = "JDK", Status = CheckStatus.Ok });
+		public Task InstallAsync(int? version = null, string? installPath = null, CancellationToken ct = default) =>
+			Task.CompletedTask;
+		public Task InstallAsync(int? version, string? installPath, Action<double, string>? onProgress, CancellationToken ct = default) =>
+			Task.CompletedTask;
+		public IEnumerable<int> GetAvailableVersions() => JdkManager.SupportedInstallVersions;
+	}
+
+	public AndroidProviderOverrideTests()
+	{
+		_originalSdkDir = Path.Combine(Path.GetTempPath(), "maui-test-orig-" + Path.GetRandomFileName());
+		_overrideSdkDir = Path.Combine(Path.GetTempPath(), "maui-test-ovr-" + Path.GetRandomFileName());
+		Directory.CreateDirectory(_originalSdkDir);
+		Directory.CreateDirectory(_overrideSdkDir);
+
+		// Create platform-tools/adb in the override SDK so Adb resolves successfully there
+		var platformToolsDir = Path.Combine(_overrideSdkDir, "platform-tools");
+		Directory.CreateDirectory(platformToolsDir);
+		var adbName = OperatingSystem.IsWindows() ? "adb.exe" : "adb";
+		File.WriteAllText(Path.Combine(platformToolsDir, adbName), "stub");
+	}
+
+	public void Dispose()
+	{
+		if (Directory.Exists(_originalSdkDir))
+			Directory.Delete(_originalSdkDir, recursive: true);
+		if (Directory.Exists(_overrideSdkDir))
+			Directory.Delete(_overrideSdkDir, recursive: true);
+	}
+
+	[Fact]
+	public void OverrideSdkPath_UpdatesSdkPathProperty()
+	{
+		var provider = new AndroidProvider(new StubJdkManager());
+
+		provider.OverrideSdkPath(_overrideSdkDir);
+
+		Assert.Equal(_overrideSdkDir, provider.SdkPath);
+	}
+
+	[Fact]
+	public void OverrideSdkPath_RebuildsMakesAdbAvailable()
+	{
+		// Construct with the empty original SDK dir (no platform-tools/adb)
+		Environment.SetEnvironmentVariable("ANDROID_HOME", _originalSdkDir);
+		try
+		{
+			var provider = new AndroidProvider(new StubJdkManager());
+
+			// Override to SDK dir that has platform-tools/adb
+			provider.OverrideSdkPath(_overrideSdkDir);
+
+			// After override, the provider should report the new SDK path and be installed
+			Assert.Equal(_overrideSdkDir, provider.SdkPath);
+			Assert.True(provider.IsSdkInstalled);
+		}
+		finally
+		{
+			Environment.SetEnvironmentVariable("ANDROID_HOME", null);
+		}
+	}
+
+	[Fact]
+	public void OverrideJdkPath_UpdatesJdkPathProperty()
+	{
+		var tempJdk = Path.Combine(Path.GetTempPath(), "maui-test-jdk-" + Path.GetRandomFileName());
+		Directory.CreateDirectory(tempJdk);
+		try
+		{
+			var provider = new AndroidProvider(new StubJdkManager());
+			provider.OverrideJdkPath(tempJdk);
+
+			Assert.Equal(tempJdk, provider.JdkPath);
+		}
+		finally
+		{
+			if (Directory.Exists(tempJdk))
+				Directory.Delete(tempJdk, recursive: true);
+		}
 	}
 }

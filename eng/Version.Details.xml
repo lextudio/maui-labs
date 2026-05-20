@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Dependencies>
   <ProductDependencies>
-    <!-- dotnet/android-tools: Android SDK tooling (SdkManager, AdbRunner, JdkInstaller, etc.) -->
-    <Dependency Name="Xamarin.Android.Tools.AndroidSdk" Version="1.0.143-preview.8">
-      <Uri>https://github.com/dotnet/android-tools</Uri>
-      <Sha>ec5040ad5158f240a67d887133dd56cfa5eb74ba</Sha>
+    <!-- dotnet/android-tools: Android SDK tooling (SdkManager, AdbRunner, JdkInstaller, etc.)
+         The package is built by dotnet/android which includes android-tools as a submodule. -->
+    <Dependency Name="Xamarin.Android.Tools.AndroidSdk" Version="1.0.155-preview.137">
+      <Uri>https://github.com/dotnet/android</Uri>
+      <Sha>e8fb4bc8f779fd0d27c5c0ed04637a5dd25c083b</Sha>
     </Dependency>
     <!-- dotnet/maui -->
     <Dependency Name="Microsoft.Maui.Controls" Version="10.0.41">
@@ -32,15 +33,15 @@
       <Uri>https://github.com/dotnet/dotnet</Uri>
       <Sha>73b3b5ac0e4a5658c7a0555b67d91a22ad39de4b</Sha>
     </Dependency>
-    <Dependency Name="Xamarin.Apple.Tools.MaciOS" Version="1.0.0-preview.1.26201.1">
+    <Dependency Name="Xamarin.Apple.Tools.MaciOS" Version="1.0.0-preview.1.26255.1">
       <Uri>https://github.com/dotnet/macios-devtools</Uri>
-      <Sha>14efcb9735fab369066fa3c99130d076aa0dfdc9</Sha>
+      <Sha>87eb6abbc8d317b0b4c530b084ee3794b7f04c95</Sha>
     </Dependency>
   </ProductDependencies>
   <ToolsetDependencies>
-    <Dependency Name="Microsoft.DotNet.Arcade.Sdk" Version="10.0.0-beta.26203.109">
+    <Dependency Name="Microsoft.DotNet.Arcade.Sdk" Version="10.0.0-beta.26257.101">
       <Uri>https://github.com/dotnet/dotnet</Uri>
-      <Sha>6165bd7ac3499cb712ca489f2ce44bb665174a1a</Sha>
+      <Sha>dc6e7082d768b79e69b16e8fd146a509dfa6130d</Sha>
     </Dependency>
   </ToolsetDependencies>
 </Dependencies>

@@ -6,6 +6,7 @@ using System.CommandLine.Parsing;
 using System.Text.Json.Nodes;
 using Microsoft.Maui.Cli.Ai;
 using Microsoft.Maui.Cli.Ai.Models;
+using Microsoft.Maui.Cli.DevFlow.Skills;
 using Microsoft.Maui.Cli.Output;
 using Spectre.Console;
 
@@ -30,7 +31,7 @@ public static partial class AiCommands
 			AllowMultipleArgumentsPerToken = true
 		};
 
-		var command = new Command("init", "Initialize AI agent skills for MAUI development")
+		var command = new Command("init", "Bootstrap AI-powered MAUI development assets")
 		{
 			CreateRepoOption(),
 			CreateBranchOption(),
@@ -57,22 +58,17 @@ public static partial class AiCommands
 			{
 				using var http = CreateGitHubHttpClient();
 
-				// Step 1: Fetch marketplace and discover skills
+				// Step 1: Fetch marketplace and discover repository AI assets.
 				List<SkillInfo> allSkills;
+				List<RepositoryAssetInfo> allAgentAssets;
 				if (!useJson && formatter is SpectreOutputFormatter spectre)
 				{
-					allSkills = await spectre.StatusAsync("Fetching marketplace...", async () =>
-						await FetchAllSkillsAsync(http, repo, branch, ct));
+					(allSkills, allAgentAssets) = await spectre.StatusAsync("Fetching AI assets...", async () =>
+						await FetchBootstrapAssetsAsync(http, repo, branch, ct));
 				}
 				else
 				{
-					allSkills = await FetchAllSkillsAsync(http, repo, branch, ct);
-				}
-
-				if (allSkills.Count == 0)
-				{
-					formatter.WriteWarning("No skills found in the marketplace.");
-					return 1;
+					(allSkills, allAgentAssets) = await FetchBootstrapAssetsAsync(http, repo, branch, ct);
 				}
 
 				// Step 2: Detect agent environments
@@ -125,90 +121,87 @@ public static partial class AiCommands
 				formatter.WriteInfo($"Detected {environments.Count} {envWord}: {string.Join(", ", environments.Select(e => e.Kind))}");
 
 				// Step 3: Select skills
-				List<SkillInfo> selectedSkills;
-				if (skillFilter is { Length: > 0 })
-				{
-					selectedSkills = allSkills
-						.Where(s => skillFilter.Any(f =>
-							string.Equals(f, s.Name, StringComparison.OrdinalIgnoreCase)))
-						.ToList();
+				var filterSpecified = skillFilter is { Length: > 0 };
+				var selectedSkills = SelectSkills(allSkills, skillFilter, useJson, isCi, formatter);
+				var includeDevFlowSkills = filterSpecified
+					? skillFilter!.Any(IsDevFlowManagedSkillName)
+					: selectedSkills.Any(s => IsDevFlowManagedSkillName(s.Name));
 
-					if (selectedSkills.Count == 0)
+				if (!filterSpecified && !useJson && !isCi && allSkills.Count > 0 && selectedSkills.Count == 0)
+				{
+					formatter.WriteInfo("No skills selected.");
+					return 0;
+				}
+
+				if (selectedSkills.Count == 0 && !includeDevFlowSkills)
+				{
+					if (filterSpecified)
 					{
-						formatter.WriteError(new Exception($"No skills matched filter: {string.Join(", ", skillFilter)}"));
+						formatter.WriteError(new Exception($"No skills matched filter: {string.Join(", ", skillFilter!)}"));
 						return 1;
 					}
-				}
-				else if (useJson || isCi)
-				{
-					selectedSkills = allSkills;
-				}
-				else
-				{
-					var prompt = new MultiSelectionPrompt<string>()
-						.Title("Select skills to install:")
-						.PageSize(15)
-						.InstructionsText("[grey](Press [blue]<space>[/] to toggle, [green]<enter>[/] to accept)[/]");
 
-					foreach (var skill in allSkills)
-					{
-						var label = string.IsNullOrEmpty(skill.Description)
-							? skill.Name
-							: $"{skill.Name} - {skill.Description}";
-						prompt.AddChoice(label);
-					}
-
-					// Pre-select all by default
-					foreach (var skill in allSkills)
-					{
-						var label = string.IsNullOrEmpty(skill.Description)
-							? skill.Name
-							: $"{skill.Name} - {skill.Description}";
-						prompt.Select(label);
-					}
-
-					var selected = AnsiConsole.Prompt(prompt);
-					selectedSkills = allSkills
-						.Where(s =>
-						{
-							var label = string.IsNullOrEmpty(s.Description)
-								? s.Name
-								: $"{s.Name} - {s.Description}";
-							return selected.Contains(label);
-						})
-						.ToList();
-
-					if (selectedSkills.Count == 0)
+					if (allAgentAssets.Count == 0)
 					{
 						formatter.WriteInfo("No skills selected.");
 						return 0;
 					}
 				}
 
+				var selectedMarketplaceSkills = selectedSkills
+					.Where(s => !IsDevFlowManagedSkillName(s.Name))
+					.ToList();
+				List<RepositoryAssetInfo> selectedAgentAssets = filterSpecified ? [] : allAgentAssets;
+				List<AiDevFlowBootstrapTarget> devFlowTargets = includeDevFlowSkills
+					? GetDevFlowBootstrapTargets(environments)
+					: [];
+				var skillInstallEnvironments = GetUniqueSkillInstallEnvironments(environments);
+
 				// Step 4: Dry run check (before confirmation prompt)
 				if (dryRun)
 				{
-					formatter.WriteInfo("[Dry run] Would install the following skills:");
+					var dryRunRows = new List<(string Item, string Type, string Target, string Path)>();
+
+					foreach (var target in devFlowTargets)
+						dryRunRows.Add(("recommended DevFlow skills", "DevFlow", target.DisplayName, target.SkillsDirectory));
+
+					foreach (var skill in selectedMarketplaceSkills)
+					{
+						foreach (var env in skillInstallEnvironments)
+							dryRunRows.Add((skill.Name, "Skill", env.Kind.ToString(), Path.Combine(env.SkillsDirectory, skill.Name)));
+					}
+
+					foreach (var asset in selectedAgentAssets)
+						dryRunRows.Add((asset.Name, asset.Category, "GitHub Copilot", Path.Combine(workingDir, asset.DestinationRoot)));
+
+					formatter.WriteInfo("[Dry run] Would install the following AI assets:");
 					formatter.WriteTable(
-						from s in selectedSkills
-						from e in environments
-						select new { s.Name, Env = e.Kind.ToString(), Path = Path.Combine(e.SkillsDirectory, s.Name) },
-						("Skill", x => x.Name),
-						("Environment", x => x.Env),
-						("Path", x => x.Path));
+						dryRunRows,
+						("Item", r => r.Item),
+						("Type", r => r.Type),
+						("Target", r => r.Target),
+						("Path", r => r.Path));
 					return 0;
 				}
 
 				// Step 5: Confirmation
 				if (!force && !isCi && !useJson)
 				{
-					var skillWord = selectedSkills.Count == 1 ? "skill" : "skills";
-					formatter.WriteInfo($"Will install {selectedSkills.Count} {skillWord} to {environments.Count} {envWord}:");
+					var totalItems = selectedMarketplaceSkills.Count + selectedAgentAssets.Count + (includeDevFlowSkills ? 1 : 0);
+					var itemWord = totalItems == 1 ? "AI asset group" : "AI asset groups";
+					formatter.WriteInfo($"Will install {totalItems} {itemWord} to {environments.Count} {envWord}:");
+
+					var rows = new List<(string Item, string Type, string Source)>();
+					if (includeDevFlowSkills)
+						rows.Add(("recommended DevFlow skills", "DevFlow", "Microsoft.Maui.Cli bundle"));
+					rows.AddRange(selectedMarketplaceSkills.Select(s => (s.Name, "Skill", s.PluginName)));
+					rows.AddRange(selectedAgentAssets.Select(a => (a.Name, a.Category, a.RemotePath)));
+
 					formatter.WriteTable(
-						selectedSkills,
-						("Skill", s => s.Name),
-						("Plugin", s => s.PluginName),
-						("Files", s => s.Files.Count.ToString()));
+						rows,
+						("Item", r => r.Item),
+						("Type", r => r.Type),
+						("Source", r => r.Source));
 
 					if (!AnsiConsole.Confirm("Proceed with installation?", defaultValue: true))
 					{
@@ -217,17 +210,36 @@ public static partial class AiCommands
 					}
 				}
 
-				// Step 6: Install skills
-				var results = new List<(string Skill, string Env, int Files, string Path)>();
-
-				foreach (var env in environments)
+				// Step 6: Install DevFlow skills through the DevFlow-owned bundled installer.
+				var devFlowResults = new List<(string Skill, string Target, string Action, string Path)>();
+				foreach (var target in devFlowTargets)
 				{
-					foreach (var skill in selectedSkills)
+					var result = await DevFlowSkillManager.InstallRecommendedAsync(
+						target.Scope,
+						target.Target,
+						target.CustomPath,
+						force,
+						allowDowngrade: false,
+						confirm: null,
+						ct);
+
+					foreach (var row in GetDevFlowResultRows(result, target))
+					{
+						devFlowResults.Add(row);
+						formatter.WriteSuccess($"DevFlow {row.Action} {row.Skill} → {row.Target}");
+					}
+				}
+
+				// Step 7: Install marketplace/repository skills not owned by DevFlow.
+				var skillResults = new List<(string Skill, string Env, int Files, string Path)>();
+				foreach (var env in skillInstallEnvironments)
+				{
+					foreach (var skill in selectedMarketplaceSkills)
 					{
 						var (filesInstalled, installPath) = await SkillInstaller.InstallSkillAsync(
 							http, skill, env, workingDir, repo, branch, force, ct);
 
-						results.Add((skill.Name, env.Kind.ToString(), filesInstalled, installPath));
+						skillResults.Add((skill.Name, env.Kind.ToString(), filesInstalled, installPath));
 
 						if (filesInstalled == -1)
 						{
@@ -244,7 +256,21 @@ public static partial class AiCommands
 					}
 				}
 
-				// Step 6: Configure MCP
+				// Step 8: Install Copilot agent definitions.
+				var assetResults = new List<(string Asset, string Type, int Files, string Path)>();
+				foreach (var asset in selectedAgentAssets)
+				{
+					var (filesInstalled, installPath) = await RepositoryAssetInstaller.InstallAssetAsync(
+						http, asset, workingDir, repo, branch, force, ct);
+
+					assetResults.Add((asset.Name, asset.Category, filesInstalled, installPath));
+					if (filesInstalled > 0)
+						formatter.WriteSuccess($"Installed {asset.Name} → {asset.Category} ({filesInstalled} files)");
+					else
+						formatter.WriteInfo($"Skipped {asset.Name} → {asset.Category} (already installed)");
+				}
+
+				// Step 9: Configure MCP
 				if (!noMcp)
 				{
 					foreach (var env in environments)
@@ -260,12 +286,18 @@ public static partial class AiCommands
 						formatter.WriteInfo("Restart your editor to load the MCP server configuration.");
 				}
 
-				// Step 7: Summary
+				// Step 10: Summary
+				var summaryRows = new List<(string Item, string Type, string Target, string Result, string Path)>();
+				summaryRows.AddRange(devFlowResults.Select(r => (r.Skill, "DevFlow", r.Target, r.Action, r.Path)));
+				summaryRows.AddRange(skillResults.Select(r => (r.Skill, "Skill", r.Env, FormatFileResult(r.Files), r.Path)));
+				summaryRows.AddRange(assetResults.Select(r => (r.Asset, r.Type, "GitHub Copilot", FormatFileResult(r.Files), r.Path)));
+
 				formatter.WriteTable(
-					results,
-					("Skill", r => r.Skill),
-					("Environment", r => r.Env),
-					("Files", r => r.Files > 0 ? r.Files.ToString() : "skipped"),
+					summaryRows,
+					("Item", r => r.Item),
+					("Type", r => r.Type),
+					("Target", r => r.Target),
+					("Result", r => r.Result),
 					("Path", r => r.Path));
 
 				if (useJson)
@@ -273,10 +305,24 @@ public static partial class AiCommands
 					var jsonResult = new JsonObject
 					{
 						["status"] = "success",
-						["skills"] = new JsonArray(results.Select(r => (JsonNode)new JsonObject
+						["devFlowSkills"] = new JsonArray(devFlowResults.Select(r => (JsonNode)new JsonObject
+						{
+							["skill"] = r.Skill,
+							["target"] = r.Target,
+							["action"] = r.Action,
+							["path"] = r.Path
+						}).ToArray()),
+						["skills"] = new JsonArray(skillResults.Select(r => (JsonNode)new JsonObject
 						{
 							["skill"] = r.Skill,
 							["environment"] = r.Env,
+							["files"] = r.Files,
+							["path"] = r.Path
+						}).ToArray()),
+						["assets"] = new JsonArray(assetResults.Select(r => (JsonNode)new JsonObject
+						{
+							["asset"] = r.Asset,
+							["type"] = r.Type,
 							["files"] = r.Files,
 							["path"] = r.Path
 						}).ToArray())
@@ -287,9 +333,10 @@ public static partial class AiCommands
 				{
 					AnsiConsole.WriteLine();
 					AnsiConsole.MarkupLine("[dim]Next steps:[/]");
-					AnsiConsole.MarkupLine("[dim]  Open your AI agent and try asking about .NET MAUI development.[/]");
-					AnsiConsole.MarkupLine("[dim]  Run [green]maui ai status[/] to check installed skills.[/]");
-					AnsiConsole.MarkupLine("[dim]  Run [green]maui ai update[/] to sync skills later.[/]");
+					AnsiConsole.MarkupLine("[dim]  Open your AI agent and ask it to use the installed .NET MAUI skills.[/]");
+					AnsiConsole.MarkupLine("[dim]  For DevFlow, start with [green]maui-devflow-onboard[/] to add runtime automation to this project.[/]");
+					AnsiConsole.MarkupLine("[dim]  Run [green]maui ai status[/] to check installed marketplace skills.[/]");
+					AnsiConsole.MarkupLine("[dim]  Run [green]maui devflow skills check[/] to check bundled DevFlow skills.[/]");
 				}
 
 				return 0;
@@ -308,30 +355,182 @@ public static partial class AiCommands
 		return command;
 	}
 
-	/// <summary>
-	/// Fetches all skills from every plugin listed in the marketplace manifest.
-	/// </summary>
-	static async Task<List<SkillInfo>> FetchAllSkillsAsync(HttpClient http, string repo, string branch, CancellationToken ct = default)
+	static async Task<(List<SkillInfo> Skills, List<RepositoryAssetInfo> AgentAssets)> FetchBootstrapAssetsAsync(
+		HttpClient http, string repo, string branch, CancellationToken ct = default)
 	{
-		var marketplace = await MarketplaceClient.GetMarketplaceAsync(http, repo, branch, ct);
-		if (marketplace is null)
-			return [];
-
-		var allSkills = new List<SkillInfo>();
-
-		// Fetch the repository tree once and share it across all plugins.
 		var treeEntries = await MarketplaceClient.FetchTreeEntriesAsync(http, repo, branch, ct);
+		var skills = await FetchAllSkillsAsync(http, repo, branch, treeEntries, ct);
+		var agentAssets = await RepositoryAssetInstaller.GetCopilotAgentsAsync(http, repo, branch, treeEntries, ct);
+		return (skills, agentAssets);
+	}
 
-		foreach (var pluginEntry in marketplace.Plugins)
+	static List<SkillInfo> SelectSkills(
+		List<SkillInfo> allSkills,
+		string[]? skillFilter,
+		bool useJson,
+		bool isCi,
+		IOutputFormatter formatter)
+	{
+		if (skillFilter is { Length: > 0 })
 		{
-			var plugin = await MarketplaceClient.GetPluginAsync(http, repo, branch, pluginEntry.Source, ct);
-			if (plugin is null)
-				continue;
-
-			var skills = await MarketplaceClient.GetSkillsAsync(http, repo, branch, plugin, pluginEntry.Source, treeEntries, ct);
-			allSkills.AddRange(skills);
+			return allSkills
+				.Where(s => skillFilter.Any(f =>
+					string.Equals(f, s.Name, StringComparison.OrdinalIgnoreCase)))
+				.ToList();
 		}
 
-		return allSkills;
+		if (useJson || isCi || allSkills.Count == 0)
+			return allSkills;
+
+		var prompt = new MultiSelectionPrompt<string>()
+			.Title("Select skills to install:")
+			.PageSize(15)
+			.InstructionsText("[grey](Press [blue]<space>[/] to toggle, [green]<enter>[/] to accept)[/]");
+
+		foreach (var skill in allSkills)
+		{
+			var label = GetSkillPromptLabel(skill);
+			prompt.AddChoice(label);
+			prompt.Select(label);
+		}
+
+		var selected = AnsiConsole.Prompt(prompt);
+		return allSkills
+			.Where(s => selected.Contains(GetSkillPromptLabel(s)))
+			.ToList();
+	}
+
+	static string GetSkillPromptLabel(SkillInfo skill) =>
+		string.IsNullOrEmpty(skill.Description)
+			? skill.Name
+			: $"{skill.Name} - {skill.Description}";
+
+	internal static List<AiDevFlowBootstrapTarget> GetDevFlowBootstrapTargets(IEnumerable<DetectedEnvironment> environments)
+	{
+		var targets = new List<AiDevFlowBootstrapTarget>();
+		var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+		foreach (var env in environments)
+		{
+			var target = env.Kind switch
+			{
+				AgentEnvironmentKind.Claude => new AiDevFlowBootstrapTarget("project", "claude", null, env.Kind.ToString(), env.SkillsDirectory),
+				AgentEnvironmentKind.VsCode => new AiDevFlowBootstrapTarget("project", "github", null, env.Kind.ToString(), env.SkillsDirectory),
+				AgentEnvironmentKind.CopilotCli => new AiDevFlowBootstrapTarget("project", "github", null, env.Kind.ToString(), env.SkillsDirectory),
+				AgentEnvironmentKind.OpenCode => new AiDevFlowBootstrapTarget("project", "auto", Path.Combine(".opencode", "skills"), env.Kind.ToString(), env.SkillsDirectory),
+				_ => null
+			};
+
+			if (target is null)
+				continue;
+
+			var key = $"{target.Scope}|{target.Target}|{target.CustomPath}";
+			if (seen.Add(key))
+				targets.Add(target);
+		}
+
+		return targets;
+	}
+
+	static List<DetectedEnvironment> GetUniqueSkillInstallEnvironments(IEnumerable<DetectedEnvironment> environments)
+	{
+		var unique = new List<DetectedEnvironment>();
+		var seen = new HashSet<string>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+		foreach (var env in environments)
+		{
+			var path = Path.GetFullPath(env.SkillsDirectory);
+			if (seen.Add(path))
+				unique.Add(env);
+		}
+
+		return unique;
+	}
+
+	static IEnumerable<(string Skill, string Target, string Action, string Path)> GetDevFlowResultRows(
+		JsonObject result,
+		AiDevFlowBootstrapTarget target)
+	{
+		if (result["results"] is not JsonArray results)
+			yield break;
+
+		foreach (var item in results.OfType<JsonObject>())
+		{
+			yield return (
+				GetJsonString(item, "skillId") ?? "unknown",
+				target.DisplayName,
+				GetJsonString(item, "action") ?? "checked",
+				GetJsonString(item, "path") ?? target.SkillsDirectory);
+		}
+	}
+
+	static string? GetJsonString(JsonObject item, string propertyName) =>
+		item[propertyName]?.GetValue<string>();
+
+	static string FormatFileResult(int files) =>
+		files switch
+		{
+			-1 => "invalid",
+			-2 => "failed",
+			0 => "skipped",
+			_ => files.ToString()
+		};
+
+	/// <summary>
+	/// Fetches all skills from every plugin listed in the marketplace manifest,
+	/// plus project-scoped GitHub Copilot skills that live in this repository.
+	/// </summary>
+	static async Task<List<SkillInfo>> FetchAllSkillsAsync(
+		HttpClient http,
+		string repo,
+		string branch,
+		CancellationToken ct = default)
+		=> await FetchAllSkillsAsync(http, repo, branch, treeEntries: null, ct);
+
+	/// <summary>
+	/// Fetches all skills from every plugin listed in the marketplace manifest,
+	/// plus project-scoped GitHub Copilot skills that live in this repository.
+	/// </summary>
+	static async Task<List<SkillInfo>> FetchAllSkillsAsync(
+		HttpClient http,
+		string repo,
+		string branch,
+		List<(string Path, string Type)>? treeEntries = null,
+		CancellationToken ct = default)
+	{
+		var marketplace = await MarketplaceClient.GetMarketplaceAsync(http, repo, branch, ct);
+		var allSkills = new List<SkillInfo>();
+		treeEntries ??= await MarketplaceClient.FetchTreeEntriesAsync(http, repo, branch, ct);
+
+		if (marketplace is not null && treeEntries is not null)
+		{
+			foreach (var pluginEntry in marketplace.Plugins)
+			{
+				var plugin = await MarketplaceClient.GetPluginAsync(http, repo, branch, pluginEntry.Source, ct);
+				if (plugin is null)
+					continue;
+
+				var skills = await MarketplaceClient.GetSkillsAsync(http, repo, branch, plugin, pluginEntry.Source, treeEntries, ct);
+				allSkills.AddRange(skills);
+			}
+		}
+
+		if (treeEntries is not null)
+		{
+			var repositorySkills = await MarketplaceClient.GetSkillsFromDirectoryAsync(
+				http, repo, branch, RepositorySkillsRoot, RepositorySkillsPluginName, treeEntries, ct);
+			allSkills.AddRange(repositorySkills);
+		}
+
+		return allSkills
+			.GroupBy(skill => skill.Name, StringComparer.OrdinalIgnoreCase)
+			.Select(group => group.First())
+			.ToList();
 	}
 }
+
+internal sealed record AiDevFlowBootstrapTarget(
+	string Scope,
+	string Target,
+	string? CustomPath,
+	string DisplayName,
+	string SkillsDirectory);

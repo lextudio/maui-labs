@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using Microsoft.Maui.Cli.Ai.Models;
 using Microsoft.Maui.Cli.Commands;
 using Xunit;
 
@@ -143,6 +144,64 @@ public class AiCommandsTests
 		var rootCommand = Program.BuildRootCommand();
 
 		Assert.Contains(rootCommand.Subcommands, c => c.Name == "ai");
+	}
+
+	[Theory]
+	[InlineData("maui-devflow-onboard")]
+	[InlineData("maui-devflow-debug")]
+	[InlineData("maui-devflow-session-review")]
+	[InlineData("maui-ai-debugging")]
+	public void IsDevFlowManagedSkillName_KnownDevFlowSkill_ReturnsTrue(string skillName)
+	{
+		Assert.True(AiCommands.IsDevFlowManagedSkillName(skillName));
+	}
+
+	[Fact]
+	public void IsDevFlowManagedSkillName_NonDevFlowSkill_ReturnsFalse()
+	{
+		Assert.False(AiCommands.IsDevFlowManagedSkillName("android-slim-bindings"));
+	}
+
+	[Fact]
+	public void GetDevFlowBootstrapTargets_DeduplicatesSharedGitHubSkillTarget()
+	{
+		var environments = new[]
+		{
+			new DetectedEnvironment
+			{
+				Kind = AgentEnvironmentKind.VsCode,
+				SkillsDirectory = Path.Combine("repo", ".github", "skills")
+			},
+			new DetectedEnvironment
+			{
+				Kind = AgentEnvironmentKind.CopilotCli,
+				SkillsDirectory = Path.Combine("repo", ".github", "skills")
+			}
+		};
+
+		var targets = AiCommands.GetDevFlowBootstrapTargets(environments);
+
+		var target = Assert.Single(targets);
+		Assert.Equal("github", target.Target);
+		Assert.Null(target.CustomPath);
+	}
+
+	[Fact]
+	public void GetDevFlowBootstrapTargets_OpenCode_UsesCustomPath()
+	{
+		var environments = new[]
+		{
+			new DetectedEnvironment
+			{
+				Kind = AgentEnvironmentKind.OpenCode,
+				SkillsDirectory = Path.Combine("repo", ".opencode", "skills")
+			}
+		};
+
+		var target = Assert.Single(AiCommands.GetDevFlowBootstrapTargets(environments));
+
+		Assert.Equal("auto", target.Target);
+		Assert.Equal(Path.Combine(".opencode", "skills"), target.CustomPath);
 	}
 
 	private static void AssertNoWhitespaceAliases(Command command)

@@ -12,10 +12,24 @@ public static partial class AiCommands
 {
 	private const string DefaultRepo = "dotnet/maui-labs";
 	private const string DefaultBranch = "main";
+	private const string RepositorySkillsRoot = ".github/skills";
+	private const string RepositorySkillsPluginName = "dotnet-maui-repo";
+
+	private static readonly HashSet<string> s_devFlowManagedSkills = new(StringComparer.OrdinalIgnoreCase)
+	{
+		"maui-devflow-onboard",
+		"maui-devflow-debug",
+		"maui-devflow-session-review",
+		"maui-ai-debugging",
+		"maui-devflow-connect",
+		"devflow-connect",
+		"devflow-onboard",
+		"devflow-debug"
+	};
 
 	public static Command Create()
 	{
-		var command = new Command("ai", "AI-assisted MAUI development: install and manage agent skills");
+		var command = new Command("ai", "AI-assisted MAUI development: bootstrap and manage Copilot assets");
 		command.Add(CreateInitCommand());
 		command.Add(CreateListCommand());
 		command.Add(CreateStatusCommand());
@@ -23,6 +37,9 @@ public static partial class AiCommands
 		command.Add(CreateAddCommand());
 		return command;
 	}
+
+	internal static bool IsDevFlowManagedSkillName(string skillName) =>
+		s_devFlowManagedSkills.Contains(skillName);
 
 	/// <summary>
 	/// Creates the shared --repo option used by multiple subcommands.

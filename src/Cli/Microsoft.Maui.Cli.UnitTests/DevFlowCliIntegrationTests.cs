@@ -1,4 +1,7 @@
+using System.Text;
 using System.Text.Json;
+using Microsoft.Maui.Cli.DevFlow;
+using Microsoft.Maui.Cli.DevFlow.Broker;
 using Microsoft.Maui.Cli.UnitTests.Fixtures;
 using Xunit;
 
@@ -81,6 +84,110 @@ public class DevFlowCliIntegrationTests
     }
 
     [Fact]
+    public async Task DiagnoseJson_WhenBrokerIsNotRunning_ReportsJsonArraysWithoutStartingBroker()
+    {
+        var cli = new CliTestHarness(mockAgentPort: 9223);
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-diagnose-");
+        var originalCurrentDirectory = Directory.GetCurrentDirectory();
+        var brokerPortResolverCalled = false;
+
+        DevFlowCommands.ResolveRunningBrokerPortAsync = () =>
+        {
+            brokerPortResolverCalled = true;
+            return Task.FromResult<int?>(null);
+        };
+        DevFlowCommands.ListBrokerAgentsAsync = _ => throw new InvalidOperationException("Diagnose should not list agents when the broker is not running.");
+
+        try
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(tempDir.FullName, "App.csproj"),
+                """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <ItemGroup>
+                    <PackageReference Include="Microsoft.Maui.DevFlow.Agent" Version="0.1.0-preview" />
+                  </ItemGroup>
+                </Project>
+                """);
+            Directory.SetCurrentDirectory(tempDir.FullName);
+
+            var result = await cli.InvokeRawAsync("devflow", "diagnose", "--json");
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.True(brokerPortResolverCalled);
+
+            var json = result.ParseJsonOutput();
+            Assert.False(json.GetProperty("broker_running").GetBoolean());
+            Assert.False(json.TryGetProperty("broker_port", out _));
+            Assert.Equal(0, json.GetProperty("agent_count").GetInt32());
+            Assert.Equal(JsonValueKind.Array, json.GetProperty("agents").ValueKind);
+            Assert.Empty(json.GetProperty("agents").EnumerateArray());
+            Assert.Equal(JsonValueKind.Array, json.GetProperty("projects").ValueKind);
+            Assert.Equal("App.csproj", Assert.Single(json.GetProperty("projects").EnumerateArray()).GetString());
+        }
+        finally
+        {
+            DevFlowCommands.ResetBrokerClientForTests();
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task DiagnoseJson_WhenBrokerIsRunning_ReportsAgentsAsJsonArray()
+    {
+        var cli = new CliTestHarness(mockAgentPort: 9223);
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-diagnose-");
+        var originalCurrentDirectory = Directory.GetCurrentDirectory();
+
+        DevFlowCommands.ResolveRunningBrokerPortAsync = () => Task.FromResult<int?>(19223);
+        DevFlowCommands.ListBrokerAgentsAsync = brokerPort =>
+        {
+            Assert.Equal(19223, brokerPort);
+            return Task.FromResult<AgentRegistration[]?>(
+            [
+                new AgentRegistration
+                {
+                    Id = "agent-1",
+                    Project = "/src/App.csproj",
+                    Tfm = "net10.0-android",
+                    Platform = "Android",
+                    AppName = "SampleApp",
+                    Port = 9223,
+                    Version = "0.1.0-preview",
+                    ConnectedAt = DateTime.UnixEpoch
+                }
+            ]);
+        };
+
+        try
+        {
+            Directory.SetCurrentDirectory(tempDir.FullName);
+
+            var result = await cli.InvokeRawAsync("devflow", "diagnose", "--json");
+
+            Assert.Equal(0, result.ExitCode);
+
+            var json = result.ParseJsonOutput();
+            Assert.True(json.GetProperty("broker_running").GetBoolean());
+            Assert.Equal(19223, json.GetProperty("broker_port").GetInt32());
+            Assert.Equal(1, json.GetProperty("agent_count").GetInt32());
+            Assert.Equal(JsonValueKind.Array, json.GetProperty("agents").ValueKind);
+            var agent = Assert.Single(json.GetProperty("agents").EnumerateArray());
+            Assert.Equal("agent-1", agent.GetProperty("id").GetString());
+            Assert.Equal("SampleApp", agent.GetProperty("appName").GetString());
+            Assert.Equal(JsonValueKind.Array, json.GetProperty("projects").ValueKind);
+            Assert.Empty(json.GetProperty("projects").EnumerateArray());
+        }
+        finally
+        {
+            DevFlowCommands.ResetBrokerClientForTests();
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task StoragePreferencesSet_UsesPutV1Route()
     {
         var (server, cli) = await CreateFixturesAsync();
@@ -93,6 +200,357 @@ public class DevFlowCliIntegrationTests
         var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/preferences/theme");
         Assert.Equal("PUT", request.Method);
         Assert.Contains("dark", request.Body);
+    }
+
+    [Fact]
+    public async Task StorageRoots_UsesV1StorageRootsRoute()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+
+        var result = await cli.InvokeAsync("devflow", "storage", "roots", "--json");
+
+        Assert.Equal(0, result.ExitCode);
+        var json = result.ParseJsonOutput();
+        Assert.Equal("appData", json.GetProperty("roots")[0].GetProperty("id").GetString());
+
+        var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/roots");
+        Assert.Equal("GET", request.Method);
+    }
+
+    [Fact]
+    public async Task StorageFilesList_UsesV1FilesRoute()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+
+        var result = await cli.InvokeAsync("devflow", "storage", "files", "list", "logs", "--json");
+
+        Assert.Equal(0, result.ExitCode);
+        var json = result.ParseJsonOutput();
+        Assert.Equal("logs", json.GetProperty("path").GetString());
+
+        var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files");
+        Assert.Equal("GET", request.Method);
+        Assert.Contains("path=logs", request.QueryString);
+    }
+
+    [Fact]
+    public async Task StorageFilesList_WithRoot_UsesRootQuery()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+
+        var result = await cli.InvokeAsync("devflow", "storage", "files", "list", "logs", "--root", "appData", "--json");
+
+        Assert.Equal(0, result.ExitCode);
+        var json = result.ParseJsonOutput();
+        Assert.Equal("appData", json.GetProperty("root").GetString());
+
+        var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files");
+        Assert.Equal("GET", request.Method);
+        Assert.Contains("path=logs", request.QueryString);
+        Assert.Contains("root=appData", request.QueryString);
+    }
+
+    [Fact]
+    public async Task StorageFilesDownload_UsesV1FilesRoute()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+
+        var result = await cli.InvokeAsync("devflow", "storage", "files", "download", "app.log", "--json");
+
+        Assert.Equal(0, result.ExitCode);
+        var json = result.ParseJsonOutput();
+        Assert.Equal("aGVsbG8=", json.GetProperty("contentBase64").GetString());
+
+        var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+        Assert.Equal("GET", request.Method);
+    }
+
+    [Fact]
+    public async Task StorageFilesDownload_WithRoot_UsesRootQuery()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+
+        var result = await cli.InvokeAsync("devflow", "storage", "files", "download", "app.log", "--root", "appData", "--json");
+
+        Assert.Equal(0, result.ExitCode);
+        var json = result.ParseJsonOutput();
+        Assert.Equal("appData", json.GetProperty("root").GetString());
+
+        var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+        Assert.Equal("GET", request.Method);
+        Assert.Contains("root=appData", request.QueryString);
+    }
+
+    [Fact]
+    public async Task StorageFilesDownload_WithOutputDirectory_WritesRemoteFileName()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-download-");
+
+        try
+        {
+            var result = await cli.InvokeAsync("devflow", "storage", "files", "download", "app.log", "--output", tempDir.FullName, "--json");
+
+            Assert.Equal(0, result.ExitCode);
+            var outputFile = Path.Combine(tempDir.FullName, "app.log");
+            Assert.Equal("hello", await File.ReadAllTextAsync(outputFile));
+            var json = result.ParseJsonOutput();
+            Assert.True(json.GetProperty("success").GetBoolean());
+            Assert.Equal(outputFile, json.GetProperty("localPath").GetString());
+            Assert.False(json.TryGetProperty("contentBase64", out _));
+
+            var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+            Assert.Equal("GET", request.Method);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StorageFilesDownload_WithOutputFile_WritesExplicitPath()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-download-");
+
+        try
+        {
+            var outputFile = Path.Combine(tempDir.FullName, "renamed.txt");
+
+            var result = await cli.InvokeAsync("devflow", "storage", "files", "download", "app.log", "--output", outputFile, "--json");
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Equal("hello", await File.ReadAllTextAsync(outputFile));
+            var json = result.ParseJsonOutput();
+            Assert.Equal(outputFile, json.GetProperty("localPath").GetString());
+
+            var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+            Assert.Equal("GET", request.Method);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StorageFilesDownload_WithNestedDevicePathAndOutputDirectory_UsesRemoteFileName()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-download-");
+
+        try
+        {
+            var result = await cli.InvokeAsync("devflow", "storage", "files", "download", "logs/app.log", "--output", tempDir.FullName, "--json");
+
+            Assert.Equal(0, result.ExitCode);
+            var outputFile = Path.Combine(tempDir.FullName, "app.log");
+            Assert.Equal("hello", await File.ReadAllTextAsync(outputFile));
+            var json = result.ParseJsonOutput();
+            Assert.Equal(outputFile, json.GetProperty("localPath").GetString());
+
+            var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/logs%2Fapp.log");
+            Assert.Equal("GET", request.Method);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StorageFilesDownload_WithTrailingDirectorySeparator_CreatesDirectoryAndUsesRemoteFileName()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-download-");
+
+        try
+        {
+            var outputDirectory = Path.Combine(tempDir.FullName, "created-downloads") + Path.DirectorySeparatorChar;
+
+            var result = await cli.InvokeAsync("devflow", "storage", "files", "download", "logs/app.log", "--output", outputDirectory, "--json");
+
+            Assert.Equal(0, result.ExitCode);
+            var outputFile = Path.Combine(outputDirectory, "app.log");
+            Assert.Equal("hello", await File.ReadAllTextAsync(outputFile));
+            var json = result.ParseJsonOutput();
+            Assert.Equal(outputFile, json.GetProperty("localPath").GetString());
+
+            var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/logs%2Fapp.log");
+            Assert.Equal("GET", request.Method);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StorageFilesUpload_UsesPutV1FilesRoute()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+
+        var result = await cli.InvokeAsync("devflow", "storage", "files", "upload", "app.log", "aGVsbG8=", "--json");
+
+        Assert.Equal(0, result.ExitCode);
+        var json = result.ParseJsonOutput();
+        Assert.True(json.GetProperty("success").GetBoolean());
+
+        var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+        Assert.Equal("PUT", request.Method);
+        Assert.Contains("\"contentBase64\":\"aGVsbG8=\"", request.Body);
+    }
+
+    [Fact]
+    public async Task StorageFilesUpload_WithLocalFile_ReadsFileContent()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-upload-");
+
+        try
+        {
+            var localFile = Path.Combine(tempDir.FullName, "payload.txt");
+            await File.WriteAllTextAsync(localFile, "from disk");
+
+            var result = await cli.InvokeAsync("devflow", "storage", "files", "upload", "app.log", "--file", localFile, "--json");
+
+            Assert.Equal(0, result.ExitCode);
+            var expectedBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes("from disk"));
+
+            var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+            Assert.Equal("PUT", request.Method);
+            Assert.Contains($"\"contentBase64\":\"{expectedBase64}\"", request.Body);
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StorageFilesUpload_WithRelativeLocalFile_ReadsFromCurrentDirectory()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-upload-");
+        var originalCurrentDirectory = Directory.GetCurrentDirectory();
+
+        try
+        {
+            var localFile = Path.Combine(tempDir.FullName, "payload.txt");
+            await File.WriteAllTextAsync(localFile, "relative content");
+            Directory.SetCurrentDirectory(tempDir.FullName);
+
+            var result = await cli.InvokeAsync("devflow", "storage", "files", "upload", "app.log", "--file", "payload.txt", "--json");
+
+            Assert.Equal(0, result.ExitCode);
+            var expectedBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes("relative content"));
+
+            var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+            Assert.Equal("PUT", request.Method);
+            Assert.Contains($"\"contentBase64\":\"{expectedBase64}\"", request.Body);
+        }
+        finally
+        {
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StorageFilesUpload_WithContentAndLocalFile_ReturnsError()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-upload-");
+
+        try
+        {
+            var localFile = Path.Combine(tempDir.FullName, "payload.txt");
+            await File.WriteAllTextAsync(localFile, "from disk");
+
+            var result = await cli.InvokeAsync("devflow", "storage", "files", "upload", "app.log", "aGVsbG8=", "--file", localFile, "--json");
+
+            Assert.Equal(1, result.ExitCode);
+            Assert.Contains("Provide exactly one of contentBase64 or --file.", result.StdErr);
+            Assert.DoesNotContain(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+        }
+        finally
+        {
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task StorageFilesUpload_WithoutContentOrLocalFile_ReturnsError()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+
+        var result = await cli.InvokeAsync("devflow", "storage", "files", "upload", "app.log", "--json");
+
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("Provide exactly one of contentBase64 or --file.", result.StdErr);
+        Assert.DoesNotContain(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+    }
+
+    [Fact]
+    public async Task StorageFilesUpload_WithRoot_UsesRootQuery()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+
+        var result = await cli.InvokeAsync("devflow", "storage", "files", "upload", "app.log", "aGVsbG8=", "--root", "appData", "--json");
+
+        Assert.Equal(0, result.ExitCode);
+        var json = result.ParseJsonOutput();
+        Assert.Equal("appData", json.GetProperty("root").GetString());
+
+        var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+        Assert.Equal("PUT", request.Method);
+        Assert.Contains("root=appData", request.QueryString);
+        Assert.Contains("\"contentBase64\":\"aGVsbG8=\"", request.Body);
+    }
+
+    [Fact]
+    public async Task StorageFilesDelete_UsesDeleteV1FilesRoute()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+
+        var result = await cli.InvokeAsync("devflow", "storage", "files", "delete", "app.log", "--json");
+
+        Assert.Equal(0, result.ExitCode);
+
+        var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+        Assert.Equal("DELETE", request.Method);
+    }
+
+    [Fact]
+    public async Task StorageFilesDelete_WithRoot_UsesRootQuery()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var serverHandle = server;
+
+        var result = await cli.InvokeAsync("devflow", "storage", "files", "delete", "app.log", "--root", "appData", "--json");
+
+        Assert.Equal(0, result.ExitCode);
+
+        var request = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/files/app.log");
+        Assert.Equal("DELETE", request.Method);
+        Assert.Contains("root=appData", request.QueryString);
     }
 
     [Fact]
