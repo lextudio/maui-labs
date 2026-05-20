@@ -376,6 +376,39 @@ public class DevFlowCliCommandTests
         Assert.Equal("DELETE", req.Method);
     }
 
+    // ========== theme ==========
+
+    [Fact]
+    public async Task ThemeGet_HitsThemeRoute()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var _ = server;
+
+        var result = await cli.InvokeAsync("devflow", "theme", "get", "--json");
+
+        Assert.True(result.ExitCode == 0, $"stdout: {result.StdOut}\nstderr: {result.StdErr}");
+        var json = result.ParseJsonOutput();
+        Assert.Equal("dark", json.GetProperty("theme").GetString());
+        var req = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/device/app/theme");
+        Assert.Equal("GET", req.Method);
+    }
+
+    [Fact]
+    public async Task ThemeSet_DefaultAutoOnDesktop_UsesAppThemeRoute()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var _ = server;
+
+        var result = await cli.InvokeAsync("devflow", "theme", "set", "dark", "--json");
+
+        Assert.True(result.ExitCode == 0, $"stdout: {result.StdOut}\nstderr: {result.StdErr}");
+        var json = result.ParseJsonOutput();
+        Assert.Equal("dark", json.GetProperty("theme").GetString());
+        Assert.Equal("app", json.GetProperty("source").GetString());
+        var req = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/device/app/theme" && r.Method == "PUT");
+        Assert.Contains("\"theme\":\"dark\"", req.Body);
+    }
+
     // ========== device/platform info ==========
 
     [Fact]

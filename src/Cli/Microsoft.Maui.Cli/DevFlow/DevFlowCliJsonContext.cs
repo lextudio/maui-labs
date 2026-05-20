@@ -17,6 +17,8 @@ namespace Microsoft.Maui.Cli.DevFlow;
 [JsonSerializable(typeof(List<ElementInfo>))]
 [JsonSerializable(typeof(NetworkRequest))]
 [JsonSerializable(typeof(List<NetworkRequest>))]
+[JsonSerializable(typeof(ThemeResult))]
+[JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(AgentRegistration))]
 [JsonSerializable(typeof(List<AgentRegistration>))]
 [JsonSerializable(typeof(AgentRegistration[]))]

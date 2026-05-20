@@ -127,6 +127,13 @@
               "connectivity"
             ]
           },
+          "app.theme": {
+            "version": 1,
+            "features": [
+              "get",
+              "set"
+            ]
+          },
           "device.sensors": {
             "version": 1,
             "features": [

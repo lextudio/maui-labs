@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Maui.Cli.DevFlow.Skills;
 using Microsoft.Maui.Cli.Utils;
+using Microsoft.Maui.DevFlow.Driver;
 
 namespace Microsoft.Maui.Cli.DevFlow;
 
@@ -274,6 +275,40 @@ public class DevFlowCommands
         cdpCommand.Add(sourceCmd);
         
         devflowCommand.Add(cdpCommand);
+
+        // ===== Theme commands =====
+        var themeCommand = new Command("theme", "Get or set the app/system light-dark theme");
+
+        var themeGetCmd = new Command("get", "Get the app-scoped theme reported by the agent");
+        themeGetCmd.SetAction(async (ctx, ct) =>
+        {
+            var host = ctx.GetValue(agentHostOption)!;
+            var port = ctx.GetValue(agentPortOption);
+            var isJson = output.ResolveJsonMode(ctx.GetValue(jsonOption), ctx.GetValue(noJsonOption));
+            await ThemeGetAsync(host, port, isJson);
+        });
+        themeCommand.Add(themeGetCmd);
+
+        var themeArg = new Argument<string>("theme") { Description = "Theme to apply: light, dark, or system" };
+        var themeScopeOption = new Option<string>("--scope") { Description = "Where to apply the theme: auto, app, or system", DefaultValueFactory = _ => "auto" };
+        var themeDeviceOption = new Option<string?>("--device", "-d") { Description = "Android adb device/emulator serial for system-scope changes" };
+        var themeUdidOption = new Option<string?>("--udid") { Description = "iOS Simulator UDID for system-scope changes (auto-detects booted simulator if omitted for simulator targets)" };
+        var themeSetCmd = new Command("set", "Set the app or system light-dark theme") { themeArg, themeScopeOption, themeDeviceOption, themeUdidOption };
+        themeSetCmd.SetAction(async (ctx, ct) =>
+        {
+            var host = ctx.GetValue(agentHostOption)!;
+            var port = ctx.GetValue(agentPortOption);
+            var platform = ctx.GetValue(platformOption)!;
+            var theme = ctx.GetValue(themeArg)!;
+            var scope = ctx.GetValue(themeScopeOption)!;
+            var device = ctx.GetValue(themeDeviceOption);
+            var udid = ctx.GetValue(themeUdidOption);
+            var isJson = output.ResolveJsonMode(ctx.GetValue(jsonOption), ctx.GetValue(noJsonOption));
+            await ThemeSetAsync(host, port, platform, theme, scope, device, udid, isJson);
+        });
+        themeCommand.Add(themeSetCmd);
+
+        devflowCommand.Add(themeCommand);
         
         // ===== UI commands =====
 
@@ -2343,6 +2378,8 @@ public class DevFlowCommands
         new("webview Page captureScreenshot", "Take WebView screenshot", false),
         new("webview snapshot", "Get simplified DOM snapshot", false),
         new("webview source", "Get page HTML source", false),
+        new("theme get", "Get the current app theme", false),
+        new("theme set", "Set the app or system light-dark theme", true),
         new("agent list", "List all connected agents", false),
         new("agent wait", "Wait for an agent to connect", false),
         new("batch", "Execute commands from stdin", true),
@@ -2368,7 +2405,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = new AgentClient(host, port);
             var status = await client.GetStatusAsync(window);
             if (status == null)
             {
@@ -2387,11 +2424,182 @@ public class DevFlowCommands
         catch (Exception ex) { Output.WriteError(ex.Message, json); _errorOccurred = true; }
     }
 
+    private static async Task ThemeGetAsync(string host, int port, bool json)
+    {
+        try
+        {
+            using var client = new AgentClient(host, port);
+            var result = await client.GetThemeAsync();
+            if (result == null)
+            {
+                Output.WriteError($"Cannot get theme from agent at {host}:{port}", json);
+                _errorOccurred = true;
+                return;
+            }
+
+            WriteThemeResult(result, json);
+        }
+        catch (Exception ex)
+        {
+            Output.WriteError(ex.Message, json);
+            _errorOccurred = true;
+        }
+    }
+
+    private static async Task ThemeSetAsync(
+        string host,
+        int port,
+        string platform,
+        string themeValue,
+        string scopeValue,
+        string? androidDevice,
+        string? simulatorUdid,
+        bool json)
+    {
+        if (!ThemeExtensions.TryParseTheme(themeValue, out var theme))
+        {
+            Output.WriteError($"Invalid theme '{themeValue}'. Use light, dark, or system.", json, "InvalidArgument");
+            _errorOccurred = true;
+            return;
+        }
+
+        if (!ThemeExtensions.TryParseScope(scopeValue, out var scope))
+        {
+            Output.WriteError($"Invalid scope '{scopeValue}'. Use auto, app, or system.", json, "InvalidArgument");
+            _errorOccurred = true;
+            return;
+        }
+
+        try
+        {
+            using var client = new AgentClient(host, port);
+            AgentStatus? status = null;
+
+            if (scope != ThemeSetScope.System)
+                status = await client.GetStatusAsync();
+
+            var platformName = status?.Platform ?? platform;
+            var deviceType = status?.DeviceType;
+            var useHost = scope == ThemeSetScope.System
+                || ShouldUseHostThemeScopeAutomatically(platformName, deviceType, theme, androidDevice, simulatorUdid);
+
+            ThemeResult result;
+            if (useHost)
+            {
+                result = await SetHostThemeAsync(platformName, deviceType, theme, androidDevice, simulatorUdid);
+            }
+            else
+            {
+                result = await client.SetThemeAsync(theme);
+            }
+
+            WriteThemeResult(result, json);
+        }
+        catch (Exception ex)
+        {
+            Output.WriteError(ex.Message, json);
+            _errorOccurred = true;
+        }
+    }
+
+    private static bool ShouldUseHostThemeScopeAutomatically(
+        string? platform,
+        string? deviceType,
+        DevFlowTheme theme,
+        string? androidDevice,
+        string? simulatorUdid)
+    {
+        if (IsAndroidTarget(platform, androidDevice))
+            return IsVirtualDevice(deviceType) || IsAndroidEmulatorSerial(androidDevice);
+
+        if (theme == DevFlowTheme.System)
+            return false;
+
+        return IsIosSimulatorTarget(platform, deviceType, simulatorUdid);
+    }
+
+    private static async Task<ThemeResult> SetHostThemeAsync(
+        string? platform,
+        string? deviceType,
+        DevFlowTheme theme,
+        string? androidDevice,
+        string? simulatorUdid)
+    {
+        if (IsAndroidTarget(platform, androidDevice))
+        {
+            var driver = new AndroidAppDriver { Serial = androidDevice };
+            return await driver.SetThemeAsync(theme, ThemeSetScope.System);
+        }
+
+        if (IsIosSimulatorTarget(platform, deviceType, simulatorUdid) || IsIosPlatform(platform))
+        {
+            var resolvedUdid = await ResolveUdidAsync(simulatorUdid);
+            var driver = new iOSSimulatorAppDriver { DeviceUdid = resolvedUdid };
+            return await driver.SetThemeAsync(theme, ThemeSetScope.System);
+        }
+
+        return new ThemeResult
+        {
+            Theme = theme,
+            RequestedTheme = theme,
+            Source = "system",
+            Success = false,
+            Message = $"System theme switching is not supported for platform '{platform ?? "unknown"}'. Use --scope app.",
+        };
+    }
+
+    private static bool IsAndroidTarget(string? platform, string? androidDevice)
+        => !string.IsNullOrWhiteSpace(androidDevice)
+            || (platform?.Contains("android", StringComparison.OrdinalIgnoreCase) == true);
+
+    private static bool IsIosSimulatorTarget(string? platform, string? deviceType, string? simulatorUdid)
+    {
+        if (!string.IsNullOrWhiteSpace(simulatorUdid))
+            return true;
+
+        if (!IsVirtualDevice(deviceType))
+            return false;
+
+        return IsIosPlatform(platform);
+    }
+
+    private static bool IsIosPlatform(string? platform)
+        => platform?.Equals("ios", StringComparison.OrdinalIgnoreCase) == true
+            || platform?.Contains("iossimulator", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool IsVirtualDevice(string? deviceType)
+        => deviceType?.Equals("Virtual", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static bool IsAndroidEmulatorSerial(string? androidDevice)
+        => androidDevice?.StartsWith("emulator-", StringComparison.OrdinalIgnoreCase) == true;
+
+    private static void WriteThemeResult(ThemeResult result, bool json)
+    {
+        if (!result.Success)
+        {
+            Output.WriteError(result.Message ?? "Failed to set theme.", json, "NotSupported");
+            _errorOccurred = true;
+            return;
+        }
+
+        Output.WriteResult(result, json, static r =>
+        {
+            Console.WriteLine($"Theme: {r.Theme.ToProtocolString()}");
+            if (r.UserAppTheme is { } userTheme)
+                Console.WriteLine($"App override: {userTheme.ToProtocolString()}");
+            if (r.EffectiveTheme is { } effectiveTheme)
+                Console.WriteLine($"Effective: {effectiveTheme.ToProtocolString()}");
+            Console.WriteLine($"Source: {r.Source}");
+            if (!string.IsNullOrWhiteSpace(r.Message))
+                Console.WriteLine(r.Message);
+        });
+    }
+
     private static async Task MauiTreeAsync(string host, int port, bool json, int depth, int? window, string? fields, string? format)
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = new AgentClient(host, port);
             var tree = await client.GetTreeAsync(depth, window);
             if (json)
             {

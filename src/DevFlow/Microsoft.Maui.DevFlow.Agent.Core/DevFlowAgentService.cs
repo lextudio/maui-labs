@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -519,6 +520,8 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         _server.MapGet("/api/v1/device/jobs", HandleJobsList);
         _server.MapPost("/api/v1/device/jobs/{identifier}/run", HandleJobRun);
 
+        _server.MapGet("/api/v1/device/app/theme", HandleThemeGet);
+        _server.MapPut("/api/v1/device/app/theme", HandleThemeSet);
         _server.MapGet("/api/v1/storage/preferences", HandlePreferencesList);
         _server.MapGet("/api/v1/storage/preferences/{key}", HandlePreferencesGet);
         _server.MapPut("/api/v1/storage/preferences/{key}", HandlePreferencesSet);
@@ -680,6 +683,11 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
                 features = IsJobsSupported
                     ? IsJobRunSupported ? new[] { "list", "run" } : new[] { "list" }
                     : Array.Empty<string>()
+            },
+            theme = new
+            {
+                supported = true,
+                features = new[] { "get", "set" }
             },
             invoke = new
             {
@@ -5772,6 +5780,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     private const string PlatformErrorReasonUnknown = "unknown";
     private const string PlatformErrorReasonInvalidRequest = "invalid_request";
     private static readonly Regex AndroidPermissionRegex = new(@"android\.permission\.[A-Z0-9_\.]+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly string[] SupportedThemeNames = ["light", "dark", "system"];
 
     private static HttpResponse CreatePlatformError(string message, Exception ex, int statusCode = 400, Dictionary<string, object?>? details = null)
     {
@@ -5875,13 +5884,17 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             return await MainThread.InvokeOnMainThreadAsync(() =>
             {
                 var info = AppInfo.Current;
+                var theme = BuildThemeInfoPayload(Application.Current ?? _app);
                 return HttpResponse.Json(new
                 {
                     name = info.Name,
                     packageName = info.PackageName,
                     version = info.VersionString,
                     buildNumber = info.BuildString,
-                    requestedTheme = info.RequestedTheme.ToString(),
+                    theme = theme.Theme,
+                    requestedTheme = theme.RequestedTheme,
+                    userAppTheme = theme.UserAppTheme,
+                    effectiveTheme = theme.EffectiveTheme,
                     requestedLayoutDirection = info.RequestedLayoutDirection.ToString(),
                 });
             });
@@ -5891,6 +5904,151 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             return CreatePlatformError($"Failed to get app info: {ex.Message}", ex);
         }
     }
+
+    private async Task<HttpResponse> HandleThemeGet(HttpRequest request)
+    {
+        try
+        {
+            var app = Application.Current ?? _app;
+            if (app == null)
+                return HttpResponse.Error("Agent not bound to app", reason: "agent-not-bound");
+
+            var theme = await DispatchAsync(() => BuildThemeInfoPayload(app));
+            return HttpResponse.Json(theme);
+        }
+        catch (Exception ex)
+        {
+            return CreatePlatformError($"Failed to get app theme: {ex.Message}", ex);
+        }
+    }
+
+    private async Task<HttpResponse> HandleThemeSet(HttpRequest request)
+    {
+        var body = request.BodyAs<ThemeSetRequest>();
+        if (string.IsNullOrWhiteSpace(body?.Theme))
+            return HttpResponse.Error("theme is required", reason: "invalid-argument");
+
+        if (!TryParseTheme(body.Theme, out var appTheme))
+        {
+            return HttpResponse.Error(
+                $"Theme '{body.Theme}' is not supported. Use light, dark, or system.",
+                reason: "invalid-argument",
+                details: new { supportedThemes = SupportedThemeNames });
+        }
+
+        try
+        {
+            var app = Application.Current ?? _app;
+            if (app == null)
+                return HttpResponse.Error("Agent not bound to app", reason: "agent-not-bound");
+
+            var theme = await DispatchAsync(() =>
+            {
+                app.UserAppTheme = appTheme;
+                return BuildThemeInfoPayload(app);
+            });
+
+            PublishUiEvent("themeChange", new
+            {
+                theme = theme.Theme,
+                requestedTheme = theme.RequestedTheme,
+                userAppTheme = theme.UserAppTheme,
+                effectiveTheme = theme.EffectiveTheme,
+                source = theme.Source,
+                timestamp = DateTimeOffset.UtcNow.ToString("O")
+            });
+
+            return HttpResponse.Json(theme);
+        }
+        catch (Exception ex)
+        {
+            return CreatePlatformError($"Failed to set app theme: {ex.Message}", ex);
+        }
+    }
+
+    private static ThemeInfoPayload BuildThemeInfoPayload(Application? app, string source = "app", string? message = null)
+    {
+        var requestedTheme = SafeGetRequestedTheme(app);
+        var userAppTheme = SafeGetUserAppTheme(app);
+        var effectiveTheme = userAppTheme == AppTheme.Unspecified ? requestedTheme : userAppTheme;
+
+        return new ThemeInfoPayload(
+            ThemeToProtocolString(effectiveTheme),
+            ThemeToProtocolString(requestedTheme),
+            ThemeToProtocolString(userAppTheme),
+            ThemeToProtocolString(effectiveTheme),
+            SupportedThemeNames,
+            source,
+            message);
+    }
+
+    private static AppTheme SafeGetRequestedTheme(Application? app)
+    {
+        if (app == null)
+            return AppTheme.Unspecified;
+
+        try
+        {
+            return app.RequestedTheme;
+        }
+        catch
+        {
+            return AppTheme.Unspecified;
+        }
+    }
+
+    private static AppTheme SafeGetUserAppTheme(Application? app)
+    {
+        if (app == null)
+            return AppTheme.Unspecified;
+
+        try
+        {
+            return app.UserAppTheme;
+        }
+        catch
+        {
+            return AppTheme.Unspecified;
+        }
+    }
+
+    private static bool TryParseTheme(string value, out AppTheme theme)
+    {
+        switch (value.Trim().ToLowerInvariant())
+        {
+            case "light":
+                theme = AppTheme.Light;
+                return true;
+            case "dark":
+                theme = AppTheme.Dark;
+                return true;
+            case "system":
+            case "default":
+            case "unspecified":
+            case "unset":
+                theme = AppTheme.Unspecified;
+                return true;
+            default:
+                theme = AppTheme.Unspecified;
+                return false;
+        }
+    }
+
+    private static string ThemeToProtocolString(AppTheme theme) => theme switch
+    {
+        AppTheme.Light => "light",
+        AppTheme.Dark => "dark",
+        _ => "system"
+    };
+
+    private sealed record ThemeInfoPayload(
+        [property: JsonPropertyName("theme")] string Theme,
+        [property: JsonPropertyName("requestedTheme")] string RequestedTheme,
+        [property: JsonPropertyName("userAppTheme")] string UserAppTheme,
+        [property: JsonPropertyName("effectiveTheme")] string EffectiveTheme,
+        [property: JsonPropertyName("supportedThemes")] IReadOnlyList<string> SupportedThemes,
+        [property: JsonPropertyName("source")] string Source,
+        [property: JsonPropertyName("message")] string? Message);
 
     private Task<HttpResponse> HandlePlatformDeviceInfo(HttpRequest request)
     {
@@ -6374,6 +6532,11 @@ public class PreferenceSetRequest
     public object? Value { get; set; }
     public string? Type { get; set; }
     public string? SharedName { get; set; }
+}
+
+public class ThemeSetRequest
+{
+    public string? Theme { get; set; }
 }
 
 public class SecureStorageSetRequest

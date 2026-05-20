@@ -122,6 +122,17 @@ internal static class MockAgentResponses
         }
         """;
 
+    public const string ThemeInfo = """
+        {
+          "theme": "dark",
+          "requestedTheme": "dark",
+          "userAppTheme": "dark",
+          "effectiveTheme": "dark",
+          "supportedThemes": ["light", "dark", "system"],
+          "source": "app"
+        }
+        """;
+
     public const string PreferencesList = """
         ["theme", "launchCount"]
         """;

@@ -16,6 +16,8 @@ namespace Microsoft.Maui.DevFlow.Driver;
 [JsonSerializable(typeof(ProfilerBatch))]
 [JsonSerializable(typeof(List<ProfilerHotspot>))]
 [JsonSerializable(typeof(RecordingState))]
+[JsonSerializable(typeof(ThemeResult))]
+[JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(AgentClient.ProfilerSessionEnvelope))]
 [JsonSerializable(typeof(AgentClient.ActionResponse))]
 [JsonSerializable(typeof(InvokeResult))]

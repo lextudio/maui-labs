@@ -110,6 +110,22 @@ public sealed class MockAgentServer : IAsyncDisposable
     {
         app.MapGet("/api/v1/device/info", () => Results.Content(MockAgentResponses.DeviceInfo, "application/json"));
         app.MapGet("/api/v1/device/app", () => Results.Content(MockAgentResponses.DeviceInfo, "application/json"));
+        app.MapGet("/api/v1/device/app/theme", () => Results.Content(MockAgentResponses.ThemeInfo, "application/json"));
+        app.MapPut("/api/v1/device/app/theme", async (HttpContext context) =>
+        {
+            using var document = await JsonDocument.ParseAsync(context.Request.Body);
+            var theme = document.RootElement.GetProperty("theme").GetString() ?? "system";
+            return Results.Content($$"""
+                {
+                  "theme": "{{theme}}",
+                  "requestedTheme": "{{theme}}",
+                  "userAppTheme": "{{theme}}",
+                  "effectiveTheme": "{{theme}}",
+                  "supportedThemes": ["light", "dark", "system"],
+                  "source": "app"
+                }
+                """, "application/json");
+        });
         app.MapGet("/api/v1/device/display", () => Results.Content(MockAgentResponses.DeviceInfo, "application/json"));
         app.MapGet("/api/v1/device/battery", () => Results.Content(MockAgentResponses.DeviceInfo, "application/json"));
         app.MapGet("/api/v1/device/connectivity", () => Results.Content(MockAgentResponses.DeviceInfo, "application/json"));
