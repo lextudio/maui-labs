@@ -203,7 +203,12 @@ public class WpfVisualTreeWalker : VisualTreeWalker
                 return cached;
         }
 
-        WalkNativeTree(Array.Empty<IntPtr>());
+        // Preserve native ID stability on cache miss: re-walk with the same HWND
+        // the id was originally produced under. A plain Array.Empty<IntPtr>() walk
+        // would skip AppendKnownWindowDialogSubtrees entirely, so ":dialog:{n}"
+        // prefixes from a previous tree/query would never be regenerated.
+        var seedHwnds = NativeWindowProbe.ExtractHwndsFromId(id);
+        WalkNativeTree(seedHwnds);
         lock (_nativeObjectsLock)
             return NativeWindowProbe.TryGetAutomationElement(_nativeObjects, id);
     }
@@ -220,7 +225,8 @@ public class WpfVisualTreeWalker : VisualTreeWalker
         if (NativeWindowProbe.TryBuildCachedElementInfo(cache, id) is { } cached)
             return cached;
 
-        return FlattenElementInfos(WalkNativeTree(Array.Empty<IntPtr>()))
+        var seedHwnds = NativeWindowProbe.ExtractHwndsFromId(id);
+        return FlattenElementInfos(WalkNativeTree(seedHwnds))
             .FirstOrDefault(e => e.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
     }
 

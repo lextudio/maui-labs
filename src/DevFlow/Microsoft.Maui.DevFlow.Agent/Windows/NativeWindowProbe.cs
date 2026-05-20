@@ -87,6 +87,41 @@ public sealed class NativeWindowProbe
         => nativeObjects.TryGetValue(id, out var native) && native is AutomationElement element ? element : null;
 
     /// <summary>
+    /// Parses HWND seeds out of a DevFlow native element id of the form
+    /// <c>native:hwnd:0x{HEX}[:dialog:{N}...]</c>. Returns an empty array when the
+    /// id doesn't carry an embedded HWND. Used to keep ID generation stable across
+    /// cache-miss re-walks (without a seed, <c>AppendKnownWindowDialogSubtrees</c>
+    /// would never run and dialog-scoped ids would never be regenerated).
+    /// </summary>
+    public static IReadOnlyList<IntPtr> ExtractHwndsFromId(string id)
+    {
+        if (string.IsNullOrEmpty(id))
+            return Array.Empty<IntPtr>();
+
+        const string prefix = "native:hwnd:0x";
+        var start = id.IndexOf(prefix, StringComparison.Ordinal);
+        if (start < 0)
+            return Array.Empty<IntPtr>();
+
+        var hexStart = start + prefix.Length;
+        var hexEnd = hexStart;
+        while (hexEnd < id.Length && IsHexDigit(id[hexEnd]))
+            hexEnd++;
+
+        if (hexEnd == hexStart)
+            return Array.Empty<IntPtr>();
+
+        var hex = id.AsSpan(hexStart, hexEnd - hexStart);
+        if (!long.TryParse(hex, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var hwndValue))
+            return Array.Empty<IntPtr>();
+
+        return new[] { new IntPtr(hwndValue) };
+
+        static bool IsHexDigit(char c) =>
+            (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+    }
+
+    /// <summary>
     /// Rebuilds an <see cref="ElementInfo"/> for a previously-cached <see cref="AutomationElement"/>
     /// without performing a fresh process-wide window enumeration. Returns <c>null</c> when the cached
     /// element is no longer available (e.g. dialog closed).

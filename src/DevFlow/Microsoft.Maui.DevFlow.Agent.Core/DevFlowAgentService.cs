@@ -58,6 +58,11 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
     private int _uiHookScanInFlight;
     private DateTime _lastUiHookScanTsUtc = DateTime.MinValue;
     private const int NativeUiProbeTimeoutMs = 1500;
+    // Tracks a previously-dispatched UI capture task that timed out. If still
+    // pending when a new CaptureUiOrNativeAsync arrives we skip enqueuing another
+    // uiCallback to avoid unbounded queueing on a blocked dispatcher.
+    private Task? _pendingCaptureUiTask;
+    private readonly object _pendingCaptureUiGate = new();
     private Shell? _hookedShell;
     private DateTime? _navigationStartedAtUtc;
     private string? _navigationTargetRoute;
@@ -777,6 +782,37 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         if (!_treeWalker.SupportsNativeElements)
             return await DispatchAsync(uiCallback);
 
+        // Gate: if a previous CaptureUiOrNativeAsync's UI dispatch is still
+        // pending (the dispatcher is blocked), skip enqueuing another one and
+        // go native-only. Otherwise repeated tree/query calls while the UI
+        // thread is blocked would accumulate unbounded queued work.
+        Task? priorPending;
+        lock (_pendingCaptureUiGate)
+            priorPending = _pendingCaptureUiTask;
+
+        if (priorPending is not null && !priorPending.IsCompleted)
+        {
+            try
+            {
+                var hwnds = _app is null
+                    ? Array.Empty<IntPtr>()
+                    : _treeWalker.GetKnownNativeWindowHandles(_app, windowIndex);
+                return await Task.Run(() =>
+                {
+                    try { return nativeCallback(hwnds); }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] Native UI probe failed (gated): {ex.GetBaseException().Message}");
+                        return new List<ElementInfo>();
+                    }
+                }).ConfigureAwait(false);
+            }
+            catch
+            {
+                return new List<ElementInfo>();
+            }
+        }
+
         var hwndSource = new TaskCompletionSource<IReadOnlyList<IntPtr>>(TaskCreationOptions.RunContinuationsAsynchronously);
         // Shared CTS so the surviving Task.Delay timers can be cancelled once a race
         // is decided. Without this, every CaptureUiOrNativeAsync call leaves up to
@@ -841,14 +877,29 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         var uiWinner = await Task.WhenAny(uiTask, uiDelay).ConfigureAwait(false);
         if (uiWinner != uiTask)
         {
+            // Record this pending uiTask so concurrent callers can detect the
+            // dispatcher is blocked and avoid enqueuing additional UI work.
+            lock (_pendingCaptureUiGate)
+                _pendingCaptureUiTask = uiTask;
+
             hwndSource.TrySetResult(Array.Empty<IntPtr>());
             // The UI dispatcher is blocked (the exact scenario this code path targets).
             // Observe any later fault on the abandoned uiTask so it doesn't trigger
             // TaskScheduler.UnobservedTaskException when it eventually completes.
             _ = uiTask.ContinueWith(
-                t => System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] Abandoned uiTask faulted: {t.Exception?.GetBaseException().Message}"),
+                t =>
+                {
+                    lock (_pendingCaptureUiGate)
+                    {
+                        if (ReferenceEquals(_pendingCaptureUiTask, t))
+                            _pendingCaptureUiTask = null;
+                    }
+
+                    if (t.IsFaulted)
+                        System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] Abandoned uiTask faulted: {t.Exception?.GetBaseException().Message}");
+                },
                 CancellationToken.None,
-                TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                TaskContinuationOptions.ExecuteSynchronously,
                 TaskScheduler.Default);
 
             // Also bound the native await: NativeUiProbeTimeoutMs only guards the HWND
