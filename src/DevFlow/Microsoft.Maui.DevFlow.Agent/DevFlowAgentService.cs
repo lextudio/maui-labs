@@ -542,7 +542,20 @@ public class PlatformAgentService : DevFlowAgentService
                     Microsoft.UI.Xaml.Automation.Peers.FrameworkElementAutomationPeer.CreatePeerForElement(buttonBase);
                 if (peer?.GetPattern(Microsoft.UI.Xaml.Automation.Peers.PatternInterface.Invoke) is Microsoft.UI.Xaml.Automation.Provider.IInvokeProvider invokeProvider)
                 {
-                    return buttonBase.DispatcherQueue.TryEnqueue(() => invokeProvider.Invoke());
+                    // Wrap the dispatched lambda so a stale/disabled element doesn't
+                    // surface as CoreApplication.UnhandledErrorDetected and crash the
+                    // host app. The TryEnqueue bool only reports whether the work
+                    // item was queued, not whether the invoke itself succeeded.
+                    return buttonBase.DispatcherQueue.TryEnqueue(() =>
+                    {
+                        try { invokeProvider.Invoke(); }
+                        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException
+                                                      or InvalidOperationException
+                                                      or UnauthorizedAccessException)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] WinUI native invoke skipped: {ex.GetBaseException().Message}");
+                        }
+                    });
                 }
             }
 #endif

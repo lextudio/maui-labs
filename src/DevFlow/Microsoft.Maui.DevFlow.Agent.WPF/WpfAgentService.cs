@@ -145,22 +145,57 @@ public class WpfAgentService : DevFlowAgentService
             var peer = System.Windows.Automation.Peers.UIElementAutomationPeer.FromElement(buttonBase)
                 ?? System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(buttonBase);
 
+            // Wrap the dispatched lambdas in try/catch: WPF surfaces unhandled
+            // BeginInvoke exceptions through Application.DispatcherUnhandledException,
+            // which can crash the host app if it's not subscribed (or rethrows). The
+            // common cases (button disabled or stale by the time the dispatcher
+            // runs the work) are expected and should be silently dropped.
             if (peer?.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)
                 is System.Windows.Automation.Provider.IInvokeProvider invoke)
             {
-                buttonBase.Dispatcher.BeginInvoke(() => invoke.Invoke());
+                buttonBase.Dispatcher.BeginInvoke(() =>
+                {
+                    try { invoke.Invoke(); }
+                    catch (Exception ex) when (ex is System.Windows.Automation.ElementNotEnabledException
+                                                  or System.Windows.Automation.ElementNotAvailableException
+                                                  or System.Runtime.InteropServices.COMException
+                                                  or InvalidOperationException)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] WPF native invoke skipped: {ex.GetBaseException().Message}");
+                    }
+                });
                 return true;
             }
 
             if (peer?.GetPattern(System.Windows.Automation.Peers.PatternInterface.Toggle)
                 is System.Windows.Automation.Provider.IToggleProvider toggle)
             {
-                buttonBase.Dispatcher.BeginInvoke(() => toggle.Toggle());
+                buttonBase.Dispatcher.BeginInvoke(() =>
+                {
+                    try { toggle.Toggle(); }
+                    catch (Exception ex) when (ex is System.Windows.Automation.ElementNotEnabledException
+                                                  or System.Windows.Automation.ElementNotAvailableException
+                                                  or System.Runtime.InteropServices.COMException
+                                                  or InvalidOperationException)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] WPF native toggle skipped: {ex.GetBaseException().Message}");
+                    }
+                });
                 return true;
             }
 
             buttonBase.Dispatcher.BeginInvoke(() =>
-                buttonBase.RaiseEvent(new System.Windows.RoutedEventArgs(ButtonBase.ClickEvent, buttonBase)));
+            {
+                try
+                {
+                    buttonBase.RaiseEvent(new System.Windows.RoutedEventArgs(ButtonBase.ClickEvent, buttonBase));
+                }
+                catch (Exception ex) when (ex is InvalidOperationException
+                                              or System.Runtime.InteropServices.COMException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Microsoft.Maui.DevFlow] WPF RaiseEvent skipped: {ex.GetBaseException().Message}");
+                }
+            });
             return true;
         }
         catch { }

@@ -712,6 +712,11 @@ public class WindowsAppDriver : AppDriverBase
 
     private static bool ClickPoint(int x, int y)
     {
+        // Save the user's current cursor position so we can restore it after the
+        // synthetic click — keeping the cursor permanently relocated to the click
+        // target would interfere with concurrent manual testing on the same machine.
+        var hadOriginal = GetCursorPos(out var originalCursor);
+
         if (!SetCursorPos(x, y))
             return false;
 
@@ -720,7 +725,15 @@ public class WindowsAppDriver : AppDriverBase
             new() { type = INPUT_MOUSE, u = new INPUTUNION { mi = new MOUSEINPUT { dwFlags = MOUSEEVENTF_LEFTDOWN } } },
             new() { type = INPUT_MOUSE, u = new INPUTUNION { mi = new MOUSEINPUT { dwFlags = MOUSEEVENTF_LEFTUP } } }
         };
-        return SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>()) == (uint)inputs.Length;
+        var sent = SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>()) == (uint)inputs.Length;
+
+        if (hadOriginal)
+        {
+            // Restoring the cursor is best-effort; ignore failures.
+            _ = SetCursorPos(originalCursor.X, originalCursor.Y);
+        }
+
+        return sent;
     }
 
     private static ushort MapKeyToVirtualKey(string key) => key.ToUpperInvariant() switch
@@ -744,6 +757,17 @@ public class WindowsAppDriver : AppDriverBase
 
     [DllImport("user32.dll")]
     private static extern bool SetCursorPos(int x, int y);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT lpPoint);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);

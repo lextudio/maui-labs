@@ -61,7 +61,12 @@ public sealed class NativeWindowProbe
             IntPtr hwnd;
             try
             {
-                hwnd = new IntPtr(window.Current.NativeWindowHandle);
+                // Zero-extend the int handle: AutomationElement.NativeWindowHandle is a
+                // signed 32-bit value, but valid HWNDs above 0x7FFFFFFF are negative
+                // when reinterpreted as int. new IntPtr(int) sign-extends, producing
+                // 0xFFFFFFFF_AABB0001 instead of 0x00000000_AABB0001 on 64-bit, so
+                // .ToInt64() comparisons against the MAUI-supplied handles miss.
+                hwnd = new IntPtr(unchecked((long)(uint)window.Current.NativeWindowHandle));
             }
             catch (ElementNotAvailableException)
             {
@@ -356,7 +361,10 @@ public sealed class NativeWindowProbe
             return false;
         }
 
-        if (current.NativeWindowHandle != 0 && current.NativeWindowHandle == rootHwnd.ToInt64())
+        // Zero-extend the int NativeWindowHandle the same way EnumerateProcessTopLevels
+        // does, so this comparison matches valid HWNDs above 0x7FFFFFFF on 64-bit.
+        var nativeHandle = unchecked((long)(uint)current.NativeWindowHandle);
+        if (nativeHandle != 0 && nativeHandle == rootHwnd.ToInt64())
             return false;
 
         if (TryGetIsModal(element) == true)
@@ -513,6 +521,12 @@ public sealed class NativeWindowProbe
         }
 
         var id = BuildId(current, prefix, path);
+        // Sanitize() collapses non-alphanumerics to '_', so siblings with names that
+        // sanitize identically (e.g. "Don't Allow" and "Don_t Allow") would otherwise
+        // overwrite each other in nativeObjects and a later action-by-id would
+        // invoke the wrong element. Disambiguate by appending the tree path.
+        if (nativeObjects.ContainsKey(id))
+            id = $"{id}:path:{string.Join(".", path)}";
         nativeObjects[id] = element;
         var info = Map(element, current, id, isRoot);
 
