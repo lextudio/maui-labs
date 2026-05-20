@@ -91,12 +91,17 @@ public static class BrokerClient
             var id = AgentRegistration.ComputeId(projectPath, tfm);
             var match = agents.FirstOrDefault(a => a.Id == id);
             if (match != null) return match;
+
+            var tfmMatches = agents
+                .Where(a => AgentMatchesProject(a, projectPath) && a.Tfm.Equals(tfm, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            if (tfmMatches.Length == 1) return tfmMatches[0];
         }
 
         // If project provided (no TFM), match by project path
         if (projectPath != null)
         {
-            var matches = agents.Where(a => a.Project == projectPath).ToArray();
+            var matches = agents.Where(a => AgentMatchesProject(a, projectPath)).ToArray();
             if (matches.Length == 1) return matches[0];
         }
 
@@ -105,6 +110,9 @@ public static class BrokerClient
 
         return null;
     }
+
+    static bool AgentMatchesProject(AgentRegistration agent, string projectPath)
+        => agent.Project.Equals(projectPath, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Sends a shutdown request to the broker.

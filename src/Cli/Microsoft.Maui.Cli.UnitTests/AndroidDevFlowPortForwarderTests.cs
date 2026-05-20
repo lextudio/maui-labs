@@ -173,6 +173,28 @@ public class AndroidDevFlowPortForwarderTests
 		Assert.Contains("adb -s emulator-5554 reverse tcp:19225 tcp:19225", report.Suggestions);
 	}
 
+	[Fact]
+	public async Task EnsureAsync_WithoutBrokerReverseRequest_DoesNotCheckOrReportReverse()
+	{
+		var provider = CreateProvider(Device("emulator-5554"));
+		var forwardRules = new HashSet<int> { 9223 };
+		var reverseRules = new HashSet<int> { 19223 };
+		var commands = new List<string>();
+		var forwarder = new AndroidDevFlowPortForwarder(provider, "/android-sdk/platform-tools/adb", CreateAdbRunner(forwardRules, reverseRules, commands));
+
+		var report = await forwarder.EnsureAsync(new AndroidDevFlowForwardingRequest
+		{
+			AgentPorts = [9223],
+			EnsureBrokerReverse = false,
+			Repair = true
+		});
+
+		Assert.Equal(AndroidDevFlowForwardingStatus.Ok, report.Status);
+		Assert.False(report.BrokerReverseChecked);
+		Assert.False(report.BrokerReversePresent);
+		Assert.DoesNotContain("-s emulator-5554 reverse --list", commands);
+	}
+
 	static FakeAndroidProvider CreateProvider(params Device[] devices)
 		=> new()
 		{

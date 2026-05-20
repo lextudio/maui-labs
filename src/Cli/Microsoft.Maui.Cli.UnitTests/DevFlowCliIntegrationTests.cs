@@ -277,6 +277,86 @@ public class DevFlowCliIntegrationTests
     }
 
     [Fact]
+    public async Task DiagnoseHuman_WhenBrokerUsesCustomPort_ReportsCustomBrokerReversePort()
+    {
+        var cli = new CliTestHarness(mockAgentPort: 9223);
+        var tempDir = Directory.CreateTempSubdirectory("maui-devflow-diagnose-");
+        var originalCurrentDirectory = Directory.GetCurrentDirectory();
+
+        DevFlowCommands.ResolveRunningBrokerPortAsync = () => Task.FromResult<int?>(19225);
+        DevFlowCommands.ListBrokerAgentsAsync = brokerPort =>
+        {
+            Assert.Equal(19225, brokerPort);
+            return Task.FromResult<AgentRegistration[]?>(
+            [
+                new AgentRegistration
+                {
+                    Id = "android-agent",
+                    Project = "/src/App.csproj",
+                    Tfm = "net10.0-android",
+                    Platform = "Android",
+                    AppName = "SampleApp",
+                    Port = 9223,
+                    Version = "0.1.0-preview",
+                    ConnectedAt = DateTime.UnixEpoch
+                }
+            ]);
+        };
+        DevFlowCommands.CreateAndroidPortForwarder = () =>
+        {
+            var provider = new FakeAndroidProvider
+            {
+                SdkPath = "/android-sdk",
+                IsSdkInstalled = true,
+                Devices =
+                [
+                    new Device
+                    {
+                        Id = "emulator-5554",
+                        Name = "Pixel",
+                        Platforms = ["android"],
+                        Type = DeviceType.Emulator,
+                        State = DeviceState.Connected,
+                        IsEmulator = true,
+                        IsRunning = true
+                    }
+                ]
+            };
+
+            return new AndroidDevFlowPortForwarder(
+                provider,
+                "/android-sdk/platform-tools/adb",
+                (_, args, _) =>
+                {
+                    var output = args[2] switch
+                    {
+                        "reverse" => "emulator-5554 tcp:19225 tcp:19225",
+                        "forward" => "emulator-5554 tcp:9223 tcp:9223",
+                        _ => ""
+                    };
+                    return Task.FromResult(new ProcessResult { ExitCode = 0, StandardOutput = output });
+                });
+        };
+
+        try
+        {
+            Directory.SetCurrentDirectory(tempDir.FullName);
+
+            var result = await cli.InvokeRawAsync("devflow", "diagnose", "--no-json", "--android-device", "emulator-5554");
+
+            Assert.Equal(0, result.ExitCode);
+            Assert.Contains("Broker reverse:   ready (tcp:19225)", result.StdOut);
+            Assert.DoesNotContain("Broker reverse:   ready (tcp:19223)", result.StdOut);
+        }
+        finally
+        {
+            DevFlowCommands.ResetBrokerClientForTests();
+            Directory.SetCurrentDirectory(originalCurrentDirectory);
+            tempDir.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task StoragePreferencesSet_UsesPutV1Route()
     {
         var (server, cli) = await CreateFixturesAsync();

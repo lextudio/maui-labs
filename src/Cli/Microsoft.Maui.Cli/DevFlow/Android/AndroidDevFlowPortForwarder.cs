@@ -127,9 +127,13 @@ internal sealed class AndroidDevFlowPortForwarder
 
         report = report with { SelectedSerial = selected.Device!.Serial };
 
-        var reverseBefore = await ListMappingsAsync(report.SelectedSerial, reverse: true, cancellationToken);
-        if (!reverseBefore.Success)
-            return report with { Status = AndroidDevFlowForwardingStatus.Error, Message = reverseBefore.Error, Suggestions = ["adb reverse --list"] };
+        var reverseBefore = AndroidPortMappingList.Ok([]);
+        if (request.EnsureBrokerReverse)
+        {
+            reverseBefore = await ListMappingsAsync(report.SelectedSerial, reverse: true, cancellationToken);
+            if (!reverseBefore.Success)
+                return report with { Status = AndroidDevFlowForwardingStatus.Error, Message = reverseBefore.Error, Suggestions = ["adb reverse --list"] };
+        }
 
         var forwardBefore = await ListMappingsAsync(report.SelectedSerial, reverse: false, cancellationToken);
         if (!forwardBefore.Success)
@@ -171,9 +175,16 @@ internal sealed class AndroidDevFlowPortForwarder
             });
         }
 
-        var reverseAfter = await ListMappingsAsync(report.SelectedSerial, reverse: true, cancellationToken);
-        if (!reverseAfter.Success)
-            errors.Add(reverseAfter.Error ?? "Failed to verify adb reverse mappings.");
+        var reverseAfter = AndroidPortMappingList.Ok([]);
+        var brokerReverseChecked = false;
+        if (request.EnsureBrokerReverse)
+        {
+            reverseAfter = await ListMappingsAsync(report.SelectedSerial, reverse: true, cancellationToken);
+            if (reverseAfter.Success)
+                brokerReverseChecked = true;
+            else
+                errors.Add(reverseAfter.Error ?? "Failed to verify adb reverse mappings.");
+        }
 
         var forwardAfter = await ListMappingsAsync(report.SelectedSerial, reverse: false, cancellationToken);
         if (!forwardAfter.Success)
@@ -200,6 +211,7 @@ internal sealed class AndroidDevFlowPortForwarder
             return report with
             {
                 Status = AndroidDevFlowForwardingStatus.Error,
+                BrokerReverseChecked = brokerReverseChecked,
                 BrokerReversePresent = brokerReversePresent,
                 BrokerReverseAdded = brokerReverseAdded,
                 AgentForwards = agentForwards.ToArray(),
@@ -209,9 +221,10 @@ internal sealed class AndroidDevFlowPortForwarder
         }
 
         var repaired = brokerReverseAdded || agentForwards.Any(static f => f.Added);
-        var missing = (!request.EnsureBrokerReverse || brokerReversePresent) && missingPorts.Length == 0
+        var brokerReverseMissing = request.EnsureBrokerReverse && !brokerReversePresent;
+        var missing = !brokerReverseMissing && missingPorts.Length == 0
             ? Array.Empty<string>()
-            : BuildMappingSuggestions(report.SelectedSerial, request.EnsureBrokerReverse && !brokerReversePresent, brokerPort, missingPorts);
+            : BuildMappingSuggestions(report.SelectedSerial, brokerReverseMissing, brokerPort, missingPorts);
 
         var status = missing.Length > 0
             ? AndroidDevFlowForwardingStatus.Missing
@@ -222,7 +235,8 @@ internal sealed class AndroidDevFlowPortForwarder
         return report with
         {
             Status = status,
-            BrokerReversePresent = !request.EnsureBrokerReverse || brokerReversePresent,
+            BrokerReverseChecked = brokerReverseChecked,
+            BrokerReversePresent = brokerReversePresent,
             BrokerReverseAdded = brokerReverseAdded,
             AgentForwards = agentForwards.ToArray(),
             Message = status switch
@@ -416,6 +430,9 @@ internal sealed record AndroidDevFlowForwardingReport
 
     [JsonPropertyName("broker_reverse_present")]
     public bool BrokerReversePresent { get; init; }
+
+    [JsonPropertyName("broker_reverse_checked")]
+    public bool BrokerReverseChecked { get; init; }
 
     [JsonPropertyName("broker_reverse_added")]
     public bool BrokerReverseAdded { get; init; }
