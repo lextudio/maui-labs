@@ -163,6 +163,8 @@ public class DevFlowCliIntegrationTests
                 }
             ]);
         };
+        DevFlowCommands.IsAndroidAdbLikelyAvailable = () => throw new InvalidOperationException("Non-Android diagnostics must not probe adb.");
+        DevFlowCommands.CreateAndroidPortForwarder = () => throw new InvalidOperationException("Non-Android diagnostics must not create an Android port forwarder.");
 
         try
         {

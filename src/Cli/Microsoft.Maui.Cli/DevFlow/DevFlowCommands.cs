@@ -4191,14 +4191,18 @@ public class DevFlowCommands
             .Select(static a => a.Port)
             .Distinct()
             .ToArray() ?? [];
-        var androidForwarding = await EnsureAndroidForwardingForPortsAsync(
-            androidAgentPorts,
-            ensureBrokerReverse: true,
-            androidDevice,
-            repair: false,
-            emitWarnings: false,
-            cancellationToken,
-            brokerPort: brokerPort);
+        AndroidDevFlowForwardingReport? androidForwarding = null;
+        if (androidAgentPorts.Length > 0 || !string.IsNullOrWhiteSpace(androidDevice))
+        {
+            androidForwarding = await EnsureAndroidForwardingForPortsAsync(
+                androidAgentPorts,
+                ensureBrokerReverse: true,
+                androidDevice,
+                repair: false,
+                emitWarnings: false,
+                cancellationToken,
+                brokerPort: brokerPort);
+        }
         
         // Scan for devflow-enabled projects
         var projects = ScanForDevFlowProjects();
