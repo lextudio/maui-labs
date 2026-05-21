@@ -214,6 +214,7 @@ public class DevFlowCliIntegrationTests
                 ConnectedAt = DateTime.UnixEpoch
             }
         ]);
+        DevFlowCommands.IsAndroidAdbLikelyAvailable = () => true;
         DevFlowCommands.CreateAndroidPortForwarder = () =>
         {
             var provider = new FakeAndroidProvider
@@ -302,6 +303,7 @@ public class DevFlowCliIntegrationTests
                 }
             ]);
         };
+        DevFlowCommands.IsAndroidAdbLikelyAvailable = () => true;
         DevFlowCommands.CreateAndroidPortForwarder = () =>
         {
             var provider = new FakeAndroidProvider

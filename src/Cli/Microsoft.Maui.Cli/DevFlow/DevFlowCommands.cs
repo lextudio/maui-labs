@@ -23,6 +23,7 @@ public class DevFlowCommands
     internal static Func<Task<int?>> ResolveRunningBrokerPortAsync { get; set; } = Broker.BrokerClient.GetRunningBrokerPortAsync;
     internal static Func<int, Task<Broker.AgentRegistration[]?>> ListBrokerAgentsAsync { get; set; } = Broker.BrokerClient.ListAgentsAsync;
     internal static Func<AndroidDevFlowPortForwarder> CreateAndroidPortForwarder { get; set; } = AndroidDevFlowPortForwarder.CreateDefault;
+    internal static Func<bool> IsAndroidAdbLikelyAvailable { get; set; } = AndroidDevFlowPortForwarder.IsAdbLikelyAvailable;
 
     private static IDevFlowOutputWriter Output => s_output ?? throw new InvalidOperationException("DevFlowCommands not initialized. Call CreateDevFlowCommand first.");
 
@@ -31,6 +32,7 @@ public class DevFlowCommands
         ResolveRunningBrokerPortAsync = Broker.BrokerClient.GetRunningBrokerPortAsync;
         ListBrokerAgentsAsync = Broker.BrokerClient.ListAgentsAsync;
         CreateAndroidPortForwarder = AndroidDevFlowPortForwarder.CreateDefault;
+        IsAndroidAdbLikelyAvailable = AndroidDevFlowPortForwarder.IsAdbLikelyAvailable;
     }
 
     /// <summary>
@@ -3899,7 +3901,7 @@ public class DevFlowCommands
         // Short-circuit on machines without an Android SDK so we don't pay the
         // cost of instantiating AndroidProvider / building env vars on every
         // devflow list/wait/diagnose invocation on desktop-only dev boxes.
-        if (!AndroidDevFlowPortForwarder.IsAdbLikelyAvailable())
+        if (!IsAndroidAdbLikelyAvailable())
             return null;
 
         try
