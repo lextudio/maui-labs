@@ -154,8 +154,8 @@ public class DevFlowCliIntegrationTests
                 {
                     Id = "agent-1",
                     Project = "/src/App.csproj",
-                    Tfm = "net10.0-android",
-                    Platform = "Android",
+                    Tfm = "net10.0-windows10.0.19041.0",
+                    Platform = "Windows",
                     AppName = "SampleApp",
                     Port = 9223,
                     Version = "0.1.0-preview",
