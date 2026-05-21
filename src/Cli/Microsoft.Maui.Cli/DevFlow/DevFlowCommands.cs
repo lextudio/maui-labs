@@ -3813,39 +3813,47 @@ public class DevFlowCommands
     {
         try
         {
-            var agent = Broker.BrokerClient.ResolveAgentForProjectAsync().GetAwaiter().GetResult();
-            if (agent is not null)
+            var brokerPort = Broker.BrokerClient.GetRunningBrokerPortAsync().GetAwaiter().GetResult();
+            if (brokerPort.HasValue)
             {
-                EnsureAndroidForwardingForAgentsAsync([agent], androidDevice: null, repair: true, emitWarnings: false, CancellationToken.None)
-                    .GetAwaiter()
-                    .GetResult();
-                return agent.Port;
+                Broker.AgentRegistration? agent = null;
+                var csproj = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj").FirstOrDefault();
+                if (csproj is not null)
+                    agent = Broker.BrokerClient.ResolveAgentAsync(brokerPort.Value, Path.GetFullPath(csproj)).GetAwaiter().GetResult();
+
+                agent ??= Broker.BrokerClient.ResolveAgentAsync(brokerPort.Value).GetAwaiter().GetResult();
+                if (agent is not null)
+                {
+                    EnsureAndroidForwardingForAgentsAsync([agent], androidDevice: null, repair: true, emitWarnings: false, CancellationToken.None, brokerPort: brokerPort.Value)
+                        .GetAwaiter()
+                        .GetResult();
+                    return agent.Port;
+                }
+
+                // Multiple agents, can't disambiguate — show them so the caller
+                // (human or AI agent) can re-run with --agent-port
+                var agents = Broker.BrokerClient.ListAgentsAsync(brokerPort.Value).GetAwaiter().GetResult();
+                if (agents != null && agents.Length > 1)
+                {
+                    EnsureAndroidForwardingForAgentsAsync(agents, androidDevice: null, repair: true, emitWarnings: false, cancellationToken: CancellationToken.None, brokerPort: brokerPort.Value)
+                        .GetAwaiter()
+                        .GetResult();
+
+                    Console.Error.WriteLine("Multiple agents connected. Use --agent-port to specify which one:");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine($"{"ID",-15}{"App",-20}{"Platform",-15}{"TFM",-25}{"Port",-7}");
+                    Console.Error.WriteLine(new string('-', 82));
+                    foreach (var a in agents)
+                        Console.Error.WriteLine($"{a.Id,-15}{a.AppName,-20}{a.Platform,-15}{a.Tfm,-25}{a.Port,-7}");
+                    Console.Error.WriteLine();
+                    Console.Error.WriteLine("Example: maui devflow ui status --agent-port <port>");
+                }
             }
 
             // No single match — check config file fallback
             var configPort = Broker.BrokerClient.ReadConfigPort();
             if (configPort.HasValue)
                 return configPort.Value;
-
-            // Multiple agents, can't disambiguate — show them so the caller
-            // (human or AI agent) can re-run with --agent-port
-            var brokerPort = Broker.BrokerClient.ReadBrokerPortPublic() ?? Broker.BrokerServer.DefaultPort;
-            var agents = Broker.BrokerClient.ListAgentsAsync(brokerPort).GetAwaiter().GetResult();
-            if (agents != null && agents.Length > 1)
-            {
-                EnsureAndroidForwardingForAgentsAsync(agents, androidDevice: null, repair: true, emitWarnings: false, cancellationToken: CancellationToken.None, brokerPort: brokerPort)
-                    .GetAwaiter()
-                    .GetResult();
-
-                Console.Error.WriteLine("Multiple agents connected. Use --agent-port to specify which one:");
-                Console.Error.WriteLine();
-                Console.Error.WriteLine($"{"ID",-15}{"App",-20}{"Platform",-15}{"TFM",-25}{"Port",-7}");
-                Console.Error.WriteLine(new string('-', 82));
-                foreach (var a in agents)
-                    Console.Error.WriteLine($"{a.Id,-15}{a.AppName,-20}{a.Platform,-15}{a.Tfm,-25}{a.Port,-7}");
-                Console.Error.WriteLine();
-                Console.Error.WriteLine("Example: maui devflow ui status --agent-port <port>");
-            }
         }
         catch { /* broker unavailable, fall through */ }
 
