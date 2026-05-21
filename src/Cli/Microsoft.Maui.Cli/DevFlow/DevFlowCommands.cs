@@ -1541,78 +1541,114 @@ public class DevFlowCommands
 
     private static async Task ExtensionsListAsync(string host, int port, bool json)
     {
-        using var client = new AgentClient(host, port);
-        var extensions = await client.GetExtensionsAsync();
-        if (json)
+        try
         {
-            var result = new JsonObject
+            using var client = new AgentClient(host, port);
+            var extensions = await client.GetExtensionsAsync();
+            if (json)
             {
-                ["extensions"] = JsonSerializer.SerializeToNode(
-                    extensions,
-                    typeof(Dictionary<string, ExtensionDescriptor>),
-                    DevFlowCliJsonContext.Default)
-            };
-            Output.WriteResult(result, json);
-            return;
-        }
+                var result = new JsonObject
+                {
+                    ["extensions"] = JsonSerializer.SerializeToNode(
+                        extensions,
+                        typeof(Dictionary<string, ExtensionDescriptor>),
+                        DevFlowCliJsonContext.Default)
+                };
+                Output.WriteResult(result, json);
+                return;
+            }
 
-        if (extensions.Count == 0)
+            if (extensions.Count == 0)
+            {
+                Console.WriteLine("No extensions registered on the connected agent.");
+                return;
+            }
+
+            Console.WriteLine($"{"Namespace",-35} {"Version",-10} {"Tools",-5} Description");
+            Console.WriteLine(new string('-', 90));
+            foreach (var (ns, extension) in extensions.OrderBy(e => e.Key, StringComparer.Ordinal))
+                Console.WriteLine($"{ns,-35} {extension.Version,-10} {extension.Tools.Count,-5} {extension.Description}");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or JsonException or NotSupportedException)
         {
-            Console.WriteLine("No extensions registered on the connected agent.");
-            return;
+            Output.WriteError(ex.Message, json);
+            _errorOccurred = true;
         }
-
-        Console.WriteLine($"{"Namespace",-35} {"Version",-10} {"Tools",-5} Description");
-        Console.WriteLine(new string('-', 90));
-        foreach (var (ns, extension) in extensions.OrderBy(e => e.Key, StringComparer.Ordinal))
-            Console.WriteLine($"{ns,-35} {extension.Version,-10} {extension.Tools.Count,-5} {extension.Description}");
     }
 
     private static async Task ExtensionsDescribeAsync(string host, int port, string ns, bool json)
     {
-        using var client = new AgentClient(host, port);
-        var extensions = await client.GetExtensionsAsync();
-        if (!extensions.TryGetValue(ns, out var extension))
-            throw new InvalidOperationException($"Extension '{ns}' was not found.");
-
-        if (json)
+        try
         {
-            Output.WriteResult(extension, json);
-            return;
-        }
+            using var client = new AgentClient(host, port);
+            var extensions = await client.GetExtensionsAsync();
+            if (!extensions.TryGetValue(ns, out var extension))
+            {
+                Output.WriteError($"Extension '{ns}' was not found.", json, "InvocationError");
+                _errorOccurred = true;
+                return;
+            }
 
-        Console.WriteLine($"{ns} {extension.Version}");
-        Console.WriteLine(extension.Description);
-        Console.WriteLine();
-        Console.WriteLine($"{"Tool",-24} {"Method",-7} Path");
-        Console.WriteLine(new string('-', 80));
-        foreach (var tool in extension.Tools.OrderBy(t => t.Name, StringComparer.Ordinal))
-            Console.WriteLine($"{tool.Name,-24} {tool.Method,-7} {tool.Path}");
+            if (json)
+            {
+                Output.WriteResult(extension, json);
+                return;
+            }
+
+            Console.WriteLine($"{ns} {extension.Version}");
+            Console.WriteLine(extension.Description);
+            Console.WriteLine();
+            Console.WriteLine($"{"Tool",-24} {"Method",-7} Path");
+            Console.WriteLine(new string('-', 80));
+            foreach (var tool in extension.Tools.OrderBy(t => t.Name, StringComparer.Ordinal))
+                Console.WriteLine($"{tool.Name,-24} {tool.Method,-7} {tool.Path}");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or JsonException or NotSupportedException)
+        {
+            Output.WriteError(ex.Message, json);
+            _errorOccurred = true;
+        }
     }
 
     private static async Task ExtensionsCallAsync(string host, int port, string ns, string toolName, string? parameters, bool json)
     {
-        using var client = new AgentClient(host, port);
-        var extensions = await client.GetExtensionsAsync();
-        if (!extensions.TryGetValue(ns, out var extension))
-            throw new InvalidOperationException($"Extension '{ns}' was not found.");
-
-        var tool = extension.Tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.Ordinal));
-        if (tool == null)
-            throw new InvalidOperationException($"Tool '{toolName}' was not found in extension '{ns}'.");
-
-        JsonElement? parameterJson = null;
-        if (!string.IsNullOrWhiteSpace(parameters))
-            parameterJson = JsonSerializer.Deserialize<JsonElement>(parameters);
-
-        var result = await client.CallExtensionToolAsync(tool.Method, tool.Path, parameterJson);
-        if (json)
+        try
         {
-            Console.WriteLine(result);
-            return;
-        }
+            using var client = new AgentClient(host, port);
+            var extensions = await client.GetExtensionsAsync();
+            if (!extensions.TryGetValue(ns, out var extension))
+            {
+                Output.WriteError($"Extension '{ns}' was not found.", json, "InvocationError");
+                _errorOccurred = true;
+                return;
+            }
 
-        Console.WriteLine(TryFormatJson(result));
+            var tool = extension.Tools.FirstOrDefault(t => string.Equals(t.Name, toolName, StringComparison.Ordinal));
+            if (tool == null)
+            {
+                Output.WriteError($"Tool '{toolName}' was not found in extension '{ns}'.", json, "InvocationError");
+                _errorOccurred = true;
+                return;
+            }
+
+            JsonElement? parameterJson = null;
+            if (!string.IsNullOrWhiteSpace(parameters))
+                parameterJson = JsonSerializer.Deserialize<JsonElement>(parameters);
+
+            var result = await client.CallExtensionToolAsync(tool.Method, tool.Path, parameterJson);
+            if (json)
+            {
+                Console.WriteLine(result);
+                return;
+            }
+
+            Console.WriteLine(TryFormatJson(result));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException or JsonException or NotSupportedException)
+        {
+            Output.WriteError(ex.Message, json);
+            _errorOccurred = true;
+        }
     }
 
     private static string TryFormatJson(string value)

@@ -1931,8 +1931,9 @@ paths:
         Proxy route for custom extension GET endpoints. The namespace uses
         reverse-domain notation (e.g. `com.example.diagnostics`). Available
         extensions and their self-describing tools are discoverable via
-        `GET /api/v1/agent/capabilities`. The `path` segment represents the
-        extension-defined relative path; agents may accept nested sub-paths.
+        `GET /api/v1/agent/capabilities`. This generic OpenAPI template
+        represents a single path segment; clients should use each descriptor's
+        concrete `path` value when an extension advertises a nested sub-path.
       parameters:
         - name: namespace
           in: path
@@ -2056,6 +2057,11 @@ paths:
           description: Extension-defined sub-path.
           schema:
             type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {}
       responses:
         "200":
           description: Extension-defined response.

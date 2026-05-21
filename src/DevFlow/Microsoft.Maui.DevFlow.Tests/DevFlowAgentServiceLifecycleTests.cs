@@ -169,6 +169,35 @@ public class DevFlowAgentServiceLifecycleTests
     }
 
     [Fact]
+    public void RegisterExtension_RejectsInvalidVersion()
+    {
+        var options = new AgentOptions();
+
+        Assert.Throws<ArgumentException>(() => options.RegisterExtension("com.example.diagnostics", "Diagnostics", "beta"));
+    }
+
+    [Fact]
+    public async Task Extensions_WithSamePathAndDifferentMethods_GenerateUniqueToolNames()
+    {
+        var port = GetFreePort();
+        var options = new AgentOptions { Port = port };
+        var extension = options.RegisterExtension("com.example.diagnostics", "Diagnostics");
+        extension.MapGet("echo", _ => Task.FromResult(HttpResponse.Json(new { method = "GET" })));
+        extension.MapPost("echo", _ => Task.FromResult(HttpResponse.Json(new { method = "POST" })));
+
+        using var service = new DevFlowAgentService(options);
+        using var client = new AgentClient("localhost", port);
+
+        service.StartServerOnly(new ImmediateDispatcher());
+
+        var extensions = await client.GetExtensionsAsync();
+        var descriptor = Assert.Single(extensions);
+        var toolNames = descriptor.Value.Tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray();
+
+        Assert.Equal(new[] { "get_echo", "post_echo" }, toolNames);
+    }
+
+    [Fact]
     public void StartServerOnly_RejectsDuplicateExtensionNamespace()
     {
         var options = new AgentOptions { Port = GetFreePort() };

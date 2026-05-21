@@ -55,6 +55,34 @@ public class DevFlowCliCommandTests
         Assert.Contains("hello", req.Body);
     }
 
+    [Fact]
+    public async Task ExtensionsDescribe_MissingExtension_WritesStructuredError()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var _ = server;
+
+        var result = await cli.InvokeAsync("devflow", "extensions", "describe", "com.example.missing", "--json");
+
+        Assert.Equal(1, result.ExitCode);
+        using var document = JsonDocument.Parse(result.StdErr);
+        Assert.Equal("InvocationError", document.RootElement.GetProperty("type").GetString());
+        Assert.Contains("was not found", document.RootElement.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task ExtensionsCall_MissingTool_WritesStructuredError()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var _ = server;
+
+        var result = await cli.InvokeAsync("devflow", "extensions", "call", "com.example.diagnostics", "missing", "--json");
+
+        Assert.Equal(1, result.ExitCode);
+        using var document = JsonDocument.Parse(result.StdErr);
+        Assert.Equal("InvocationError", document.RootElement.GetProperty("type").GetString());
+        Assert.Contains("was not found", document.RootElement.GetProperty("error").GetString());
+    }
+
     // ========== ui status / tree / query / element / hit-test ==========
 
     [Fact]

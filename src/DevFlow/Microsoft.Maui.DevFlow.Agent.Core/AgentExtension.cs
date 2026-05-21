@@ -6,6 +6,7 @@ namespace Microsoft.Maui.DevFlow.Agent.Core;
 public sealed class AgentExtension
 {
     private static readonly Regex NamespacePattern = new("^[a-z][a-z0-9]*(\\.[a-z][a-z0-9]*)+$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex SemanticVersionPattern = new("^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private readonly List<AgentExtensionRoute> _routes = new();
     private readonly List<ExtensionToolDescriptor> _tools = new();
 
@@ -31,6 +32,9 @@ public sealed class AgentExtension
 
         Description = description?.Trim() ?? string.Empty;
         Version = string.IsNullOrWhiteSpace(version) ? "1.0.0" : version.Trim();
+        if (!SemanticVersionPattern.IsMatch(Version))
+            throw new ArgumentException("Extension version must be a semantic version, e.g. '1.0.0'.", nameof(version));
+
         Features = (features ?? Array.Empty<string>())
             .Where(f => !string.IsNullOrWhiteSpace(f))
             .Select(f => f.Trim())
@@ -76,10 +80,14 @@ public sealed class AgentExtension
         var normalizedMethod = method.Trim().ToUpperInvariant();
         var normalizedPath = NormalizePath(path);
         var fullPath = $"/api/v1/ext/{Namespace}{normalizedPath}";
+        var toolName = string.IsNullOrWhiteSpace(name) ? BuildToolName(normalizedMethod, normalizedPath) : name.Trim();
+        if (_tools.Any(tool => string.Equals(tool.Name, toolName, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException($"Duplicate extension tool name registration: {toolName}");
+
         _routes.Add(new AgentExtensionRoute(normalizedMethod, fullPath, handler));
         _tools.Add(new ExtensionToolDescriptor
         {
-            Name = string.IsNullOrWhiteSpace(name) ? BuildToolName(normalizedMethod, normalizedPath) : name.Trim(),
+            Name = toolName,
             Description = string.IsNullOrWhiteSpace(description) ? $"{normalizedMethod} {fullPath}" : description.Trim(),
             Method = normalizedMethod,
             Path = fullPath,
@@ -102,7 +110,9 @@ public sealed class AgentExtension
     {
         var source = string.IsNullOrWhiteSpace(path) || path == "/" ? "root" : path.Trim('/');
         var sanitized = Regex.Replace(source.ToLowerInvariant(), "[^a-z0-9]+", "_").Trim('_');
-        return string.IsNullOrWhiteSpace(sanitized) ? method.ToLowerInvariant() : sanitized;
+        return string.IsNullOrWhiteSpace(sanitized)
+            ? method.ToLowerInvariant()
+            : $"{method.ToLowerInvariant()}_{sanitized}";
     }
 }
 

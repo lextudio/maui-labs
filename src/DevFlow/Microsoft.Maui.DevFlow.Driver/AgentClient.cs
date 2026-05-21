@@ -80,8 +80,7 @@ public class AgentClient : IDisposable
 
     public async Task<Dictionary<string, ExtensionDescriptor>> GetExtensionsAsync()
     {
-        var json = await _http.GetStringAsync($"{_baseUrl}{AgentApi}/capabilities");
-        var capabilities = DriverJson.Deserialize<AgentCapabilitiesResponse>(json);
+        var capabilities = await GetAsync<AgentCapabilitiesResponse>($"{AgentApi}/capabilities");
         return capabilities?.Extensions ?? new Dictionary<string, ExtensionDescriptor>();
     }
 
@@ -90,16 +89,22 @@ public class AgentClient : IDisposable
         if (string.IsNullOrWhiteSpace(path) || !path.StartsWith('/'))
             throw new ArgumentException("Extension tool path must be an absolute agent path.", nameof(path));
 
-        using var request = new HttpRequestMessage(new HttpMethod(method), $"{_baseUrl}{path}");
-        if (parameters.HasValue && !string.Equals(method, "GET", StringComparison.OrdinalIgnoreCase))
+        var httpMethod = new HttpMethod(method);
+        using var response = await SendWithTransientRetriesAsync(httpMethod, () => SendExtensionToolRequestAsync(httpMethod, path, parameters));
+        var body = await response.Content.ReadAsStringAsync();
+        response.EnsureSuccessStatusCode();
+        return body;
+    }
+
+    private async Task<HttpResponseMessage> SendExtensionToolRequestAsync(HttpMethod method, string path, JsonElement? parameters)
+    {
+        using var request = new HttpRequestMessage(method, $"{_baseUrl}{path}");
+        if (parameters.HasValue && method != HttpMethod.Get)
             request.Content = new StringContent(parameters.Value.GetRawText(), Encoding.UTF8, "application/json");
         else if (parameters.HasValue && parameters.Value.ValueKind == JsonValueKind.Object)
             request.RequestUri = new Uri($"{_baseUrl}{path}{BuildQueryString(parameters.Value)}");
 
-        using var response = await _http.SendAsync(request);
-        var body = await response.Content.ReadAsStringAsync();
-        response.EnsureSuccessStatusCode();
-        return body;
+        return await _http.SendAsync(request);
     }
 
     private static string BuildQueryString(JsonElement parameters)

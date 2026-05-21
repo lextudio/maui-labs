@@ -192,7 +192,7 @@
         "version": {
           "type": "string",
           "description": "Semantic version of this extension. Changes to this value signal clients to refresh cached tool definitions.",
-          "pattern": "^\\d+\\.\\d+\\.\\d+"
+          "pattern": "^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?$"
         },
         "description": {
           "type": "string",
@@ -224,7 +224,7 @@
         },
         "description": {
           "type": "string",
-          "description": "Human-readable description of what this tool does. Used by CLI help text and MCP tool metadata."
+          "description": "Human-readable description of what this tool does. Used by extension discovery clients."
         },
         "method": {
           "type": "string",
@@ -242,7 +242,7 @@
         },
         "parameters": {
           "type": "object",
-          "description": "JSON Schema describing the tool's input parameters. For GET requests, parameters are query strings. For POST and PUT, parameters are the JSON request body.",
+          "description": "JSON Schema describing the tool's input parameters. For GET requests, parameters are query strings. For POST, PUT, and DELETE, parameters are the JSON request body.",
           "additionalProperties": true
         },
         "returns": {

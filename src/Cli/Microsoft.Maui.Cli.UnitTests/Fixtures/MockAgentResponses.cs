@@ -60,8 +60,10 @@ internal static class MockAgentResponses
             "webview": { "version": 1, "features": ["contexts", "evaluate", "source"] },
             "network": { "version": 1, "features": ["list", "detail", "clear"] },
             "logs": { "version": 1, "features": ["list", "stream"] },
-            "sensors": { "version": 1, "features": ["list", "start", "stop"] },
-            "storage": { "version": 1, "features": ["preferences", "secure-storage", "roots", "files"] },
+            "device.sensors": { "version": 1, "features": ["list", "start", "stop"] },
+            "storage.preferences": { "version": 1, "features": ["list", "get", "set", "delete", "clear"] },
+            "storage.secure": { "version": 1, "features": ["get", "set", "delete", "clear"] },
+            "storage.files": { "version": 1, "features": ["roots", "list", "download", "upload", "delete"] },
             "profiler": { "version": 1, "features": ["capabilities", "sessions", "samples"] },
             "com.example.diagnostics": { "version": 1, "features": ["build_info", "echo"] }
           },
