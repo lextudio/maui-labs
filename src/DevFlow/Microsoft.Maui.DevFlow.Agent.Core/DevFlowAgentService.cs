@@ -705,7 +705,6 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
                 : Array.Empty<string>(),
             supported = IsJobsSupported
         };
-        capabilities["device.ble"] = new { version = 1, features = Ble.SupportedFeatures, supported = Ble.SupportedFeatures.Count > 0 };
         capabilities["storage.preferences"] = new { version = 1, features = new[] { "list", "get", "set", "delete", "clear" } };
         capabilities["storage.secure"] = new { version = 1, features = new[] { "get", "set", "delete", "clear" } };
         capabilities["storage.files"] = new { version = 1, features = new[] { "roots", "list", "download", "upload", "delete" } };
