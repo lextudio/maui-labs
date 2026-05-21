@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
@@ -41,6 +42,12 @@ public static class BrokerClient
         return await IsBrokerAliveAsync(port) ? port : null;
     }
 
+    internal static int? GetRunningBrokerPort()
+    {
+        var port = ReadBrokerPort() ?? BrokerServer.DefaultPort;
+        return IsBrokerAlive(port) ? port : null;
+    }
+
     /// <summary>
     /// Lists all agents registered with the broker.
     /// </summary>
@@ -49,6 +56,19 @@ public static class BrokerClient
         try
         {
             var response = await _http.GetStringAsync($"http://localhost:{brokerPort}/api/agents");
+            return CliJson.Deserialize<AgentRegistration[]>(response);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static AgentRegistration[]? ListAgents(int brokerPort)
+    {
+        try
+        {
+            var response = GetString($"http://localhost:{brokerPort}/api/agents");
             return CliJson.Deserialize<AgentRegistration[]>(response);
         }
         catch
@@ -85,6 +105,19 @@ public static class BrokerClient
         var agents = await ListAgentsAsync(brokerPort);
         if (agents == null || agents.Length == 0) return null;
 
+        return ResolveAgent(agents, projectPath, tfm);
+    }
+
+    public static AgentRegistration? ResolveAgent(int brokerPort, string? projectPath = null, string? tfm = null)
+    {
+        var agents = ListAgents(brokerPort);
+        if (agents == null || agents.Length == 0) return null;
+
+        return ResolveAgent(agents, projectPath, tfm);
+    }
+
+    static AgentRegistration? ResolveAgent(AgentRegistration[] agents, string? projectPath = null, string? tfm = null)
+    {
         // If project+TFM provided, look for exact match
         if (projectPath != null && tfm != null)
         {
@@ -143,6 +176,54 @@ public static class BrokerClient
         {
             return false;
         }
+    }
+
+    private static bool IsBrokerAlive(int port)
+    {
+        try
+        {
+            return TryConnect(IPAddress.Loopback, port) || TryConnect(IPAddress.IPv6Loopback, port);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryConnect(IPAddress address, int port)
+    {
+        using var socket = new Socket(address.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
+        {
+            Blocking = false
+        };
+
+        try
+        {
+            socket.Connect(new IPEndPoint(address, port));
+            return true;
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode is SocketError.WouldBlock or SocketError.InProgress or SocketError.AlreadyInProgress)
+        {
+            if (!socket.Poll(500_000, SelectMode.SelectWrite))
+                return false;
+
+            var error = (int)socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Error)!;
+            return error == 0;
+        }
+        catch (SocketException)
+        {
+            return false;
+        }
+    }
+
+    private static string GetString(string url)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var response = _http.Send(request);
+        response.EnsureSuccessStatusCode();
+        using var stream = response.Content.ReadAsStream();
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
     }
 
     private static int? ReadBrokerPort()

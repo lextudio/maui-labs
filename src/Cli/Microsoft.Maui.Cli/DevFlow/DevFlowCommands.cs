@@ -1494,9 +1494,26 @@ public class DevFlowCommands
     
     // ===== CDP Helper: Send command via AgentClient =====
 
+    private static async Task<Microsoft.Maui.DevFlow.Driver.AgentClient> CreateAgentClientAsync(string host, int port)
+    {
+        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+        {
+            var brokerPort = await ResolveRunningBrokerPortAsync();
+            if (brokerPort.HasValue)
+            {
+                var agents = await ListBrokerAgentsAsync(brokerPort.Value);
+                var agent = agents?.FirstOrDefault(a => a.Port == port);
+                if (agent is not null && IsAndroidAgent(agent))
+                    await EnsureAndroidForwardingForAgentsAsync([agent], androidDevice: null, repair: true, emitWarnings: false, CancellationToken.None, brokerPort: brokerPort.Value);
+            }
+        }
+
+        return new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+    }
+
     private static async Task<JsonElement?> SendCdpCommandAsync(string host, int port, string method, JsonNode? parameters = null, string? webview = null)
     {
-        using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+        using var client = await CreateAgentClientAsync(host, port);
         var result = await client.SendCdpCommandAsync(method, parameters, webview);
         return result;
     }
@@ -1758,7 +1775,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var result = await client.GetCdpWebViewsAsync();
             var body = result.ToString();
 
@@ -1799,7 +1816,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var source = await client.GetCdpSourceAsync(webview);
             Console.WriteLine(source);
         }
@@ -2173,7 +2190,7 @@ public class DevFlowCommands
 
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var results = await client.QueryAsync(type, automationId, text);
 
             if (results.Count == 0)
@@ -2256,7 +2273,7 @@ public class DevFlowCommands
             var resolvedId = await ResolveElementIdAsync(host, port, json, elementId, automationId, null, null, 0);
             if (resolvedId == null) return;
 
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var actualValue = await client.GetPropertyAsync(resolvedId, propertyName);
 
             var passed = string.Equals(actualValue, expectedValue, StringComparison.Ordinal);
@@ -2382,7 +2399,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var status = await client.GetStatusAsync(window);
             if (status == null)
             {
@@ -2405,7 +2422,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var tree = await client.GetTreeAsync(depth, window);
             if (json)
             {
@@ -2424,7 +2441,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
 
             if (!string.IsNullOrWhiteSpace(waitUntil))
             {
@@ -2506,7 +2523,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var result = await client.HitTestAsync(x, y, window);
             if (json)
                 Console.WriteLine(result);
@@ -2520,7 +2537,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var success = await client.TapAsync(elementId);
             Output.WriteActionResult(success, "Tapped", elementId, json,
                 success ? $"Tapped: {elementId}" : $"Failed to tap: {elementId}");
@@ -2533,7 +2550,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var success = await client.FillAsync(elementId, text);
             Output.WriteActionResult(success, "Filled", elementId, json,
                 success ? $"Filled: {elementId}" : $"Failed to fill: {elementId}");
@@ -2546,7 +2563,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var success = await client.ClearAsync(elementId);
             Output.WriteActionResult(success, "Cleared", elementId, json,
                 success ? $"Cleared: {elementId}" : $"Failed to clear: {elementId}");
@@ -2570,7 +2587,7 @@ public class DevFlowCommands
             byte[]? data = null;
             bool fromSimctl = false;
 
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
 
             // For full-screen captures (no element scoping), try simctl io screenshot first
             // when connected to an iOS simulator. This captures everything on the simulator
@@ -2768,7 +2785,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var value = await client.GetPropertyAsync(elementId, propertyName);
             if (json)
             {
@@ -2790,7 +2807,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var success = await client.SetPropertyAsync(elementId, propertyName, value);
             if (success)
             {
@@ -2810,7 +2827,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var el = await client.GetElementAsync(elementId);
             if (el == null)
             {
@@ -2828,7 +2845,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var success = await client.NavigateAsync(route);
             Output.WriteActionResult(success, "Navigated", route, json,
                 success ? $"Navigated to: {route}" : $"Failed to navigate to: {route}");
@@ -2841,7 +2858,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var success = await client.ScrollAsync(elementId, dx, dy, animated, window, itemIndex, groupIndex, scrollToPosition);
             if (json)
             {
@@ -2865,7 +2882,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var success = await client.FocusAsync(elementId);
             Output.WriteActionResult(success, "Focused", elementId, json,
                 success ? $"Focused: {elementId}" : $"Failed to focus: {elementId}");
@@ -2878,7 +2895,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var success = await client.ResizeAsync(width, height, window);
             if (json)
                 Output.WriteActionResult(success, "Resized", $"{width}x{height}", json);
@@ -2893,7 +2910,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var body = await client.GetLogsAsync(limit, skip, source);
 
             if (json)
@@ -3156,7 +3173,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var requests = await client.GetNetworkRequestsAsync(limit, filterHost, filterMethod);
 
             if (json)
@@ -3189,7 +3206,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var req = await client.GetNetworkRequestDetailAsync(id);
 
             if (req == null)
@@ -3246,7 +3263,7 @@ public class DevFlowCommands
     {
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var result = await client.ClearNetworkRequestsAsync();
             Output.WriteActionResult(result, "NetworkCleared", null, json,
                 result ? "Network request buffer cleared." : "Failed to clear.");
@@ -3511,7 +3528,7 @@ public class DevFlowCommands
         // Auto-detect from connected agent
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var status = await client.GetStatusAsync();
             if (status?.Platform != null)
             {
@@ -3568,7 +3585,7 @@ public class DevFlowCommands
         // Try to find the PID by checking what's listening on the agent port
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var status = await client.GetStatusAsync();
             var appName = status?.App?.Name ?? status?.AppName;
             if (!string.IsNullOrWhiteSpace(appName))
@@ -3591,7 +3608,7 @@ public class DevFlowCommands
 
         try
         {
-            using var client = new Microsoft.Maui.DevFlow.Driver.AgentClient(host, port);
+            using var client = await CreateAgentClientAsync(host, port);
             var status = await client.GetStatusAsync();
             var appName = status?.App?.Name ?? status?.AppName;
             if (!string.IsNullOrWhiteSpace(appName))
@@ -3815,32 +3832,23 @@ public class DevFlowCommands
     {
         try
         {
-            var brokerPort = Broker.BrokerClient.GetRunningBrokerPortAsync().GetAwaiter().GetResult();
+            var brokerPort = Broker.BrokerClient.GetRunningBrokerPort();
             if (brokerPort.HasValue)
             {
                 Broker.AgentRegistration? agent = null;
                 var csproj = Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj").FirstOrDefault();
                 if (csproj is not null)
-                    agent = Broker.BrokerClient.ResolveAgentAsync(brokerPort.Value, Path.GetFullPath(csproj)).GetAwaiter().GetResult();
+                    agent = Broker.BrokerClient.ResolveAgent(brokerPort.Value, Path.GetFullPath(csproj));
 
-                agent ??= Broker.BrokerClient.ResolveAgentAsync(brokerPort.Value).GetAwaiter().GetResult();
+                agent ??= Broker.BrokerClient.ResolveAgent(brokerPort.Value);
                 if (agent is not null)
-                {
-                    EnsureAndroidForwardingForAgentsAsync([agent], androidDevice: null, repair: true, emitWarnings: false, CancellationToken.None, brokerPort: brokerPort.Value)
-                        .GetAwaiter()
-                        .GetResult();
                     return agent.Port;
-                }
 
                 // Multiple agents, can't disambiguate — show them so the caller
                 // (human or AI agent) can re-run with --agent-port
-                var agents = Broker.BrokerClient.ListAgentsAsync(brokerPort.Value).GetAwaiter().GetResult();
+                var agents = Broker.BrokerClient.ListAgents(brokerPort.Value);
                 if (agents != null && agents.Length > 1)
                 {
-                    EnsureAndroidForwardingForAgentsAsync(agents, androidDevice: null, repair: true, emitWarnings: false, cancellationToken: CancellationToken.None, brokerPort: brokerPort.Value)
-                        .GetAwaiter()
-                        .GetResult();
-
                     Console.Error.WriteLine("Multiple agents connected. Use --agent-port to specify which one:");
                     Console.Error.WriteLine();
                     Console.Error.WriteLine($"{"ID",-15}{"App",-20}{"Platform",-15}{"TFM",-25}{"Port",-7}");
