@@ -78,6 +78,52 @@ public class AgentClient : IDisposable
     public Task<JsonElement> GetCapabilitiesAsync()
         => GetJsonAsync($"{AgentApi}/capabilities");
 
+    public async Task<Dictionary<string, ExtensionDescriptor>> GetExtensionsAsync()
+    {
+        var capabilities = await GetAsync<AgentCapabilitiesResponse>($"{AgentApi}/capabilities");
+        return capabilities?.Extensions ?? new Dictionary<string, ExtensionDescriptor>();
+    }
+
+    public async Task<string> CallExtensionToolAsync(string method, string path, JsonElement? parameters = null)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !path.StartsWith('/'))
+            throw new ArgumentException("Extension tool path must be an absolute agent path.", nameof(path));
+
+        var httpMethod = new HttpMethod(method);
+        using var response = await SendWithTransientRetriesAsync(httpMethod, () => SendExtensionToolRequestAsync(httpMethod, path, parameters));
+        var body = await response.Content.ReadAsStringAsync();
+        response.EnsureSuccessStatusCode();
+        return body;
+    }
+
+    private async Task<HttpResponseMessage> SendExtensionToolRequestAsync(HttpMethod method, string path, JsonElement? parameters)
+    {
+        using var request = new HttpRequestMessage(method, $"{_baseUrl}{path}");
+        if (parameters.HasValue && method != HttpMethod.Get)
+            request.Content = new StringContent(parameters.Value.GetRawText(), Encoding.UTF8, "application/json");
+        else if (parameters.HasValue && parameters.Value.ValueKind == JsonValueKind.Object)
+            request.RequestUri = new Uri($"{_baseUrl}{path}{BuildQueryString(parameters.Value)}");
+
+        return await _http.SendAsync(request);
+    }
+
+    private static string BuildQueryString(JsonElement parameters)
+    {
+        var query = parameters.EnumerateObject()
+            .Select(property => $"{Uri.EscapeDataString(property.Name)}={Uri.EscapeDataString(FormatQueryValue(property.Value))}")
+            .ToArray();
+        return query.Length == 0 ? string.Empty : "?" + string.Join("&", query);
+    }
+
+    private static string FormatQueryValue(JsonElement value)
+        => value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString() ?? string.Empty,
+            JsonValueKind.Number or JsonValueKind.True or JsonValueKind.False => value.ToString(),
+            JsonValueKind.Null => string.Empty,
+            _ => value.GetRawText()
+        };
+
     /// <summary>
     /// Get the visual tree from the running app.
     /// </summary>
@@ -978,6 +1024,8 @@ public class AgentStatus
     public AppDescriptor? App { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("capabilities")]
     public AgentCapabilities? Capabilities { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("extensions")]
+    public ExtensionsMarker? Extensions { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("timestamp")]
     public string? Timestamp { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("running")]

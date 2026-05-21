@@ -3,6 +3,8 @@ using System.Text.RegularExpressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Maui;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Controls;
@@ -544,6 +546,44 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
         // Invoke / reflection
         _server.MapGet("/api/v1/invoke/actions", HandleListActions);
         _server.MapPost("/api/v1/invoke/actions/{name}", HandleInvokeAction);
+
+        RegisterExtensionRoutes();
+    }
+
+    private void RegisterExtensionRoutes()
+    {
+        var namespaces = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var extension in _options.Extensions)
+        {
+            if (!namespaces.Add(extension.Namespace))
+                throw new InvalidOperationException($"Duplicate extension namespace registration: {extension.Namespace}");
+
+            foreach (var route in extension.Routes)
+            {
+                var key = $"{route.Method} {route.Path}";
+                if (!seen.Add(key))
+                    throw new InvalidOperationException($"Duplicate extension route registration: {key}");
+
+                switch (route.Method)
+                {
+                    case "GET":
+                        _server.MapGet(route.Path, route.Handler);
+                        break;
+                    case "POST":
+                        _server.MapPost(route.Path, route.Handler);
+                        break;
+                    case "PUT":
+                        _server.MapPut(route.Path, route.Handler);
+                        break;
+                    case "DELETE":
+                        _server.MapDelete(route.Path, route.Handler);
+                        break;
+                    default:
+                        throw new InvalidOperationException($"Unsupported extension route method: {route.Method}");
+                }
+            }
+        }
     }
 
     private async Task<HttpResponse> HandleStatus(HttpRequest request)
@@ -614,7 +654,8 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
                 cdpReady = _cdpWebViews.Any(v => v.IsReady),
                 cdpWebViewCount = _cdpWebViews.Count,
                 profiler = BuildProfilerCapabilitiesPayload(),
-                profilerSession = _profilerSessions.CurrentSession
+                profilerSession = _profilerSessions.CurrentSession,
+                extensions = BuildExtensionsMarker()
             };
         });
 
@@ -639,62 +680,142 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
 
     private Task<HttpResponse> HandleCapabilities(HttpRequest request)
     {
-        var result = new
+        var version = typeof(DevFlowAgentService).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown";
+
+        var capabilities = new Dictionary<string, object>();
+
+        capabilities["ui.tree"] = new { version = 1, features = new[] { "css-selector", "type", "text", "accessibility-id" } };
+        capabilities["ui.actions"] = new { version = 1, features = new[] { "tap", "fill", "clear", "focus", "scroll", "navigate", "resize", "back", "key", "gesture", "batch", "properties" } };
+        capabilities["ui.screenshot"] = new { version = 1, features = new[] { "element", "fullscreen", "selector" } };
+
+        if (_cdpWebViews.Count > 0)
+            capabilities["webview"] = new { version = 1, features = new[] { "evaluate", "contexts", "source", "dom", "dom-query", "network", "console", "screenshot" } };
+
+        capabilities["profiler"] = new { version = 1, features = BuildProfilerFeatureList() };
+        capabilities["network"] = new { version = 1, features = new[] { "list", "detail", "clear", "stream" } };
+        capabilities["logs"] = new { version = 1, features = new[] { "list", "stream" } };
+        capabilities["device.info"] = new { version = 1, features = new[] { "app", "device", "display", "battery", "connectivity" } };
+        capabilities["device.sensors"] = new { version = 1, features = new[] { "list", "start", "stop", "stream" } };
+        capabilities["device.jobs"] = new
         {
-            ui = new
+            version = 1,
+            features = IsJobsSupported
+                ? IsJobRunSupported ? new[] { "list", "run" } : new[] { "list" }
+                : Array.Empty<string>(),
+            supported = IsJobsSupported
+        };
+        capabilities["storage.preferences"] = new { version = 1, features = new[] { "list", "get", "set", "delete", "clear" } };
+        capabilities["storage.secure"] = new { version = 1, features = new[] { "get", "set", "delete", "clear" } };
+        capabilities["storage.files"] = new { version = 1, features = new[] { "roots", "list", "download", "upload", "delete" } };
+        capabilities["invoke"] = new { version = 1, features = new[] { "actions" } };
+
+        var result = new Dictionary<string, object?>
+        {
+            ["agent"] = new
             {
-                supported = true,
-                features = new[] { "tree", "query", "hit-test", "tap", "fill", "clear", "focus", "scroll", "navigate", "resize", "back", "key", "gesture", "batch", "properties", "screenshot" }
+                name = "Microsoft.Maui.DevFlow.Agent",
+                version,
+                framework = "maui",
+                frameworkVersion = typeof(Microsoft.Maui.Controls.Application).Assembly
+                    .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown"
             },
-            webview = new
-            {
-                supported = _cdpWebViews.Any(v => v.IsReady),
-                features = _cdpWebViews.Any(v => v.IsReady)
-                    ? new[] { "evaluate", "contexts", "source", "dom", "dom-query", "network", "console", "screenshot" }
-                    : Array.Empty<string>()
-            },
-            network = new
-            {
-                supported = true,
-                features = new[] { "list", "detail", "clear", "stream" }
-            },
-            logs = new
-            {
-                supported = true,
-                features = new[] { "list", "stream" }
-            },
-            sensors = new
-            {
-                supported = true,
-                features = new[] { "list", "start", "stop", "stream" }
-            },
-            storage = new
-            {
-                supported = true,
-                features = new[] { "preferences", "secure-storage", "roots", "files" }
-            },
-            profiler = new
-            {
-                supported = IsProfilerFeatureAvailable,
-                features = IsProfilerFeatureAvailable
-                    ? new[] { "capabilities", "sessions", "samples", "markers", "spans", "hotspots" }
-                    : Array.Empty<string>()
-            },
-            jobs = new
-            {
-                supported = IsJobsSupported,
-                features = IsJobsSupported
-                    ? IsJobRunSupported ? new[] { "list", "run" } : new[] { "list" }
-                    : Array.Empty<string>()
-            },
-            invoke = new
-            {
-                supported = true,
-                features = new[] { "actions" }
-            }
+            ["capabilities"] = capabilities
         };
 
+        if (_options.Extensions.Count > 0)
+        {
+            var extensions = BuildExtensionMetadata();
+            foreach (var extension in _options.Extensions)
+            {
+                capabilities[extension.Namespace] = new
+                {
+                    version = GetCapabilityVersion(extension.Version),
+                    features = extension.Features.Count > 0
+                        ? extension.Features
+                        : extension.Tools.Select(tool => tool.Name).ToArray()
+                };
+            }
+
+            result["extensions"] = extensions;
+        }
+
         return Task.FromResult(HttpResponse.Json(result));
+    }
+
+    private object BuildExtensionsMarker()
+    {
+        var metadata = BuildExtensionMetadata();
+        return new
+        {
+            count = metadata.Count,
+            hash = ComputeExtensionHash(metadata)
+        };
+    }
+
+    private Dictionary<string, object> BuildExtensionMetadata()
+    {
+        var extensions = new Dictionary<string, object>(StringComparer.Ordinal);
+
+        foreach (var extension in _options.Extensions.OrderBy(e => e.Namespace, StringComparer.Ordinal))
+        {
+            extensions[extension.Namespace] = new
+            {
+                version = extension.Version,
+                description = extension.Description,
+                tools = extension.Tools.Select(tool => new
+                {
+                    name = tool.Name,
+                    description = tool.Description,
+                    method = tool.Method,
+                    path = tool.Path,
+                    parameters = tool.Parameters,
+                    returns = tool.Returns,
+                    annotations = tool.Annotations is null ? null : new
+                    {
+                        readOnly = tool.Annotations.ReadOnly,
+                        idempotent = tool.Annotations.Idempotent,
+                        destructive = tool.Annotations.Destructive,
+                        category = tool.Annotations.Category
+                    }
+                }).ToArray()
+            };
+        }
+
+        return extensions;
+    }
+
+    private static string ComputeExtensionHash(Dictionary<string, object> metadata)
+    {
+        var json = JsonSerializer.Serialize(metadata);
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(json));
+        return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static int GetCapabilityVersion(string version)
+    {
+        var dot = version.IndexOf('.');
+        var major = dot >= 0 ? version[..dot] : version;
+        return int.TryParse(major, out var parsed) && parsed > 0 ? parsed : 1;
+    }
+
+    private string[] BuildProfilerFeatureList()
+    {
+        if (!IsProfilerFeatureAvailable)
+            return Array.Empty<string>();
+
+        var features = new List<string> { "capabilities", "sessions", "samples", "markers", "spans", "hotspots" };
+        var capabilities = _profilerCollector.GetCapabilities();
+        if (capabilities.ManagedMemorySupported)
+            features.Add("managed-memory");
+        if (capabilities.NativeMemorySupported)
+            features.Add("native-memory");
+        if (capabilities.CpuPercentSupported)
+            features.Add("cpu");
+        if (capabilities.FpsSupported)
+            features.Add("fps");
+
+        return features.ToArray();
     }
 
     private async Task<HttpResponse> HandleTree(HttpRequest request)
