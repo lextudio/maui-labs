@@ -15,7 +15,7 @@ public sealed class ExtensionTools
         WriteIndented = false
     };
 
-    [McpServerTool(Name = "extension_list"), Description("List all extensions registered on the connected DevFlow agent.")]
+    [McpServerTool(Name = "maui_extension_list"), Description("List all extensions registered on the connected DevFlow agent.")]
     public static async Task<string> ListExtensions(
         McpAgentSession session,
         [Description("Agent HTTP port (optional if only one agent connected)")] int? agentPort = null)
@@ -25,7 +25,7 @@ public sealed class ExtensionTools
         return JsonSerializer.Serialize(extensions, JsonOptions);
     }
 
-    [McpServerTool(Name = "extension_call"), Description("Call an extension tool on the connected DevFlow agent.")]
+    [McpServerTool(Name = "maui_extension_call"), Description("Call an extension tool on the connected DevFlow agent.")]
     public static async Task<string> CallExtension(
         McpAgentSession session,
         [Description("Extension namespace, e.g. com.example.diagnostics")] string extensionNamespace,
