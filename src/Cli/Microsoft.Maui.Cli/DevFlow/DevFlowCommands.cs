@@ -1633,7 +1633,7 @@ public class DevFlowCommands
 
             JsonElement? parameterJson = null;
             if (!string.IsNullOrWhiteSpace(parameters))
-                parameterJson = JsonSerializer.Deserialize<JsonElement>(parameters);
+                parameterJson = CliJson.ParseElement(parameters);
 
             var result = await client.CallExtensionToolAsync(tool.Method, tool.Path, parameterJson);
             if (json)

@@ -8,13 +8,6 @@ namespace Microsoft.Maui.Cli.DevFlow.Mcp.Tools;
 [McpServerToolType]
 public sealed class ExtensionTools
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
-        WriteIndented = false
-    };
-
     [McpServerTool(Name = "maui_extension_list"), Description("List all extensions registered on the connected DevFlow agent.")]
     public static async Task<string> ListExtensions(
         McpAgentSession session,
@@ -22,7 +15,7 @@ public sealed class ExtensionTools
     {
         using var client = await session.GetAgentClientAsync(agentPort);
         var extensions = await client.GetExtensionsAsync();
-        return JsonSerializer.Serialize(extensions, JsonOptions);
+        return CliJson.SerializeUntyped(extensions, indented: false);
     }
 
     [McpServerTool(Name = "maui_extension_call"), Description("Call an extension tool on the connected DevFlow agent.")]
@@ -44,7 +37,7 @@ public sealed class ExtensionTools
 
         JsonElement? parameterJson = null;
         if (!string.IsNullOrWhiteSpace(parameters))
-            parameterJson = JsonSerializer.Deserialize<JsonElement>(parameters);
+            parameterJson = CliJson.ParseElement(parameters);
 
         return await client.CallExtensionToolAsync(tool.Method, tool.Path, parameterJson);
     }
