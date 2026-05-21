@@ -38,7 +38,7 @@ public class AndroidDevFlowPortForwarderTests
 
 		Assert.Equal(AndroidDevFlowForwardingStatus.MultipleDevices, report.Status);
 		Assert.Null(report.SelectedSerial);
-		Assert.Equal("Multiple online Android devices or emulators were found. Specify --android-device or ANDROID_SERIAL.", report.Message);
+		Assert.Equal("Multiple online Android devices or emulators were found. Specify --device or ANDROID_SERIAL.", report.Message);
 		Assert.Empty(commands);
 	}
 

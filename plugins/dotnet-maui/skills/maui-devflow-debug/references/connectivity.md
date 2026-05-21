@@ -59,8 +59,8 @@ adb forward --list
 When multiple Android devices/emulators are connected, use the same serial selection the CLI supports:
 
 ```bash
-maui devflow diagnose --android-device <serial>
-maui devflow list --android-device <serial>
+maui devflow diagnose --device <serial>
+maui devflow list --device <serial>
 ```
 
 If no broker is available and the app uses a direct `.mauidevflow` port, forward that port instead:
@@ -112,8 +112,8 @@ pgrep -f "YourApp"
 | Symptom | Fix |
 |---------|-----|
 | `maui devflow list` shows no agents | Verify app is running in Debug, package references exist, and `AddMauiDevFlowAgent()` executes |
-| Android agent never registers | Run `maui devflow diagnose --android-device <serial>` or manually set `adb reverse tcp:19223 tcp:19223` for broker registration |
-| Android connection refused after registration | Run `maui devflow diagnose --android-device <serial>` or manually set `adb forward tcp:<port> tcp:<port>` using the port from `maui devflow list` |
+| Android agent never registers | Run `maui devflow diagnose --device <serial>` or manually set `adb reverse tcp:19223 tcp:19223` for broker registration |
+| Android connection refused after registration | Run `maui devflow diagnose --device <serial>` or manually set `adb forward tcp:<port> tcp:<port>` using the port from `maui devflow list` |
 | Android broker list is empty but app is running | Forward the direct `.mauidevflow` port and run `maui devflow agent status --agent-host localhost --agent-port <port>` |
 | Broker unavailable | `maui devflow broker start`; retry the command |
 | Port already in use | Identify the owner with `lsof -i :<port>` before killing a PID |

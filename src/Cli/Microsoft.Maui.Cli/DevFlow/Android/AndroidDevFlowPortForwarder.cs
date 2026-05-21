@@ -274,8 +274,8 @@ internal sealed class AndroidDevFlowPortForwarder
             1 => AndroidDeviceSelection.Ok(onlineDevices[0]),
             _ => AndroidDeviceSelection.Failed(
                 AndroidDevFlowForwardingStatus.MultipleDevices,
-                "Multiple online Android devices or emulators were found. Specify --android-device or ANDROID_SERIAL.",
-                onlineDevices.Select(static d => $"--android-device {d.Serial}").ToArray())
+                "Multiple online Android devices or emulators were found. Specify --device or ANDROID_SERIAL.",
+                onlineDevices.Select(static d => $"--device {d.Serial}").ToArray())
         };
     }
 

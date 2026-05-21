@@ -258,7 +258,7 @@ public class DevFlowCliIntegrationTests
         {
             Directory.SetCurrentDirectory(tempDir.FullName);
 
-            var result = await cli.InvokeRawAsync("devflow", "diagnose", "--json", "--android-device", "emulator-5554");
+            var result = await cli.InvokeRawAsync("devflow", "diagnose", "--json", "--device", "emulator-5554");
 
             Assert.Equal(0, result.ExitCode);
             var json = result.ParseJsonOutput();
@@ -346,7 +346,7 @@ public class DevFlowCliIntegrationTests
         {
             Directory.SetCurrentDirectory(tempDir.FullName);
 
-            var result = await cli.InvokeRawAsync("devflow", "diagnose", "--no-json", "--android-device", "emulator-5554");
+            var result = await cli.InvokeRawAsync("devflow", "diagnose", "--no-json", "--device", "emulator-5554");
 
             Assert.Equal(0, result.ExitCode);
             Assert.Contains("Broker reverse:   ready (tcp:19225)", result.StdOut);

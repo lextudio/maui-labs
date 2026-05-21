@@ -283,7 +283,7 @@ For Android, the two directions are different: the app reaches the host broker t
 `adb reverse tcp:19223 tcp:19223`, while the host CLI reaches the in-emulator agent
 through `adb forward tcp:{port} tcp:{port}`. The CLI prepares these mappings
 automatically when it can select a single online Android device. If multiple devices are
-online, pass `--android-device <serial>` or set `ANDROID_SERIAL` so it does not guess.
+online, pass `--device <serial>` or set `ANDROID_SERIAL` so it does not guess.
 
 ## File Locations
 
@@ -336,7 +336,7 @@ The broker exposes a simple HTTP API on port 19223 for CLI and diagnostic use:
   app launched successfully.
 - **Firewall?** On Android, run `maui devflow diagnose` and check the `android`
   forwarding section. If multiple devices are online, retry with
-  `--android-device <serial>`.
+  `--device <serial>`.
 - **Custom port in code?** If `AddMicrosoft.Maui.DevFlowAgent(o => o.Port = XXXX)` sets a
   non-default port, the agent includes that `currentPort` during broker registration so
   the broker reuses the hardcoded port. If broker registration is unavailable, the CLI
