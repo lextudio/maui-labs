@@ -459,7 +459,12 @@ public class HttpResponse
 
     public static HttpResponse Json(object data) => new()
     {
-        Body = JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true })
+        Body = JsonSerializer.Serialize(data, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            MaxDepth = 256,
+            ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles
+        })
     };
 
     public static HttpResponse Png(byte[] data) => new()
