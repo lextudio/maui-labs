@@ -83,6 +83,22 @@ public class CommandConstructionTests
 	}
 
 	[Fact]
+	public void DevFlowCommand_IncludesThemeCommands()
+	{
+		var jsonOption = new Option<bool>("--json");
+		var devflowCommand = DevFlowCommands.CreateDevFlowCommand(jsonOption);
+
+		var themeCommand = Assert.Single(devflowCommand.Subcommands, c => c.Name == "theme");
+		Assert.Contains(themeCommand.Subcommands, c => c.Name == "get");
+		var setCommand = Assert.Single(themeCommand.Subcommands, c => c.Name == "set");
+		var scopeOption = (Option<string>)Assert.Single(setCommand.Options, option => option.Name == "--scope");
+		var parseResult = themeCommand.Parse("set dark");
+
+		Assert.Empty(parseResult.Errors);
+		Assert.Equal("auto", parseResult.GetValue(scopeOption));
+	}
+
+	[Fact]
 	public void DevFlowCommand_UpdateSkillIsHiddenCompatibilityAliasForSkillsUpdate()
 	{
 		var jsonOption = new Option<bool>("--json");

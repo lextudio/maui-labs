@@ -34,7 +34,8 @@ internal static class MockAgentResponses
             "logs": true,
             "sensors": true,
             "storage": true,
-            "profiler": true
+            "profiler": true,
+            "theme": true
           },
           "running": true,
           "cdpReady": true,
@@ -65,6 +66,8 @@ internal static class MockAgentResponses
             "storage.secure": { "version": 1, "features": ["get", "set", "delete", "clear"] },
             "storage.files": { "version": 1, "features": ["roots", "list", "download", "upload", "delete"] },
             "profiler": { "version": 1, "features": ["capabilities", "sessions", "samples"] },
+            "theme": { "version": 1, "supported": true, "features": ["get", "set"] },
+            "app.theme": { "version": 1, "supported": true, "features": ["get", "set"] },
             "com.example.diagnostics": { "version": 1, "features": ["build_info", "echo"] }
           },
           "extensions": {
@@ -170,6 +173,17 @@ internal static class MockAgentResponses
           "name": "My Mac",
           "platform": "MacCatalyst",
           "versionString": "15.0"
+        }
+        """;
+
+    public const string ThemeInfo = """
+        {
+          "theme": "dark",
+          "requestedTheme": "dark",
+          "userAppTheme": "dark",
+          "effectiveTheme": "dark",
+          "supportedThemes": ["light", "dark", "system"],
+          "source": "app"
         }
         """;
 

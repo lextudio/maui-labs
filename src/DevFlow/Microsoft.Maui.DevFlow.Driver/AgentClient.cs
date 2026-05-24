@@ -380,6 +380,50 @@ public class AgentClient : IDisposable
     }
 
     /// <summary>
+    /// Get the app-scoped theme currently reported by the agent.
+    /// </summary>
+    public async Task<ThemeResult?> GetThemeAsync()
+    {
+        var result = await GetAsync<ThemeResult>($"{DeviceApi}/app/theme");
+        return result == null ? null : WithSuccessfulThemeResult(result);
+    }
+
+    /// <summary>
+    /// Set the app-scoped theme inside the running MAUI app.
+    /// </summary>
+    public async Task<ThemeResult> SetThemeAsync(DevFlowTheme theme)
+    {
+        var body = new JsonObject
+        {
+            ["theme"] = theme.ToProtocolString(),
+        };
+
+        var result = await PutJsonAsync<ThemeResult>($"{DeviceApi}/app/theme", body);
+        return result != null ? WithSuccessfulThemeResult(result) : new ThemeResult
+        {
+            Theme = theme,
+            RequestedTheme = theme,
+            UserAppTheme = theme,
+            Source = "app",
+            Success = false,
+            Message = "Failed to set app theme.",
+        };
+    }
+
+    private static ThemeResult WithSuccessfulThemeResult(ThemeResult result)
+        => new()
+        {
+            Theme = result.Theme,
+            RequestedTheme = result.RequestedTheme,
+            UserAppTheme = result.UserAppTheme,
+            EffectiveTheme = result.EffectiveTheme,
+            SupportedThemes = result.SupportedThemes,
+            Source = result.Source,
+            Success = true,
+            Message = result.Message,
+        };
+
+    /// <summary>
     /// Retrieve application logs from the agent.
     /// </summary>
     public async Task<string> GetLogsAsync(int limit = 100, int skip = 0, string? source = null)
@@ -616,6 +660,26 @@ public class AgentClient : IDisposable
             return DriverJson.Deserialize<T>(responseBody);
         }
         catch (Exception ex) when (IsExpectedClientException(ex))
+        {
+            return null;
+        }
+    }
+
+    private async Task<T?> PutJsonAsync<T>(string path, JsonNode body) where T : class
+    {
+        try
+        {
+            using var content = DriverJson.CreateJsonContent(body);
+            var response = await _http.PutAsync($"{_baseUrl}{path}", content);
+            if (!response.IsSuccessStatusCode)
+                return null;
+
+            var responseBody = await response.Content.ReadAsStringAsync();
+            if (string.IsNullOrWhiteSpace(responseBody))
+                return null;
+            return DriverJson.Deserialize<T>(responseBody);
+        }
+        catch
         {
             return null;
         }
@@ -1105,6 +1169,8 @@ public class AgentCapabilities
     public bool Profiler { get; set; }
     [System.Text.Json.Serialization.JsonPropertyName("jobs")]
     public bool Jobs { get; set; }
+    [System.Text.Json.Serialization.JsonPropertyName("theme")]
+    public bool Theme { get; set; }
 }
 
 public class NetworkRequest

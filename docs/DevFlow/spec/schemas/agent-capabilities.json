@@ -168,6 +168,22 @@
               "upload",
               "delete"
             ]
+          },
+          "theme": {
+            "version": 1,
+            "features": [
+              "get",
+              "set"
+            ],
+            "supported": true
+          },
+          "app.theme": {
+            "version": 1,
+            "features": [
+              "get",
+              "set"
+            ],
+            "supported": true
           }
         }
       ]

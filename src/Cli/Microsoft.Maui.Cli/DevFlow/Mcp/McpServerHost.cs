@@ -43,6 +43,7 @@ public static class McpServerHost
 			.WithTools<RecordingTools>()
 			.WithTools<PreferencesTools>()
 			.WithTools<PlatformTools>()
+			.WithTools<ThemeTools>()
 			.WithTools<SensorTools>()
 			.WithTools<JobTools>()
 			.WithTools<FileTools>()

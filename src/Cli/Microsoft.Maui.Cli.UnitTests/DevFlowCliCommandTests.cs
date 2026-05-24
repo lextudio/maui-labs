@@ -1,5 +1,7 @@
 using System.Text.Json;
+using Microsoft.Maui.Cli.DevFlow;
 using Microsoft.Maui.Cli.UnitTests.Fixtures;
+using Microsoft.Maui.DevFlow.Driver;
 using Xunit;
 
 namespace Microsoft.Maui.Cli.UnitTests;
@@ -438,6 +440,76 @@ public class DevFlowCliCommandTests
         Assert.Equal(0, result.ExitCode);
         var req = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/storage/secure");
         Assert.Equal("DELETE", req.Method);
+    }
+
+    // ========== theme ==========
+
+    [Fact]
+    public async Task ThemeGet_HitsThemeRoute()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var _ = server;
+
+        var result = await cli.InvokeAsync("devflow", "theme", "get", "--json");
+
+        Assert.True(result.ExitCode == 0, $"stdout: {result.StdOut}\nstderr: {result.StdErr}");
+        var json = result.ParseJsonOutput();
+        Assert.Equal("dark", json.GetProperty("theme").GetString());
+        var req = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/device/app/theme");
+        Assert.Equal("GET", req.Method);
+    }
+
+    [Fact]
+    public async Task ThemeSet_DefaultAutoOnDesktop_UsesAppThemeRoute()
+    {
+        var (server, cli) = await CreateFixturesAsync();
+        await using var _ = server;
+
+        var result = await cli.InvokeAsync("devflow", "theme", "set", "dark", "--json");
+
+        Assert.True(result.ExitCode == 0, $"stdout: {result.StdOut}\nstderr: {result.StdErr}");
+        var json = result.ParseJsonOutput();
+        Assert.Equal("dark", json.GetProperty("theme").GetString());
+        Assert.Equal("app", json.GetProperty("source").GetString());
+        var req = Assert.Single(server.RecordedRequests, r => r.Path == "/api/v1/device/app/theme" && r.Method == "PUT");
+        Assert.Contains("\"theme\":\"dark\"", req.Body);
+    }
+
+    [Theory]
+    [InlineData("ios", "Virtual", null, null, true)]
+    [InlineData("ios", "Physical", null, null, false)]
+    [InlineData("ios", null, null, "A-SIMULATOR-UDID", true)]
+    [InlineData("android", "Virtual", null, null, true)]
+    [InlineData("android", "Physical", null, null, false)]
+    [InlineData("android", null, "emulator-5554", null, true)]
+    public void ThemeHostSelector_Auto_UsesHostOnlyForDisposableVirtualTargets(
+        string platform,
+        string? deviceType,
+        string? androidDevice,
+        string? simulatorUdid,
+        bool expected)
+    {
+        var actual = ThemeHostSelector.ShouldUseHostThemeScopeAutomatically(
+            platform,
+            deviceType,
+            DevFlowTheme.Dark,
+            androidDevice,
+            simulatorUdid);
+
+        Assert.Equal(expected, actual);
+    }
+
+    [Fact]
+    public void ThemeHostSelector_Auto_DoesNotUseHostForSystemTheme()
+    {
+        var actual = ThemeHostSelector.ShouldUseHostThemeScopeAutomatically(
+            "ios",
+            "Virtual",
+            DevFlowTheme.System,
+            androidDevice: null,
+            simulatorUdid: null);
+
+        Assert.False(actual);
     }
 
     // ========== device/platform info ==========
