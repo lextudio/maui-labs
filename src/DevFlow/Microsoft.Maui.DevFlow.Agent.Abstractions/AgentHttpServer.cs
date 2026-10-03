@@ -18,7 +18,8 @@ public class AgentHttpServer : IDisposable
     private CancellationTokenSource? _cts;
     private Task? _listenTask;
     private bool _disposed;
-    private readonly int _port;
+    private readonly int _requestedPort;
+    private int _port;
     private readonly Dictionary<string, RouteHandler> _getRoutes = new();
     private readonly Dictionary<string, RouteHandler> _postRoutes = new();
     private readonly Dictionary<string, RouteHandler> _putRoutes = new();
@@ -39,7 +40,7 @@ public class AgentHttpServer : IDisposable
 
     public AgentHttpServer(int port = 9223)
     {
-        _port = port;
+        _requestedPort = port;
     }
 
     public void MapGet(string path, Func<HttpRequest, Task<HttpResponse>> handler)
@@ -70,9 +71,36 @@ public class AgentHttpServer : IDisposable
         if (IsRunning) return;
 
         _cts = new CancellationTokenSource();
-        _listener = new TcpListener(IPAddress.Loopback, _port);
-        _listener.Start();
+        _listener = StartListener(_requestedPort);
+        _port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _listenTask = AcceptLoop(_cts.Token);
+    }
+
+    /// <summary>
+    /// Binds the requested port, falling back to an ephemeral one when it is already taken.
+    /// </summary>
+    /// <remarks>
+    /// Parallel test hosts and a previously crashed run easily collide on a fixed port, and the resulting
+    /// <see cref="SocketException"/> aborts startup with nothing listening. Falling back keeps the agent
+    /// usable: <see cref="Port"/> reports the port actually bound, so callers still discover it.
+    /// </remarks>
+    private static TcpListener StartListener(int requestedPort)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, requestedPort);
+        try
+        {
+            listener.Start();
+            return listener;
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.AddressAlreadyInUse)
+        {
+            listener.Stop();
+            var fallback = new TcpListener(IPAddress.Loopback, 0);
+            fallback.Start();
+            Console.WriteLine(
+                $"[Microsoft.Maui.DevFlow.Agent] Port {requestedPort} is already in use; listening on {((IPEndPoint)fallback.LocalEndpoint).Port} instead.");
+            return fallback;
+        }
     }
 
     public async Task StopAsync()
