@@ -716,7 +716,14 @@ public class HttpRequest
 
 public class HttpResponse
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        WriteIndented = true,
+        // A deep or cyclic UI tree used to throw on serialization, which surfaced as a broken response
+        // for an otherwise healthy tree. Both settings are needed: depth alone still throws on a cycle.
+        MaxDepth = 256,
+        ReferenceHandler = ReferenceHandler.IgnoreCycles
+    };
     private static readonly JsonSerializerOptions ErrorJsonOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
