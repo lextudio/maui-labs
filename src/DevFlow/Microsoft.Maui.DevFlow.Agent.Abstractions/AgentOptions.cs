@@ -148,6 +148,15 @@ public class AgentOptions
     public bool RequireMutationLease { get; set; } = true;
 
     /// <summary>
+    /// Whether mutating HTTP endpoints are admitted one at a time (a second one waits, then gets a retryable
+    /// 503 <c>ui-mutation-busy</c>). Default: true. A controlled single-client host (for example an IDE's
+    /// integration-test child that also sets <see cref="RequireMutationLease"/> to false) can turn it off so a
+    /// request can supply the input a pending modal command is waiting for; the lease and the busy
+    /// back-pressure are otherwise unchanged.
+    /// </summary>
+    public bool SerializeMutations { get; set; } = true;
+
+    /// <summary>
     /// How long a mutation lease remains active without a successful mutation or heartbeat.
     /// Default: 10 seconds.
     /// </summary>

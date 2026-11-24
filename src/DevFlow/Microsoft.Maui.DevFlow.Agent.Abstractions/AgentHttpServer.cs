@@ -33,6 +33,12 @@ public class AgentHttpServer : IDisposable
     internal Func<HttpRequest, HttpResponse?>? MutationAdmissionValidator { get; set; }
     internal Func<HttpRequest, HttpResponse, Task>? MutationObserver { get; set; }
     /// <summary>
+    /// Whether mutating routes are admitted one at a time. Hosts that intentionally disable
+    /// mutation leases can disable this too so a pending modal command can be driven by a
+    /// subsequent request from their single trusted client.
+    /// </summary>
+    internal bool SerializeMutations { get; set; } = true;
+    /// <summary>
     /// How long a mutation waits for the one ahead of it before giving up with a retryable 503.
     /// Long enough for a normal UI round-trip, short enough that a wedged dispatcher cannot
     /// silently swallow every subsequent request.
@@ -475,7 +481,12 @@ public class AgentHttpServer : IDisposable
         // stay OUT of this gate: a forced takeover exists precisely to preempt a mutation that
         // is stuck — typically on a blocked UI dispatcher — so queueing it behind that mutation
         // would deadlock the one escape hatch. MutationLeaseCoordinator serializes itself.
-        if (!route.RequiresMutationLease || !route.SerializeMutation)
+        // A host that explicitly opts out of mutation serialization is a controlled, single-client
+        // environment (notably OpenDevelop's integration-test child).  Such a host also needs
+        // concurrent requests to drive a modal UI: the initiating action remains pending until
+        // its dialog closes, while the next request supplies that input.  Serializing those
+        // requests here would deadlock the otherwise lease-free workflow.
+        if (!route.RequiresMutationLease || !route.SerializeMutation || !SerializeMutations)
             return await RunRouteAsync(route, request, requiresMutationLease).ConfigureAwait(false);
 
         if (!await _mutationAdmissionGate.WaitAsync(MutationAdmissionTimeout, ct).ConfigureAwait(false))

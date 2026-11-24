@@ -33,6 +33,7 @@ public partial class DevFlowAgentService : IDisposable, IMarkerPublisher
             () => _brokerRegistration,
             _options.MutationLeaseTimeoutMs);
         _server = new AgentHttpServer(_options.Port);
+        _server.SerializeMutations = _options.SerializeMutations;
         _server.MutationLeaseValidator = ValidateMutationLeaseAsync;
         _server.MutationAdmissionValidator = RejectMutationDuringPointerSession;
         _server.MutationObserver = ObserveMutationAsync;
